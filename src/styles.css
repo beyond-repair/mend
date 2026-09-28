@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+@theme {
+  --color-soot: #100e0c;
+  --color-iron: #1b1714;
+  --color-plate: #2a241e;
+  --color-brass: #d4b483;
+  --color-brass-dim: #8c7049;
+  --color-parchment: #f3ead7;
+  --color-mist: #a89880;
+  --color-rust: #c45c26;
+  --font-display: "Cinzel", Palatino, "Palatino Linotype", serif;
+  --font-sans: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html,
+  body {
+    height: 100%;
+    background: var(--color-soot);
+    color: var(--color-parchment);
+  }
+  body {
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-sans);
+  }
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  button:focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+  }
+}
+
+.ledger {
+  background: var(--color-iron);
+  color: var(--color-parchment);
+  border: 1px solid var(--color-brass-dim);
+  box-shadow: inset 0 1px 0 rgba(212, 180, 131, 0.28);
+}
+
+.sheet {
+  background:
+    linear-gradient(180deg, rgba(243, 234, 215, 0.05), transparent 28%),
+    #221c17;
+  border: 1px solid rgba(140, 112, 73, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(16, 14, 12, 0.65);
+}
+
+.stamp {
+  display: inline-block;
+  margin-top: 0.25rem;
+  border: 1px solid currentColor;
+  padding: 0.1rem 0.45rem;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.scrap {
+  border: 1px solid rgba(212, 180, 131, 0.55);
+  border-radius: 4px;
+  background: rgba(16, 14, 12, 0.82);
+  padding: 0.35rem 0.6rem;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #f3ead7;
+}
+
+.instrument {
+  background:
+    linear-gradient(180deg, rgba(212, 180, 131, 0.16), transparent 12px),
+    linear-gradient(180deg, #2a241c, #14110e 28%);
+  border-top: 2px solid #8c7049;
+  box-shadow: inset 0 1px 0 rgba(243, 234, 215, 0.18);
+}
+
+.plate-head {
+  background:
+    linear-gradient(180deg, #3a3126, #1b1714);
+  border-bottom: 2px solid #8c7049;
+  box-shadow: inset 0 1px 0 rgba(243, 234, 215, 0.2);
+}
+
+.bezel {
+  border: 2px solid #8c7049;
+  box-shadow:
+    inset 0 0 0 1px #100e0c,
+    0 0 0 1px rgba(212, 180, 131, 0.25);
+  object-fit: cover;
+  object-position: center 12%;
+}
+
+.gear-pad {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 12;
+  width: 148px;
+  height: 148px;
+  pointer-events: none;
+}
+
+.gear-btn {
+  pointer-events: auto;
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 2px solid #8c7049;
+  background: radial-gradient(circle at 35% 30%, #5c4b38, #1b1714 68%);
+  color: #d4b483;
+  font-family: var(--font-display);
+  font-size: 13px;
+  box-shadow:
+    inset 0 0 0 4px #2a241e,
+    0 2px 0 #000;
+}
+
+.gear-n { left: 50px; top: 0; }
+.gear-s { left: 50px; bottom: 0; }
+.gear-w { left: 0; top: 50px; }
+.gear-e { right: 0; top: 50px; }
+
+.gear-hub {
+  position: absolute;
+  left: 52px;
+  top: 52px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 2px solid #8c7049;
+  background: repeating-conic-gradient(from 8deg, #4a3c2c 0 10deg, #1b1714 10deg 20deg);
+  box-shadow: inset 0 0 0 6px #14110e;
+}
+
+.hud-key {
+  min-height: 52px;
+  border: 1px solid rgba(140, 112, 73, 0.85);
+  background:
+    linear-gradient(180deg, rgba(212, 180, 131, 0.08), transparent 40%),
+    #1b1714;
+  color: #d4b483;
+  box-shadow: inset 0 0 0 1px rgba(16, 14, 12, 0.8);
+}
+
+.zoom-key {
+  min-height: 44px;
+  min-width: 52px;
+  border: 1px solid #8c7049;
+  border-radius: 4px;
+  background: rgba(27, 23, 20, 0.88);
+  color: #d4b483;
+  font-size: 12px;
+}
+
+.flow-line {
+  animation: seam-flow 1.1s linear infinite;
+}
+
+@keyframes seam-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+.rivet {
+  background-image:
+    radial-gradient(circle at 8px 8px, var(--color-brass-dim) 0 2px, transparent 2.5px),
+    radial-gradient(circle at calc(100% - 8px) 8px, var(--color-brass-dim) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 8px calc(100% - 8px), var(--color-brass-dim) 0 2px, transparent 2.5px),
+    radial-gradient(circle at calc(100% - 8px) calc(100% - 8px), var(--color-brass-dim) 0 2px, transparent 2.5px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

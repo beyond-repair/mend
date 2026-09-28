@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "MEND",
+      "hasCanvas": false,
+      "bodyTextLen": 276,
+      "bodyTextHash": "c4e787c6c3bb64b272a954184920e9132b3de4ab48d0871bf2d1ed336e92c8f7",
+      "bodyTextPrefix": "OAKHAVEN MAINTENANCE LEDGER MEND You do not spend power. You spe",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/visual-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "MEND",
+      "hasCanvas": false,
+      "bodyTextLen": 276,
+      "bodyTextHash": "c4e787c6c3bb64b272a954184920e9132b3de4ab48d0871bf2d1ed336e92c8f7",
+      "bodyTextPrefix": "OAKHAVEN MAINTENANCE LEDGER MEND You do not spend power. You spe",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/visual-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/visual-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

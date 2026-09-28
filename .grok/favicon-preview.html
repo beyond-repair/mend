@@ -1,0 +1,48 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;background:#6a6258}
+  .row{display:flex;align-items:flex-end;gap:24px;padding:24px}
+  .box{background:#444;padding:8px}
+  svg.big{width:128px;height:128px}
+  .tiny{width:16px;height:16px}
+  .tiny svg{width:16px;height:16px;display:block}
+  .zoom{width:128px;height:128px;image-rendering:pixelated}
+</style>
+<body>
+<div class="row">
+  <div class="box">
+    <svg class="big" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="6" fill="#100e0c"/>
+      <path fill="#d4b483" d="M5.5 25.5V6.5h5.1l5.4 9.4 5.4-9.4h5.1v19h-4.2V13.4l-4.6 8.1h-3.4l-4.6-8.1v12.1H5.5z"/>
+      <rect x="6" y="27.2" width="20" height="1.6" rx="0.4" fill="#c45c26"/>
+    </svg>
+  </div>
+  <div class="box tiny" id="t">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+      <rect width="32" height="32" rx="6" fill="#100e0c"/>
+      <path fill="#d4b483" d="M5.5 25.5V6.5h5.1l5.4 9.4 5.4-9.4h5.1v19h-4.2V13.4l-4.6 8.1h-3.4l-4.6-8.1v12.1H5.5z"/>
+      <rect x="6" y="27.2" width="20" height="1.6" rx="0.4" fill="#c45c26"/>
+    </svg>
+  </div>
+</div>
+<script>
+  const svg = document.querySelector('#t').innerHTML;
+  const blob = new Blob([svg], {type:'image/svg+xml'});
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = 16; c.height = 16;
+    c.getContext('2d').drawImage(img, 0, 0, 16, 16);
+    const z = new Image();
+    z.src = c.toDataURL();
+    z.className = 'zoom';
+    z.style.imageRendering = 'pixelated';
+    z.style.width = '128px';
+    z.style.height = '128px';
+    document.querySelector('.row').appendChild(z);
+    setTimeout(() => { document.title = 'ready'; }, 50);
+  };
+  img.src = url;
+</script>
