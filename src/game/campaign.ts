@@ -348,8 +348,18 @@ export const CAMPAIGN: Record<string, Convo> = {
         text: "Roads are pipes with boots. If you want the pit to know what the lung is, we already have a way to say it. If you want company without the diagram, that is also a kind of line.",
         replies: [
           end("The company is the point.", [flag("wrenWalked", true), log("Wren walks the pit's direction without making the diagram the toll.")]),
+          {
+            text: "The carts toward the ward are heavier.",
+            goto: "carts",
+            requires: [{ flag: "foodLive", is: true }],
+          },
           end("Hold the diagram until I ask."),
         ],
+      },
+      carts: {
+        speaker: "wren",
+        text: "Someone is eating. I haven't stood in the room. The weight is on the road before the diagram is. That's the part I used to miss.",
+        replies: [end("Then we walk toward the weight.")],
       },
     },
   },
@@ -769,6 +779,412 @@ export const CAMPAIGN: Record<string, Convo> = {
       },
     },
   },
+  "cinder-spire": {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "narrator",
+        text: "The moth stops at the mouth. Whatever is ahead does not sound like weather. It sounds like a room missing a parent and unwilling to say so. She will come if you wait. She will also stay on the road, which is the last sound she wants. You do not get to carry her.",
+        replies: [
+          end("Wait until she steps.", [
+            flag("cinderSpireOk", true),
+            log("You wait. She hates the sound, and then she comes. The Spire does not become weather."),
+          ]),
+          end("Stay on the road. I'll go in.", [
+            flag("cinderSpireStay", true),
+            { op: "dismiss", id: "cinder" },
+            log("She stays at the mouth. The road is the weather she chose. The Spire is not."),
+          ]),
+        ],
+      },
+    },
+  },
+  "tobin-late": {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "tobin",
+        text: "We've walked far enough that the bench is a rumor and the city is the job. I still don't have to like the last cut. I do have to know whether you sat in the shape or left the holes.",
+        replies: [
+          {
+            text: "I put a hand on the rank.",
+            goto: "hand",
+            requires: [{ flag: "citadelFate", is: "seize" }],
+          },
+          {
+            text: "I cut the siphon.",
+            goto: "cut",
+            requires: [{ flag: "citadelFate", is: "sever" }],
+          },
+          {
+            text: "The ward is eating. So is the bill.",
+            goto: "bill",
+            requires: [{ flag: "foodLive", is: true }, { flag: "levyLive", is: true }],
+          },
+          end("Keep the step.", [flag("tobinLate", true), log("Tobin keeps walking. Agreement was never the price.")]),
+        ],
+      },
+      hand: {
+        speaker: "tobin",
+        text: "Then don't call it maintenance. Maintenance doesn't own the drawing. I'll still walk. I won't sand that word for you.",
+        replies: [end("Don't sand it.", [flag("tobinLate", true)])],
+      },
+      cut: {
+        speaker: "tobin",
+        text: "The dark is honest. The infirmaries are in it. I can hold both of those without calling you a villain. Don't ask me to pick a cleaner sentence.",
+        replies: [end("Both, then.", [flag("tobinLate", true)])],
+      },
+      bill: {
+        speaker: "tobin",
+        text: "Food and a levy on one pipe. I knew that in the Sinks and I know it here. The meal is still a meal. The bill is still a bill. I'm glad I didn't have to pretend they were one kindness.",
+        replies: [end("They stayed two things.", [flag("tobinLate", true)])],
+      },
+    },
+  },
+  "wren-late": {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "wren",
+        text: "If the line heard the lung, the pit already knows. If it didn't, the diagram stayed in my pocket, and that was also a walk. I didn't come to be right at the end. I came to see whether you'd sit in the standard.",
+        replies: [
+          {
+            text: "The line heard you.",
+            goto: "heard",
+            requires: [{ flag: "workersKnow", is: true }],
+          },
+          {
+            text: "I sat in the rank.",
+            goto: "sat",
+            requires: [{ flag: "citadelFate", is: "seize" }],
+          },
+          end("The pocket was a choice.", [flag("wrenLate", true), log("Wren keeps the diagram unsent. The company was the line.")]),
+        ],
+      },
+      heard: {
+        speaker: "wren",
+        text: "Then I don't need to repeat it. A diagram that arrives is not a leash. If you want me gone before the Spire, say gone. I'd rather see the question.",
+        replies: [end("See it with me.", [flag("wrenLate", true)])],
+      },
+      sat: {
+        speaker: "wren",
+        text: "You sat in it. I watched. I am still here, which is not forgiveness. It's the reason I walked: so the room would have a person who didn't want that chair.",
+        replies: [end("Stay in the room.", [flag("wrenLate", true)])],
+      },
+    },
+  },
+  "sera-late": {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "sera",
+        text: "I stayed to watch what you did with a standard. Not to clap, and not to leave the moment it got ugly. Say which child you meant. I'll tell you if I can live next to it.",
+        replies: [
+          {
+            text: "I wrote my hand onto the shape.",
+            goto: "face",
+            requires: [{ flag: "citadelFate", is: "seize" }],
+          },
+          {
+            text: "I cut it and left the holes.",
+            goto: "holes",
+            requires: [{ flag: "citadelFate", is: "sever" }],
+          },
+          {
+            text: "The stock was refused. The parents stayed.",
+            goto: "stock",
+            requires: [{ flag: "stockRefused", is: true }],
+          },
+          end("Walk the rest. Argue if you have to.", [flag("seraLate", true)]),
+        ],
+      },
+      face: {
+        speaker: "sera",
+        text: "Then I was right to be afraid, and wrong if I leave now. A face on the engine is not maintenance. I'll stay where you can hear that. I will not help you enjoy it.",
+        replies: [end("Hear it.", [flag("seraLate", true), log("Sera stays beside a standard she will not bless.")])],
+      },
+      holes: {
+        speaker: "sera",
+        text: "You didn't put your face on it. The dark still has the infirmaries. I can live next to the refusal. I can't call the dark kind.",
+        replies: [end("Don't call it kind.", [flag("seraLate", true)])],
+      },
+      stock: {
+        speaker: "sera",
+        text: "I saw the refusal. The forge can be healthy and still not be a rifle. That's the sentence I came to hear. The rest of the city can be a mess and that sentence can still be true.",
+        replies: [end("The sentence stands.", [flag("seraLate", true)])],
+      },
+    },
+  },
+  "mara-late": {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "mara",
+        text: "If you're about to sand the nights off me so the last room is simpler, don't. I walked this far with the song. The Spire doesn't get a cleaner version.",
+        replies: [
+          {
+            text: "Nell is sleeping. The flue has a parent.",
+            goto: "nell",
+            requires: [{ flag: "tenementWarm", is: true }],
+          },
+          {
+            text: "I left the lattice alone.",
+            goto: "alone",
+            requires: [{ flag: "maraFate", is: "intact" }],
+          },
+          {
+            text: "I tried to mend the lattice.",
+            goto: "mend",
+            requires: [{ flag: "maraFate", is: "restored" }],
+          },
+          end("The nights come with you.", [flag("maraLate", true), log("Mara keeps the nights. The last room does not get to edit her.")]),
+        ],
+      },
+      nell: {
+        speaker: "mara",
+        text: "Good. A night with a parent is still a night. Don't ask her to sing about it. I won't either. Warm is not a cure. It's a bed.",
+        replies: [end("A bed.", [flag("maraLate", true)])],
+      },
+      alone: {
+        speaker: "mara",
+        text: "Then you left the thing that kept me alive. Ives will have a word for that. I don't. I just sleep the way I sleep, and I'm still walking.",
+        replies: [end("Keep walking.", [flag("maraLate", true)])],
+      },
+      mend: {
+        speaker: "mara",
+        text: "I remember a kitchen. I don't remember the door-song the same way. That's easier, and easier is not the same as mine. I didn't ask you to stop. I am telling you what it cost.",
+        replies: [end("I hear the cost.", [flag("maraLate", true)])],
+      },
+    },
+  },
+  moss: {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "moss",
+        text: "The brake seized on a cart that already decided to be heavy. I am not a sign. I am the person who has been standing here while the weight argued with the iron.",
+        replies: [
+          {
+            text: "The cart left.",
+            goto: "left",
+            requires: [{ flag: "cartEase", is: true }],
+          },
+          {
+            text: "I pinned the load.",
+            goto: "pinned",
+            requires: [{ flag: "cartPinned", is: true }],
+          },
+          end("I'll read the brake.", [flag("mossMet", true), log("Moss stays on the brake. The cart is the sentence. She is not.")]),
+        ],
+      },
+      left: {
+        speaker: "moss",
+        text: "Then Rust has the weight and does not have the speech yet. Don't ask me to be glad. A cart is not a kindness. It is a parent arriving early.",
+        replies: [end("Let it arrive.", [flag("mossMet", true)])],
+      },
+      pinned: {
+        speaker: "moss",
+        text: "Then the pit can look finished and the forge can go hungry. I will stay on the pin. If you ease it later, the hunger was still true for as long as you meant it.",
+        replies: [end("Leave the pin.", [flag("mossMet", true), log("Moss stays with the pin. Downstream will meet the absence.")])],
+      },
+    },
+  },
+  "tobin-mid": {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "tobin",
+        text: "The ward is not a second city. It drinks from a room we already stood in. If the cups are full, a bill is drinking with them. If they are empty, the parent is the thing to name, not the thirst.",
+        replies: [
+          end("Name the parent.", [
+            flag("tobinMid", true),
+            log("Tobin counts the ward as a child of the Sinks. He does not grade the child."),
+          ]),
+        ],
+      },
+    },
+  },
+  "wren-mid": {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "wren",
+        text: "The slab is a cable with a throat somewhere else. I can draw that without making the rigger a symbol. If you want the line to hear the lung, that is a different sentence from standing here.",
+        replies: [
+          end("Stand here.", [flag("wrenMid", true), log("Wren keeps the diagram in her hands. The pit does not have to hear it for the company to be real.")]),
+        ],
+      },
+    },
+  },
+  "sera-mid": {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "sera",
+        text: "I came to watch what you do with a forge that can be made to work. Working is not the same as permitted. If the stock is live, I disagree and I am still here. If you refused it, I heard you.",
+        replies: [
+          end("Keep watching.", [flag("seraMid", true), log("Sera stays. The disagreement was not a resignation.")]),
+        ],
+      },
+    },
+  },
+  "mara-mid": {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "mara",
+        text: "The nights came with me. If the flues are warm, that is a bed, not a cure. If you sanded the song so I would be easier, say so later. Not while the road is still a road.",
+        replies: [
+          end("The nights stay.", [flag("maraMid", true), log("Mara keeps the nights on the road. The walk does not get a cleaner version.")]),
+        ],
+      },
+    },
+  },
+  brin: {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "brin",
+        text: "The face reads dead. The pocket is not dry. I have been auditing the face because it is the thing that looks broken. If you have a better parent, say it. If you cut the face, it will bite you and the district will not notice.",
+        replies: [
+          {
+            text: "The face is a costume. The feed behind it is holding.",
+            goto: "named",
+            requires: [{ flag: "gaugeRead", is: true }],
+          },
+          {
+            text: "I cut the real feed.",
+            goto: "cut",
+            requires: [{ flag: "gaugeCut", is: true }],
+          },
+          end("The face can wait."),
+        ],
+      },
+      named: {
+        speaker: "brin",
+        text: "Then I was reading a costume. The listener on the housing names one seam you have not admitted. It does not make the seam true, and it does not survive the telling. I am staying off the servo.",
+        replies: [end("Stay off it.")],
+      },
+      cut: {
+        speaker: "brin",
+        text: "The pocket is dry and the pump is not. You cut a local parent. The drowned thing in the corner was drinking it. I am not going back in until it forgets.",
+        replies: [end("Leave her the corridor.")],
+      },
+    },
+  },
+  vetch: {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "vetch",
+        text: "The ward is dry, so the alley drinks what the clinic is not using. That still is a cup, not a well. Break it and we go thirsty. License it and I can live with a parent that is not a raid. Leave it and I will still be here.",
+        replies: [
+          {
+            text: "The trickle is written down.",
+            goto: "licensed",
+            requires: [{ flag: "stillLicensed", is: true }],
+          },
+          {
+            text: "The cup is broken.",
+            goto: "broken",
+            requires: [{ flag: "stillBroken", is: true }],
+          },
+          end("Leave the cup."),
+        ],
+      },
+      licensed: {
+        speaker: "vetch",
+        text: "You wrote it down. I can pay a trickle. I will not pretend the cup made the ward.",
+        replies: [
+          end("Keep the trickle.", [
+            flag("vetchPaid", true),
+            { op: "scrip", n: 14 },
+            log("Vetch pays for a cup that stayed a cup. The scrip is the license, not a thanks."),
+          ], { requires: [{ missing: "vetchPaid" }] }),
+          end("That's the room."),
+        ],
+      },
+      broken: {
+        speaker: "vetch",
+        text: "You broke the cup while we were thirsty. The clinic did not become a well. I will not call it order.",
+        replies: [end("It was a cut.")],
+      },
+    },
+  },
+  holt: {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "holt",
+        text: "They are not mining. They are standing under a winch that is not the crane. If the canyon throat is still breathing, they can hear a parent and they will stand down or leave. If the throat is already still, that winch is the only parent they have.",
+        replies: [
+          {
+            text: "They stood down.",
+            goto: "down",
+            requires: [{ flag: "crewStood", is: true }],
+          },
+          {
+            text: "They left.",
+            goto: "left",
+            requires: [{ flag: "crewFled", is: true }],
+          },
+          end("The winch can wait."),
+        ],
+      },
+      down: {
+        speaker: "holt",
+        text: "A live throat is a sentence they understand. The dog I kicked you holds a seam. It is not a wage.",
+        replies: [end("The throat was the reason.")],
+      },
+      left: {
+        speaker: "holt",
+        text: "They left because the cable above them was still alive. I won't call that cowardice. I won't call it loyalty either.",
+        replies: [end("Let them go.")],
+      },
+    },
+  },
+  ime: {
+    start: "start",
+    nodes: {
+      start: {
+        speaker: "ime",
+        text: "This cell can keep one infirmary. It is not a siphon and it is not a pardon. Charge it while the parent is still sending. After you answer the crucible, it is a story about a night you did not store.",
+        replies: [
+          {
+            text: "The cell is holding.",
+            goto: "holding",
+            requires: [{ flag: "bufferCharged", is: true }, { missing: "citadelFate" }],
+          },
+          {
+            text: "One ward kept the night.",
+            goto: "kept",
+            requires: [{ flag: "bufferHeld", is: true }],
+          },
+          {
+            text: "The cell was empty.",
+            goto: "empty",
+            requires: [{ flag: "citadelFate", is: "sever" }, { missing: "bufferCharged" }],
+          },
+          end("Leave the cell."),
+        ],
+      },
+      holding: {
+        speaker: "ime",
+        text: "One night, if you cut the parent. The other wards will still go dark. I will not let you call the cell a solution.",
+        replies: [end("One night.")],
+      },
+      kept: {
+        speaker: "ime",
+        text: "One ward kept the night. I will not thank you for the others. The dark is still the dark.",
+        replies: [end("The others stayed dark.")],
+      },
+      empty: {
+        speaker: "ime",
+        text: "The wards went with the siphon. There was a cell. It was empty. That is also a decision.",
+        replies: [end("It was empty.")],
+      },
+    },
+  },
 };
 
 const LATE: { convo: string; text: string; requires: Reply["requires"]; goto: string; close?: string; node: { speaker: string; text: string } }[] = [
@@ -1015,6 +1431,127 @@ const LATE: { convo: string; text: string; requires: Reply["requires"]; goto: st
     node: {
       speaker: "vane",
       text: "Stores arrived. Sarn will not thank the rank for a haul. I won't ask her to. Eating is not a rank, even when the rank eats.",
+    },
+  },
+  {
+    convo: "ives",
+    text: "The cart never arrived.",
+    requires: [{ flag: "cartPinned", is: true }, { flag: "stoneMoving", is: true }],
+    goto: "cart-held",
+    close: "The pit is not the forge.",
+    node: {
+      speaker: "ives",
+      text: "Stone left the quarry. It is not on my floor. Whatever is holding the road is the parent I don't have. I can still refuse the stock. I can't invent the ore.",
+    },
+  },
+  {
+    convo: "ives",
+    text: "The cart beat the speech.",
+    requires: [{ flag: "cartEase", is: true }, { flag: "stoneMoving", is: true }],
+    goto: "cart-early",
+    close: "Weight first.",
+    node: {
+      speaker: "ives",
+      text: "It's already in the yard. Don't tell me what it means until I know whether you want it to become a rifle. The arrival is not the permission.",
+    },
+  },
+  {
+    convo: "nell",
+    text: "The wash is drinking.",
+    requires: [{ flag: "washLive", is: true }],
+    goto: "wash-drinks",
+    close: "A pipe, not a song.",
+    node: {
+      speaker: "nell",
+      text: "There's water that isn't the flue. If the forge went dry for it, I know. I will drink it. I will not thank a rifle for the thirst I didn't have.",
+    },
+  },
+  {
+    convo: "drift",
+    text: "The glaze was cut.",
+    requires: [{ flag: "iceCut", is: true }],
+    goto: "glaze-cut",
+    close: "The edge is enough.",
+    node: {
+      speaker: "drift",
+      text: "The hollow went cold and the clock might still be turning. I stay on the edge. You billed the middle. I don't have to agree to feel the bill.",
+    },
+  },
+  {
+    convo: "drift",
+    text: "The span is seated.",
+    requires: [{ flag: "iceSpan", is: true }],
+    goto: "glaze-span",
+    close: "A floor.",
+    node: {
+      speaker: "drift",
+      text: "The middle stopped taking a bite. I still sleep where the weather is. A floor is not a reason to stand in the bowl.",
+    },
+  },
+  {
+    convo: "lark",
+    text: "Moss pinned the cart.",
+    requires: [{ flag: "cartPinned", is: true }],
+    goto: "moss-pin",
+    close: "The road kept it.",
+    node: {
+      speaker: "lark",
+      text: "Then the high walk is carrying a refusal. I won't call it down. Rust can be hungry with the pit looking busy. That's a true sentence. I just run.",
+    },
+  },
+  {
+    convo: "lark",
+    text: "The brick yard.",
+    requires: [{ flag: "seen:road", is: true }, { missing: "seen:kiln" }],
+    goto: "kiln-mouth",
+    close: "South of this walk.",
+    node: {
+      speaker: "lark",
+      text: "Before Rust, south of this walk, a kiln is waiting on parents it will not name. Clay is in the yard. Water is not. The stamp is a third parent, and it is a person.",
+    },
+  },
+  {
+    convo: "lark",
+    text: "The kiln took.",
+    requires: [{ flag: "brickLive", is: true }],
+    goto: "kiln-took",
+    close: "Smoke is a receipt.",
+    node: {
+      speaker: "lark",
+      text: "I can smell the set from the road. If Cress is still standing, the smell has a bill. I run. I don't invoice.",
+    },
+  },
+  {
+    convo: "lark",
+    text: "The freight table.",
+    requires: [{ flag: "seen:road", is: true }, { missing: "seen:switch" }],
+    goto: "switch-mouth",
+    close: "South of the brick stair.",
+    node: {
+      speaker: "lark",
+      text: "Past the kiln mouth, the road drops into a yard. Hale's plates are slick. Rue invoices whatever the table agrees to pass. I run over it. I don't grease it.",
+    },
+  },
+  {
+    convo: "lark",
+    text: "The glass stair.",
+    requires: [{ flag: "seen:road", is: true }, { missing: "seen:pane" }],
+    goto: "pane-mouth",
+    close: "North of the high walk.",
+    node: {
+      speaker: "lark",
+      text: "North off this walk, before the ward stair, a glasshouse is waiting on parents it will not name. Sand is in the pit. Heat is not. The stamp is a third parent, and it is a person. Sol runs cullet. I run messages.",
+    },
+  },
+  {
+    convo: "bram",
+    text: "I read a waybill with your cart on it.",
+    requires: [{ flag: "waybillRead", is: true }],
+    goto: "waybill",
+    close: "The paper is not the cart.",
+    node: {
+      speaker: "bram",
+      text: "Then you already know the table and this cart have been refusing the same load. The paper does not make me send it. A seated road might. A speech will not.",
     },
   },
 ];

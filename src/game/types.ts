@@ -151,6 +151,10 @@ export interface ItemDef {
   heavy?: boolean;
   /** The brass ice stops billing the walk. Not a thicker plate. */
   ice?: boolean;
+  /** A slick plate stops billing the step. Not a thicker plate. */
+  slick?: boolean;
+  /** Furnace heat stops billing the step. Not a thicker plate. */
+  heat?: boolean;
 }
 
 export interface InvItem {
@@ -473,6 +477,9 @@ export interface Data {
   verbs?: Partial<Record<Verb, number>>;
   /** Downstream and off-verb practice. Derived lenses read this. Old ledgers may omit it. */
   traces?: Partial<Record<TraceKey, number>>;
+  /** Ways of working. Not a damage ladder. Old ledgers omit this until the next load. */
+  perks?: string[];
+  perkPoints?: number;
   /** The city as one machine. Filled by reconcile. Missing on old ledgers until the next load. */
   world?: WorldSnapshot;
   draft: {

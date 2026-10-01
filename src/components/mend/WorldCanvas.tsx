@@ -3,6 +3,7 @@ import { bursts, decayFx, floaters, shake } from "@/game/fx";
 import { gait, nodeLive, seamMark, walkable } from "@/game/logic";
 import { LOCKED_DOORS, MAPS, MOUTHS, tileAt } from "@/game/maps";
 import { useGame } from "@/game/store";
+import { layoutStage, presence, projectTile, stageNow } from "@/components/mend/stage";
 import type { Actor, Data } from "@/game/types";
 
 const TW = 78;
@@ -35,13 +36,27 @@ function keyedSprite(src: string): CanvasImageSource | null {
     c.drawImage(image, 0, 0);
     const img = c.getImageData(0, 0, plate.width, plate.height);
     const p = img.data;
+    let clear = 0;
+    for (let i = 3; i < p.length; i += 4) if (p[i] < 16) clear++;
+    const already = clear > (p.length / 4) * 0.02;
     for (let i = 0; i < p.length; i += 4) {
       const r = p[i];
       const g = p[i + 1];
       const b = p[i + 2];
+      if (already) {
+        const magenta = r > 180 && b > 150 && g < 100 && Math.abs(r - b) < 70;
+        if (magenta) p[i + 3] = 0;
+        continue;
+      }
       const magenta = r > 200 && b > 200 && g < 70 && Math.abs(r - b) < 45;
-      const fringe = !magenta && r > 165 && b > 145 && g < 95 && Math.abs(r - b) < 55 && r + b > g * 4;
-      if (magenta) p[i + 3] = 0;
+      // JPEG turns #FF00FF into a cluster near rgb(230, 12, 130), plus a darker rim.
+      const jpeg = r > 100 && g < 70 && b > 48 && b < 190 && r - g > 85 && b - g > 20 && r - b > 15 && r - b < 150;
+      const fringe =
+        !magenta &&
+        !jpeg &&
+        ((r > 165 && b > 145 && g < 95 && Math.abs(r - b) < 55 && r + b > g * 4) ||
+          (r > 150 && g < 80 && b > 45 && b < 190 && r - g > 90 && r - b > 15 && r - b < 130));
+      if (magenta || jpeg) p[i + 3] = 0;
       else if (fringe) p[i + 3] = Math.min(p[i + 3], 70);
     }
     c.putImageData(img, 0, 0);
@@ -60,33 +75,88 @@ function floorKey(theme: string) {
   return "sinks";
 }
 
-function vistaKey(theme: string) {
-  return floorKey(theme);
+type FigureKind = "armor" | "mill" | "tall" | "slight" | "coat";
+
+function figureKind(spritePath: string, template: string): FigureKind {
+  const s = `${spritePath} ${template}`.toLowerCase();
+  if (s.includes("enforcer") || s.includes("kael") || template === "varr") return "armor";
+  if (s.includes("automaton") || s.includes("pump") || template === "cinder" || template === "mill") return "mill";
+  if (s.includes("sovereign")) return "tall";
+  if (s.includes("pell") || s.includes("mara") || s.includes("sera") || template === "wren") return "slight";
+  return "coat";
 }
 
-function drawVista(ctx: CanvasRenderingContext2D, theme: string, w: number, h: number, px: number, py: number) {
-  const image = sprite(`/game/backdrops/${vistaKey(theme)}.jpg`);
-  if (!image.complete || image.naturalWidth === 0) return;
-  const scale = (w * 1.14) / image.naturalWidth;
-  const dw = image.naturalWidth * scale;
-  const dh = image.naturalHeight * scale;
-  const x = (w - dw) / 2 - (px - deck.w / 2) * 2.2;
-  const y = h * 0.04 - (py - deck.h / 2) * 1.4;
-  ctx.drawImage(image, x, y, dw, dh);
-  const shade = ctx.createLinearGradient(0, 0, 0, h);
-  shade.addColorStop(0, "rgba(5,4,3,0.1)");
-  shade.addColorStop(0.4, "rgba(5,4,3,0.05)");
-  shade.addColorStop(1, "rgba(5,4,3,0.74)");
-  ctx.fillStyle = shade;
-  ctx.fillRect(0, 0, w, h);
-  if (theme === "spire") {
-    ctx.fillStyle = "rgba(6,14,22,0.4)";
-    ctx.fillRect(0, 0, w, h);
+function drawChevron(ctx: CanvasRenderingContext2D, sx: number, sy: number, shut: boolean) {
+  ctx.save();
+  ctx.strokeStyle = shut ? "#e07040" : "#f3ead7";
+  ctx.lineWidth = 1.6;
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(sx - 6, sy - 2);
+  ctx.lineTo(sx, sy + 5);
+  ctx.lineTo(sx + 6, sy - 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFigure(ctx: CanvasRenderingContext2D, sx: number, sy: number, height: number, kind: FigureKind, hostile: boolean) {
+  const h = height;
+  const bulky = kind === "armor" || kind === "mill";
+  const w = h * (kind === "slight" ? 0.3 : bulky ? 0.42 : kind === "tall" ? 0.32 : 0.36);
+  const coat = hostile ? "#5a3328" : kind === "armor" ? "#8ea0ac" : kind === "mill" ? "#a07848" : kind === "slight" ? "#4a382e" : "#2a221c";
+  const skin = kind === "armor" || kind === "mill" ? "#b7c2c8" : "#d2b08a";
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.38)";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + 1, w * 0.62, Math.max(2.5, h * 0.045), 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#14110e";
+  ctx.fillRect(sx - w * 0.22, sy - h * 0.36, w * 0.16, h * 0.36);
+  ctx.fillRect(sx + w * 0.06, sy - h * 0.36, w * 0.16, h * 0.36);
+  const g = ctx.createLinearGradient(sx, sy - h, sx, sy);
+  g.addColorStop(0, coat);
+  g.addColorStop(1, "#100e0c");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(sx - w * 0.46, sy - h * 0.72);
+  ctx.lineTo(sx - w * 0.16, sy - h * 0.86);
+  ctx.lineTo(sx + w * 0.16, sy - h * 0.86);
+  ctx.lineTo(sx + w * 0.46, sy - h * 0.72);
+  ctx.lineTo(sx + w * 0.4, sy - h * 0.3);
+  ctx.lineTo(sx - w * 0.4, sy - h * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = hostile ? "#c45c26" : "rgba(212,180,131,0.75)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(212,180,131,0.45)";
+  ctx.beginPath();
+  ctx.moveTo(sx, sy - h * 0.82);
+  ctx.lineTo(sx, sy - h * 0.36);
+  ctx.stroke();
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy - h * 0.94, w * 0.2, h * 0.085, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = kind === "mill" ? "#d4b483" : kind === "armor" ? "#5e6c76" : "#1a1410";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy - h * 0.98, w * 0.22, h * 0.05, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+  if (kind === "armor") {
+    ctx.strokeStyle = "#e4ecef";
+    ctx.strokeRect(sx - w * 0.22, sy - h * 0.7, w * 0.44, h * 0.22);
   }
+  if (kind === "mill") {
+    ctx.strokeStyle = "#d4b483";
+    ctx.beginPath();
+    ctx.arc(sx, sy - h * 0.92, h * 0.09, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function paintFloor(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: number, y: number, theme: string) {
-  const image = sprite(`/game/floors/${floorKey(theme)}.jpg`);
+  const image = sprite(`/game/floors/${floorKey(theme)}.jpg?v=7`);
   if (!image.complete || image.naturalWidth === 0) return false;
   const cx = (deck.w - 1) / 2;
   const cy = (deck.h - 1) / 2;
@@ -101,7 +171,7 @@ function paintFloor(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: nu
   ctx.drawImage(image, sx - wx - dw / 2, sy - wy - dh / 2, dw, dh);
   const rim = ctx.createRadialGradient(sx, sy - 2, 8, sx, sy, TH * 0.78);
   rim.addColorStop(0, "rgba(0,0,0,0)");
-  rim.addColorStop(1, "rgba(10,7,5,0.3)");
+  rim.addColorStop(1, "rgba(10,7,5,0.12)");
   ctx.fillStyle = rim;
   ctx.fillRect(sx - TW, sy - TH, TW * 2, TH * 2);
   ctx.restore();
@@ -147,6 +217,10 @@ function drawTile(
   ctx.scale(zoom, zoom);
   ctx.translate(-sx, -sy);
   if (fade) ctx.globalAlpha = 0.4;
+  if (stageNow().plate && ch !== "~" && ch !== "!" && ch !== "^") {
+    ctx.restore();
+    return;
+  }
   const tone = (x * 3 + y * 5) % 3;
   const floors =
     theme === "haven"
@@ -159,33 +233,46 @@ function drawTile(
   const h = hash(x, y);
   diamond(ctx, sx, sy);
   if (ch === "~") {
-    ctx.fillStyle = "#1c1612";
+    ctx.fillStyle = "#100e0c";
     ctx.fill();
     ctx.save();
     ctx.clip();
-    ctx.strokeStyle = "rgba(90,70,48,0.55)";
+    const oil = ctx.createLinearGradient(sx - 28, sy - 10, sx + 24, sy + 12);
+    oil.addColorStop(0, "rgba(28,22,16,0.2)");
+    oil.addColorStop(0.45, "rgba(196,148,72,0.22)");
+    oil.addColorStop(1, "rgba(12,10,8,0.15)");
+    ctx.fillStyle = oil;
+    ctx.fillRect(sx - TW, sy - TH, TW * 2, TH * 2);
+    ctx.strokeStyle = "rgba(90,70,48,0.45)";
     ctx.lineWidth = 1;
     for (let i = -2; i <= 2; i++) {
-      const wobble = Math.sin(now / 420 + x + i) * 2;
+      const wobble = Math.sin(now / 520 + x * 0.4 + i) * 1.6;
       ctx.beginPath();
-      ctx.moveTo(sx - 22, sy + i * 4 + wobble);
-      ctx.lineTo(sx + 22, sy + i * 3);
+      ctx.moveTo(sx - 26, sy + i * 4 + wobble);
+      ctx.lineTo(sx + 26, sy + i * 2.4);
       ctx.stroke();
     }
     ctx.restore();
+    ctx.strokeStyle = "rgba(168,132,84,0.7)";
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
   } else if (ch === "=") {
-    ctx.fillStyle = "#6d573f";
+    ctx.fillStyle = "#3a3128";
     ctx.fill();
     ctx.save();
     ctx.clip();
-    ctx.strokeStyle = "rgba(27,23,20,0.55)";
-    for (let i = -2; i <= 2; i++) {
+    ctx.strokeStyle = "rgba(196,160,96,0.45)";
+    ctx.lineWidth = 1.2;
+    for (let i = -3; i <= 3; i++) {
       ctx.beginPath();
-      ctx.moveTo(sx - 24, sy + i * 5);
-      ctx.lineTo(sx + 24, sy + i * 3);
+      ctx.moveTo(sx - 28, sy + i * 3.2);
+      ctx.lineTo(sx + 28, sy + i * 1.6);
       ctx.stroke();
     }
     ctx.restore();
+    ctx.strokeStyle = "rgba(212,180,131,0.8)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
   } else if (ch === "%") {
     ctx.fillStyle = "#2a241c";
     ctx.fill();
@@ -271,6 +358,59 @@ function skirt(ctx: CanvasRenderingContext2D, ax: number, ay: number, bx: number
   ctx.lineWidth = 1;
 }
 
+function etchPlate(ctx: CanvasRenderingContext2D, sx: number, sy: number, h: number, now: number, theme: string) {
+  const ice = theme === "citadel" || theme === "spire";
+  const sand = theme === "quarry";
+  ctx.save();
+  diamond(ctx, sx, sy);
+  ctx.clip();
+  const ink = ice ? "rgba(150,220,230,0.72)" : sand ? "rgba(120,78,42,0.75)" : "rgba(255,214,150,0.62)";
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 1;
+  if (h % 2 === 0) {
+    const pts: [number, number][] = [
+      [sx - 18, sy + 2],
+      [sx - 6, sy - 8],
+      [sx + 2, sy - 1],
+      [sx + 14, sy - 7],
+      [sx + 10, sy + 6],
+      [sx - 4, sy + 8],
+    ];
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.stroke();
+    for (const [px, py] of pts) {
+      ctx.beginPath();
+      ctx.arc(px, py, 1.1, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  } else {
+    const cx = sx + ((h % 5) - 2) * 3;
+    const cy = sy + ((h % 3) - 1) * 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6.5, 0, Math.PI * 2);
+    ctx.stroke();
+    const spin = now / 900 + h;
+    for (let i = 0; i < 6; i++) {
+      const a = spin + (i * Math.PI) / 3;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * 6.5, cy + Math.sin(a) * 3.2);
+      ctx.lineTo(cx + Math.cos(a) * 11, cy + Math.sin(a) * 5.2);
+      ctx.stroke();
+    }
+  }
+  if (ice) {
+    ctx.strokeStyle = "rgba(190,236,244,0.4)";
+    ctx.beginPath();
+    ctx.moveTo(sx - 22, sy + 2);
+    ctx.lineTo(sx - 2, sy - 6);
+    ctx.lineTo(sx + 18, sy + 3);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawDeck(
   ctx: CanvasRenderingContext2D,
   sx: number,
@@ -286,7 +426,7 @@ function drawDeck(
   const h = hash(x, y);
   const south = theme === "sinks" && y >= 12;
   const ember = south && vacant;
-  const depth = 44;
+  const depth = 10;
   const face = theme === "quarry" ? "#6a4530" : theme === "citadel" || theme === "spire" ? "#24343c" : "#3a2c20";
   const pipe = theme === "citadel" || theme === "spire" ? "#7ec8d0" : ember ? "#c45c26" : "#c4844a";
   if (rimD) skirt(ctx, sx - TW / 2, sy, sx, sy + TH / 2, depth, face, pipe);
@@ -354,6 +494,14 @@ function drawDeck(
     ctx.stroke();
   }
   ctx.restore();
+  if (plated) {
+    diamond(ctx, sx, sy);
+    ctx.strokeStyle = "rgba(18,14,10,0.85)";
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+    return;
+  }
+  etchPlate(ctx, sx, sy, h, now, theme);
   ctx.beginPath();
   ctx.moveTo(sx - TW / 2, sy);
   ctx.lineTo(sx, sy - TH / 2);
@@ -465,6 +613,11 @@ function drawSprite(ctx: CanvasRenderingContext2D, src: string, sx: number, sy: 
   const dw = dh * ratio;
   ctx.drawImage(image, -dw / 2, -dh + 8, dw, dh);
   ctx.restore();
+}
+
+function drawCast(ctx: CanvasRenderingContext2D, src: string, sx: number, sy: number, height: number, slump = 0) {
+  shadow(ctx, sx, sy + 2, Math.max(7, height * 0.22));
+  drawSprite(ctx, src, sx, sy, height, slump);
 }
 
 function label(ctx: CanvasRenderingContext2D, sx: number, sy: number, text: string, color: string) {
@@ -594,17 +747,29 @@ function drawRig(ctx: CanvasRenderingContext2D, kind: string, sx: number, sy: nu
     ctx.arc(0, -20, 4, 0, Math.PI * 2);
     ctx.fill();
   } else if (kind === "colossus") {
-    ctx.fillStyle = "#6a5648";
+    ctx.scale(1.7, 1.7);
+    ctx.fillStyle = "#8a6a48";
     ctx.beginPath();
-    ctx.ellipse(0, -18, 16, 20, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -16, 18, 22, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#1b1714";
-    ctx.fillRect(-10, -16, 6, 3);
-    ctx.fillRect(4, -16, 6, 3);
-    ctx.strokeStyle = dropped ? "#c45c26" : "#c4844a";
-    ctx.lineWidth = 2;
+    ctx.fillStyle = "#5c4632";
     ctx.beginPath();
-    ctx.arc(0, -4, 7, 0, Math.PI * 2);
+    ctx.moveTo(-14, -28);
+    ctx.lineTo(0, -40);
+    ctx.lineTo(14, -28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#c4844a";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, -34, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#1b1714";
+    ctx.fillRect(-12, -18, 7, 3);
+    ctx.fillRect(5, -18, 7, 3);
+    ctx.strokeStyle = dropped ? "#c45c26" : "#d4b483";
+    ctx.beginPath();
+    ctx.arc(0, -2, 8, 0, Math.PI * 2);
     ctx.stroke();
   } else if (kind === "orrery") {
     ctx.strokeStyle = dropped ? "#7ec8d0" : "#d4b483";
@@ -998,20 +1163,22 @@ export function WorldCanvas() {
       }
       deck.w = map.width;
       deck.h = map.height;
-      drawVista(ctx, map.theme, w, h, d.player.x, d.player.y);
-      const vacant = d.mapId === "sinks" && d.flags.checkpointLead === "vacant";
+      layoutStage(ctx, w, h, d.player.x, d.player.y, d.mapId);
       const pumpFate = String(d.flags.pumpFate ?? "");
+      const pumpLit = pumpFate === "mend" || pumpFate === "wren" || pumpFate === "speech" || pumpFate === "flood";
+      if (stageNow().plate && d.mapId === "sinks" && pumpLit) {
+        ctx.fillStyle = "rgba(210,140,60,0.08)";
+        ctx.fillRect(0, 0, w, h);
+      }
+      const vacant = d.mapId === "sinks" && d.flags.checkpointLead === "vacant";
       const calm = Boolean(d.flags.reduceMotion);
       const jx = calm ? 0 : (Math.random() - 0.5) * shake;
       const jy = calm ? 0 : (Math.random() - 0.5) * shake;
       ctx.save();
       ctx.translate(jx, jy);
-      const zoom = d.zoom ?? 1.25;
-      const project = (x: number, y: number) => {
-        const dx = x - d.player.x;
-        const dy = y - d.player.y;
-        return { sx: w / 2 + (dx - dy) * (TW / 2) * zoom, sy: h * 0.58 + (dx + dy) * (TH / 2) * zoom };
-      };
+      const zoom = Math.max(1, d.zoom ?? 1);
+      const project = (x: number, y: number) => projectTile(w, h, d.player.x, d.player.y, x, y, zoom, TW, TH);
+      const playerH = stageNow().plate ? Math.max(30, Math.min(40, h * 0.12)) : Math.max(84, Math.min(118, TH * 2.7 * zoom));
       const jobs: { z: number; run: () => void }[] = [];
       const tags: { z: number; run: () => void }[] = [];
       for (let y = 0; y < map.height; y++) {
@@ -1021,25 +1188,34 @@ export function WorldCanvas() {
           const ch = tileAt(map, x, y);
           if (ch === "#") continue;
           const shut = ch === "+" && LOCKED_DOORS.some((door) => door.map === d.mapId && door.x === x && door.y === y && !d.flags[door.flag]);
-          const rimR = isPlate(ch) && !isPlate(tileAt(map, x + 1, y));
-          const rimD = isPlate(ch) && !isPlate(tileAt(map, x, y + 1));
-          jobs.push({ z: (x + y) * 10, run: () => drawTile(ctx, p.sx, p.sy, ch, x, y, now, map.theme, vacant, false, shut, zoom, rimR, rimD) });
-          if (MOUTHS.some((m) => m.map === d.mapId && m.x === x && m.y === y)) {
-            jobs.push({ z: (x + y) * 10 + 1, run: () => drawMouth(ctx, p.sx, p.sy - 8, now) });
-          }
-          if (ch === "~") {
-            jobs.push({
-              z: (x + y) * 10 + 3,
-              run: () => steamPuff(ctx, p.sx, p.sy, now + x * 40, "rgba(168,152,128,0.7)", 2),
-            });
+          const mouth = MOUTHS.some((m) => m.map === d.mapId && m.x === x && m.y === y);
+          if (stageNow().plate) {
+            const near = Math.abs(x - d.player.x) + Math.abs(y - d.player.y) <= 4;
+            if (near && (mouth || shut)) {
+              jobs.push({
+                z: (x + y) * 10,
+                run: () => drawChevron(ctx, p.sx, p.sy, shut),
+              });
+            }
+          } else {
+            const rimR = isPlate(ch) && !isPlate(tileAt(map, x + 1, y));
+            const rimD = isPlate(ch) && !isPlate(tileAt(map, x, y + 1));
+            jobs.push({ z: (x + y) * 10, run: () => drawTile(ctx, p.sx, p.sy, ch, x, y, now, map.theme, vacant, false, shut, zoom, rimR, rimD) });
+            if (mouth) jobs.push({ z: (x + y) * 10 + 1, run: () => drawMouth(ctx, p.sx, p.sy - 8, now) });
+            if (ch === "~") {
+              jobs.push({
+                z: (x + y) * 10 + 3,
+                run: () => steamPuff(ctx, p.sx, p.sy, now + x * 40, "rgba(168,152,128,0.7)", 2),
+              });
+            }
           }
         }
       }
-      if (d.mapId === "sinks") {
+      if (!stageNow().plate && d.mapId === "sinks") {
         jobs.push({ z: (17 + 7) * 10 + 1, run: () => drawFeed(ctx, project, d, now) });
         jobs.push({ z: (5 + 11) * 10 + 1, run: () => drawSignature(ctx, project, d, now) });
       }
-      if (d.mapId === "haven") {
+      if (!stageNow().plate && d.mapId === "haven") {
         jobs.push({ z: (16 + 4) * 10 + 1, run: () => drawWard(ctx, project, d, now) });
       }
       for (const m of Object.values(d.machines)) {
@@ -1049,9 +1225,15 @@ export function WorldCanvas() {
         const structural = footing ? !nodeLive(m.nodes, footing) : false;
         const down = m.nodes.some((n) => n.spent) || (m.id === "pump" && (pumpFate === "lockout" || pumpFate === "bleed")) || structural;
         const running = m.id === "pump" && (pumpFate === "mend" || pumpFate === "wren" || pumpFate === "speech" || pumpFate === "flood");
+        const nearMachine = Math.abs(m.x - d.player.x) + Math.abs(m.y - d.player.y);
         jobs.push({
           z: (m.x + m.y) * 10 + 4,
           run: () => {
+            if (stageNow().plate) {
+              if (m.id === "pump" && running) steamPuff(ctx, p.sx + 8, p.sy - 28, now, pumpFate === "flood" ? "rgba(196,92,38,0.55)" : "rgba(243,234,215,0.75)", 3);
+              if (m.id === "pump" && pumpFate === "bleed") steamPuff(ctx, p.sx, p.sy - 8, now, "rgba(90,60,36,0.7)", 2);
+              return;
+            }
             shadow(ctx, p.sx, p.sy, 22 * zoom);
             if (m.template === "pump") drawSprite(ctx, m.sprite, p.sx, p.sy, 108 * zoom);
             else drawRig(ctx, m.template, p.sx, p.sy, now, down, zoom);
@@ -1061,26 +1243,12 @@ export function WorldCanvas() {
             if (m.id === "cistern" && !down) steamPuff(ctx, p.sx, p.sy - 18, now, pumpFate === "bleed" ? "rgba(110,72,40,0.65)" : "rgba(243,234,215,0.55)", 2);
             if ((m.id === "head" || m.id === "hearth") && !down) steamPuff(ctx, p.sx, p.sy - 16, now, "rgba(243,234,215,0.7)", 2);
             if (m.id === "hollow" && !down) steamPuff(ctx, p.sx, p.sy - 10, now, "rgba(212,180,131,0.45)", 2);
-            const tag =
-              m.id === "pump" && down
-                ? `${m.name} · quiet`
-                : m.id === "jack" && down
-                  ? `${m.name} · settling`
-                  : m.id === "bar" && down
-                    ? `${m.name} · barred`
-                    : m.id === "head" && down
-                      ? `${m.name} · dry`
-                      : m.id === "head"
-                        ? `${m.name} · live`
-                        : m.id === "hearth" && down
-                          ? `${m.name} · cold`
-                          : m.id === "hearth"
-                            ? `${m.name} · banked`
-                            : m.name;
-            tags.push({
-              z: (m.x + m.y) * 10 + 8,
-              run: () => label(ctx, p.sx, p.sy + 26, tag, down ? "#c45c26" : "#d4b483"),
-            });
+            if (nearMachine <= 2 || (m.id === "pump" && !pumpFate)) {
+              tags.push({
+                z: (m.x + m.y) * 10 + 8,
+                run: () => label(ctx, p.sx, p.sy + 26, m.name, down ? "#c45c26" : "#d4b483"),
+              });
+            }
           },
         });
       }
@@ -1088,35 +1256,48 @@ export function WorldCanvas() {
         if (a.mapId !== d.mapId) continue;
         const p = project(a.x, a.y);
         if (!a.alive) {
-          jobs.push({ z: (a.x + a.y) * 10 + 2, run: () => drawRemains(ctx, p.sx, p.sy) });
+          const nearDead = Math.abs(a.x - d.player.x) + Math.abs(a.y - d.player.y) <= 5;
+          if (!stageNow().plate || nearDead) jobs.push({ z: (a.x + a.y) * 10 + 2, run: () => drawRemains(ctx, p.sx, p.sy) });
           continue;
         }
-        const body = 128 * a.scale * zoom;
+        const dist = Math.abs(a.x - d.player.x) + Math.abs(a.y - d.player.y);
+        const fade = presence(p.sx, p.sy);
+        if (stageNow().plate && fade <= 0.04) continue;
+        const body = playerH * (a.scale || 1) * 0.92;
         jobs.push({
           z: (a.x + a.y) * 10 + 5,
           run: () => {
             const still = gait(a) === "dead";
             const dark = weaponDark(a);
             const bob = still || dark || Boolean(d.flags.reduceMotion) ? 0 : Math.sin(now / 420 + a.x) * 1.4;
-            shadow(ctx, p.sx, p.sy, 18 * zoom);
-            if (a.template === "cinder") {
-              const restless = d.flags.bellowsLive === false || Boolean(d.flags.roadDark && !d.flags.cinderDarkOk);
-              const calm = Boolean(d.flags.reduceMotion) || (!restless && Boolean(d.flags.foodLive));
-              drawCinder(ctx, p.sx, p.sy + bob, zoom, now, calm);
-            } else drawSprite(ctx, a.sprite, p.sx, p.sy + bob, body, dark ? 0.04 : 0);
-            if (a.nodes.some((n) => n.revealed)) drawSeamMark(ctx, p.sx + 14 * zoom, p.sy - body + 10, seamMark(a.nodes), now);
+            ctx.save();
+            ctx.globalAlpha = fade;
+            if (stageNow().plate) {
+              drawCast(ctx, a.sprite, p.sx, p.sy + bob, body, dark ? 0.04 : 0);
+            } else {
+              shadow(ctx, p.sx, p.sy, 18 * zoom);
+              if (a.template === "cinder") {
+                const restless = d.flags.bellowsLive === false || Boolean(d.flags.roadDark && !d.flags.cinderDarkOk);
+                const calmBeast = Boolean(d.flags.reduceMotion) || (!restless && Boolean(d.flags.foodLive));
+                drawCinder(ctx, p.sx, p.sy + bob, zoom, now, calmBeast);
+              } else drawSprite(ctx, a.sprite, p.sx, p.sy + bob, body, dark ? 0.04 : 0);
+            }
+            if (!stageNow().plate && a.nodes.some((n) => n.revealed)) drawSeamMark(ctx, p.sx + 14 * zoom, p.sy - body + 10, seamMark(a.nodes), now);
             if (dark) steamPuff(ctx, p.sx + 10, p.sy - body * 0.45, now, "rgba(168,152,128,0.65)", 2);
             const mark = fieldMark(a);
             if (mark && d.combat) tags.push({ z: (a.x + a.y) * 10 + 9, run: () => label(ctx, p.sx, p.sy - body + 6, mark, "#c45c26") });
-            tags.push({
-              z: (a.x + a.y) * 10 + 9,
-              run: () => label(ctx, p.sx, p.sy + 18, a.name, a.hostile ? "#c45c26" : "#f3ead7"),
-            });
+            if (!stageNow().plate && (a.hostile || dist <= 2)) {
+              tags.push({
+                z: (a.x + a.y) * 10 + 9,
+                run: () => label(ctx, p.sx, stageNow().plate ? p.sy - body - 4 : p.sy + 18, a.name, a.hostile ? "#c45c26" : "#f3ead7"),
+              });
+            }
+            ctx.restore();
           },
         });
       }
       const pp = project(d.player.x, d.player.y);
-      const playerBody = 156 * zoom;
+      const playerBody = stageNow().plate ? playerH : 156 * zoom;
       jobs.push({
         z: (d.player.x + d.player.y) * 10 + 6,
         run: () => {
@@ -1125,15 +1306,17 @@ export function WorldCanvas() {
           const walking = d.path.length > 0 && !still && !d.flags.reduceMotion;
           const bob = walking ? Math.sin(now / 160) * 2.4 : still || d.flags.reduceMotion ? 0 : Math.sin(now / 380) * 1.6;
           const lean = walking ? Math.sin(now / 160) * 2.2 : 0;
-          shadow(ctx, pp.sx, pp.sy, 20 * zoom);
-          drawSprite(ctx, d.player.sprite, pp.sx + lean, pp.sy + bob, playerBody, dark ? 0.03 : 0);
+          if (stageNow().plate) drawCast(ctx, d.player.sprite, pp.sx + lean, pp.sy + bob, playerBody, dark ? 0.03 : 0);
+          else {
+            shadow(ctx, pp.sx, pp.sy, 20 * zoom);
+            drawSprite(ctx, d.player.sprite, pp.sx + lean, pp.sy + bob, playerBody, dark ? 0.03 : 0);
+          }
           if (d.player.guarding) {
             ctx.strokeStyle = "rgba(212,180,131,0.8)";
             ctx.strokeRect(pp.sx - 22 * zoom, pp.sy - playerBody * 0.72, 44 * zoom, playerBody * 0.5);
           }
           const mark = fieldMark(d.player);
           if (mark && d.combat) tags.push({ z: 9990, run: () => label(ctx, pp.sx, pp.sy - playerBody + 8, mark, "#c45c26") });
-          tags.push({ z: 9991, run: () => label(ctx, pp.sx, pp.sy + 20, d.name.split(" ")[0] || "Silas", "#d4b483") });
         },
       });
       jobs.sort((a, b) => a.z - b.z);
@@ -1168,7 +1351,7 @@ export function WorldCanvas() {
       }
       const vignette = ctx.createRadialGradient(w / 2, h * 0.5, h * 0.2, w / 2, h * 0.48, Math.max(w, h) * 0.72);
       vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(1, "rgba(0,0,0,0.22)");
+      vignette.addColorStop(1, stageNow().plate ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.22)");
       ctx.fillStyle = vignette;
       ctx.fillRect(-20, -20, w + 40, h + 40);
       ctx.restore();
@@ -1214,7 +1397,7 @@ export function WorldCanvas() {
                       : weather === "wrong"
                         ? "#c45c26"
                         : "#d4b483";
-            ctx.globalAlpha = weather === "wrong" ? 0.22 : 0.35;
+            ctx.globalAlpha = stageNow().plate ? 0.16 : weather === "wrong" ? 0.22 : 0.35;
             ctx.fillStyle = tint;
             const tall = weather === "drip" || weather === "grit";
             ctx.fillRect(mote.x * w, mote.y * h, weather === "spark" ? 2.2 : 1.3, tall ? 7 : weather === "ice" ? 1.4 : 4);
@@ -1234,22 +1417,50 @@ export function WorldCanvas() {
       const my = ev.clientY - rect.top;
       const map = MAPS[d.mapId];
       if (!map) return;
-      const zoom = d.zoom ?? 1.25;
-      let best: { x: number; y: number; dd: number } | null = null;
-      let floor: { x: number; y: number; dd: number } | null = null;
-      for (let y = 0; y < map.height; y++) {
-        for (let x = 0; x < map.width; x++) {
-          const dx = x - d.player.x;
-          const dy = y - d.player.y;
-          const sx = rect.width / 2 + (dx - dy) * (TW / 2) * zoom;
-          const sy = rect.height * 0.58 + (dx + dy) * (TH / 2) * zoom;
-          const dd = (sx - mx) ** 2 + (sy - my) ** 2 * 2.2;
-          if (!best || dd < best.dd) best = { x, y, dd };
-          if (walkable(d, x, y, "player") && (!floor || dd < floor.dd)) floor = { x, y, dd };
+      const zoom = Math.max(1, d.zoom ?? 1);
+      const plate = stageNow().plate;
+      const hitX = plate ? Math.max(12, stageNow().step.x) : (TW / 2) * zoom;
+      const hitY = plate ? Math.max(7, stageNow().step.y) : (TH / 2) * zoom;
+      if (plate) {
+        const body: { hit: { x: number; y: number; dd: number } | null } = { hit: null };
+        const consider = (x: number, y: number, tall: number) => {
+          const p = projectTile(rect.width, rect.height, d.player.x, d.player.y, x, y, zoom, TW, TH);
+          if (presence(p.sx, p.sy) < 0.2) return;
+          const dx = (mx - p.sx) / (hitX * 0.85);
+          const dy = (my - (p.sy - tall * 0.42)) / (tall * 0.48);
+          if (dx * dx + dy * dy > 1) return;
+          const dd = (mx - p.sx) ** 2 + (my - p.sy) ** 2;
+          if (!body.hit || dd < body.hit.dd) body.hit = { x, y, dd };
+        };
+        for (const a of Object.values(d.actors)) {
+          if (!a.alive || a.mapId !== d.mapId) continue;
+          consider(a.x, a.y, 40);
+        }
+        for (const m of Object.values(d.machines)) {
+          if (m.mapId !== d.mapId) continue;
+          consider(m.x, m.y, 36);
+        }
+        if (body.hit) {
+          clickTile(body.hit.x, body.hit.y);
+          return;
         }
       }
-      const pick = floor && floor.dd < 9000 ? floor : best;
-      if (pick && pick.dd < 9000) clickTile(pick.x, pick.y);
+      let best: { x: number; y: number; dd: number; stand: boolean } | null = null;
+      for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+          const p = projectTile(rect.width, rect.height, d.player.x, d.player.y, x, y, zoom, TW, TH);
+          const near = Math.max(Math.abs(x - d.player.x), Math.abs(y - d.player.y));
+          if (plate && (near > 9 || presence(p.sx, p.sy) < 0.25)) continue;
+          const stand = walkable(d, x, y, "player");
+          if (plate && !stand) continue;
+          const nx = Math.abs(mx - p.sx) / hitX;
+          const ny = Math.abs(my - p.sy) / hitY;
+          if (nx + ny > (plate ? 2.2 : 1.15)) continue;
+          const dd = (p.sx - mx) ** 2 + (p.sy - my) ** 2;
+          if (!best || (stand && !best.stand) || (stand === best.stand && dd < best.dd)) best = { x, y, dd, stand };
+        }
+      }
+      if (best) clickTile(best.x, best.y);
     };
     canvas.addEventListener("pointerdown", onPointer);
     return () => {

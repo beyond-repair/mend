@@ -59,9 +59,11 @@ export const WORLD_NODES: WorldNode[] = [
   { id: "told", name: "Wren's diagram", district: "sinks", kind: "person", root: true, about: "Whether the line was told about the lung." },
   { id: "plots-refused", name: "Refused plots", district: "haven", kind: "event", root: true, about: "Silas left the beds down on purpose." },
   { id: "stock-refused", name: "Refused stock", district: "rust", kind: "event", root: true, about: "Silas would not let the forge finish gear." },
+  { id: "wash-spill", name: "Wash taking the quench", district: "rust", kind: "machine", root: true, about: "The tenement pipe drinking what the forge needed." },
   { id: "chute-spill", name: "Chute spill", district: "quarry", kind: "machine", root: true, about: "A local grade cut. Ore leaves the road and not the forge." },
   { id: "lamp-dark", name: "Broken lamp glass", district: "citadel", kind: "machine", root: true, about: "A local cut on a child of the orrery." },
   { id: "hoard", name: "Held cart", district: "haven", kind: "person", root: true, about: "Bram held the load for the ward." },
+  { id: "cart-pin", name: "Pinned waystation", district: "road", kind: "machine", root: true, about: "A brake held so stone does not become ore." },
   { id: "shop", name: "Stall shop", district: "haven", kind: "store", about: "Nessa can sell." },
   { id: "income", name: "Nessa's income", district: "haven", kind: "person", about: "What the shop pays her." },
   { id: "care", name: "Clinic care", district: "haven", kind: "service", about: "Odell has a live tap." },
@@ -82,6 +84,37 @@ export const WORLD_NODES: WorldNode[] = [
   { id: "dark", name: "Dark road", district: "road", kind: "event", about: "The lamps' absence, once the citadel is in play." },
   { id: "loose", name: "Loose sentry", district: "citadel", kind: "faction", about: "A clock that stopped, so the watch has no hour." },
   { id: "workers", name: "Line diagram", district: "quarry", kind: "person", about: "Wren's reading of the lung, carried to the pit." },
+  { id: "clay", name: "Yard clay", district: "kiln", kind: "machine", root: true, about: "The only parent the brick yard owns outright." },
+  { id: "kiln-bed", name: "Kiln bed", district: "kiln", kind: "machine", root: true, about: "Local flue or borrowed Rust heat. Not both required." },
+  { id: "kiln-refused", name: "Refused yard", district: "kiln", kind: "event", root: true, about: "Silas left the beds down on purpose." },
+  { id: "field-dry", name: "Field-dry", district: "kiln", kind: "machine", root: true, about: "A mean bake that does not need gallery water." },
+  { id: "kiln-stamp", name: "Stamp claim", district: "kiln", kind: "faction", root: true, about: "Cress's price, still intact." },
+  { id: "licensed", name: "Licensed board", district: "kiln", kind: "event", root: true, about: "The stamp was paid or talked into allowing a sale." },
+  { id: "stamp-gone", name: "Cut stamp", district: "kiln", kind: "event", root: true, about: "The claim is a hole." },
+  { id: "brick", name: "Set brick", district: "kiln", kind: "service", about: "Clay, a bed, and water or a field-dry. Refusal blocks it." },
+  { id: "houses", name: "Kiln houses", district: "kiln", kind: "service", about: "Walls that hold because brick holds." },
+  { id: "kiln-shop", name: "Jun's board", district: "kiln", kind: "store", about: "A legal sale. Brick, plus a license or a hole." },
+  { id: "kiln-levy", name: "Brick levy", district: "kiln", kind: "faction", about: "A bill that rides on brick while the stamp still exists." },
+  { id: "switch-open", name: "Table passing", district: "switch", kind: "route", root: true, about: "The haul can leave. A jam blocks it unless a shunt is seated." },
+  { id: "on-books", name: "Haul on the books", district: "switch", kind: "faction", root: true, about: "Weight the stamp is allowed to see. A shunt takes it off the books." },
+  { id: "grease", name: "Axle grease", district: "switch", kind: "machine", root: true, about: "The local parent of a floor that stops billing." },
+  { id: "yard-stamp", name: "Yard stamp", district: "switch", kind: "faction", root: true, about: "Rue's price, still intact." },
+  { id: "yard-licensed", name: "Licensed yard", district: "switch", kind: "event", root: true, about: "The stamp was paid or talked into allowing a shed sale." },
+  { id: "yard-cut", name: "Cut yard stamp", district: "switch", kind: "event", root: true, about: "The yard claim is a hole." },
+  { id: "shed", name: "Yard shed", district: "switch", kind: "service", about: "A sleeper's floor, once the axle is greased." },
+  { id: "yard-toll", name: "Haul levy", district: "switch", kind: "faction", about: "A bill that rides a haul the books can see." },
+  { id: "yard-shop", name: "Shed board", district: "switch", kind: "store", about: "A legal sale. Grease, a passing table, and a license or a hole." },
+  { id: "sand", name: "House sand", district: "pane", kind: "machine", root: true, about: "The only parent the glasshouse owns outright. A spill can be seated again." },
+  { id: "pane-bed", name: "Glass bed", district: "pane", kind: "machine", root: true, about: "Local flue or borrowed kiln heat. Not both required." },
+  { id: "pane-refused", name: "Refused house", district: "pane", kind: "event", root: true, about: "Silas left the beds down on purpose." },
+  { id: "cullet", name: "Cullet melt", district: "pane", kind: "machine", root: true, about: "Scrap melted mean. It can stand in for a spilled pit." },
+  { id: "pane-stamp", name: "Glass stamp", district: "pane", kind: "faction", root: true, about: "Ness's price, still intact." },
+  { id: "pane-licensed", name: "Licensed bench", district: "pane", kind: "event", root: true, about: "The stamp was paid or talked into allowing a sale." },
+  { id: "pane-cut", name: "Cut glass stamp", district: "pane", kind: "event", root: true, about: "The glass claim is a hole." },
+  { id: "charge", name: "Clear melt", district: "pane", kind: "service", about: "Sand or cullet, and a bed. Refusal blocks it." },
+  { id: "pane-houses", name: "Glass house", district: "pane", kind: "service", about: "Walls that hold because the melt holds." },
+  { id: "pane-shop", name: "Glass bench", district: "pane", kind: "store", about: "A legal sale. A melt, plus a license or a hole." },
+  { id: "pane-levy", name: "Glass levy", district: "pane", kind: "faction", about: "A bill that rides a melt while the stamp still exists." },
 ];
 
 export const WORLD_EDGES: WorldEdge[] = [
@@ -106,11 +139,13 @@ export const WORLD_EDGES: WorldEdge[] = [
   { id: "move-ore", rel: "transports", from: "moving", to: "ore", gate: "require" },
   { id: "colossus-ore", rel: "supports", from: "colossus", to: "ore", gate: "require" },
   { id: "spill-ore", rel: "blocks", from: "chute-spill", to: "ore", gate: "block" },
+  { id: "pin-ore", rel: "blocks", from: "cart-pin", to: "ore", gate: "block" },
   { id: "pressure-quench", rel: "supplies", from: "pressure", to: "quench", gate: "require" },
   { id: "ore-stock", rel: "supplies", from: "ore", to: "stock", gate: "require" },
   { id: "quench-stock", rel: "consumes", from: "quench", to: "stock", gate: "require" },
   { id: "heat-stock", rel: "powers", from: "heat", to: "stock", gate: "require" },
   { id: "refuse-stock", rel: "blocks", from: "stock-refused", to: "stock", gate: "block" },
+  { id: "wash-quench", rel: "blocks", from: "wash-spill", to: "quench", gate: "block" },
   { id: "stock-gear", rel: "supplies", from: "stock", to: "gear", gate: "require" },
   { id: "guild-ration", rel: "supplies", from: "guild", to: "ration", gate: "require" },
   { id: "food-ration", rel: "stabilizes", from: "food", to: "ration", gate: "lack" },
@@ -129,6 +164,36 @@ export const WORLD_EDGES: WorldEdge[] = [
   { id: "power-loose", rel: "controls", from: "power", to: "loose", gate: "lack" },
   { id: "open-loose", rel: "depends", from: "citadel-open", to: "loose", gate: "require" },
   { id: "told-workers", rel: "communicates", from: "told", to: "workers", gate: "require" },
+  { id: "clay-brick", rel: "supplies", from: "clay", to: "brick", gate: "require" },
+  { id: "bed-brick", rel: "powers", from: "kiln-bed", to: "brick", gate: "require" },
+  { id: "pressure-brick", rel: "supplies", from: "pressure", to: "brick", gate: "alt", altGroup: "set" },
+  { id: "dry-brick", rel: "supplies", from: "field-dry", to: "brick", gate: "alt", altGroup: "set" },
+  { id: "refuse-brick", rel: "blocks", from: "kiln-refused", to: "brick", gate: "block" },
+  { id: "brick-houses", rel: "supports", from: "brick", to: "houses", gate: "require" },
+  { id: "brick-shop", rel: "supplies", from: "brick", to: "kiln-shop", gate: "require" },
+  { id: "license-shop", rel: "regulates", from: "licensed", to: "kiln-shop", gate: "alt", altGroup: "permit" },
+  { id: "hole-shop", rel: "regulates", from: "stamp-gone", to: "kiln-shop", gate: "alt", altGroup: "permit" },
+  { id: "brick-levy", rel: "exposes", from: "brick", to: "kiln-levy", gate: "require" },
+  { id: "stamp-levy", rel: "regulates", from: "kiln-stamp", to: "kiln-levy", gate: "require" },
+  { id: "open-supply", rel: "transports", from: "switch-open", to: "supply", gate: "require" },
+  { id: "grease-shed", rel: "supports", from: "grease", to: "shed", gate: "require" },
+  { id: "books-toll", rel: "exposes", from: "on-books", to: "yard-toll", gate: "require" },
+  { id: "move-toll", rel: "transports", from: "moving", to: "yard-toll", gate: "require" },
+  { id: "stamp-toll", rel: "regulates", from: "yard-stamp", to: "yard-toll", gate: "require" },
+  { id: "grease-shop", rel: "supports", from: "grease", to: "yard-shop", gate: "require" },
+  { id: "open-shop", rel: "transports", from: "switch-open", to: "yard-shop", gate: "require" },
+  { id: "license-yard", rel: "regulates", from: "yard-licensed", to: "yard-shop", gate: "alt", altGroup: "yard-permit" },
+  { id: "hole-yard", rel: "regulates", from: "yard-cut", to: "yard-shop", gate: "alt", altGroup: "yard-permit" },
+  { id: "sand-charge", rel: "supplies", from: "sand", to: "charge", gate: "alt", altGroup: "melt" },
+  { id: "cullet-charge", rel: "supplies", from: "cullet", to: "charge", gate: "alt", altGroup: "melt" },
+  { id: "bed-charge", rel: "powers", from: "pane-bed", to: "charge", gate: "require" },
+  { id: "refuse-charge", rel: "blocks", from: "pane-refused", to: "charge", gate: "block" },
+  { id: "charge-houses", rel: "supports", from: "charge", to: "pane-houses", gate: "require" },
+  { id: "charge-shop", rel: "supplies", from: "charge", to: "pane-shop", gate: "require" },
+  { id: "license-pane", rel: "regulates", from: "pane-licensed", to: "pane-shop", gate: "alt", altGroup: "pane-permit" },
+  { id: "hole-pane", rel: "regulates", from: "pane-cut", to: "pane-shop", gate: "alt", altGroup: "pane-permit" },
+  { id: "charge-levy", rel: "exposes", from: "charge", to: "pane-levy", gate: "require" },
+  { id: "stamp-pane", rel: "regulates", from: "pane-stamp", to: "pane-levy", gate: "require" },
 ];
 
 interface Beat {
@@ -219,6 +284,118 @@ const BEATS: Beat[] = [
     district: "quarry",
     open: "The line has Wren's diagram of the bellows. The quarry can ask what the lung is parent to.",
     close: "The diagram leaves the line.",
+  },
+  {
+    id: "ore",
+    district: "rust",
+    open: "Sound ore is reaching the forge. The road let the cart through.",
+    close: "Sound ore stopped. The pit can still look finished. Something between the pit and the forge is holding the load.",
+    voice: {
+      who: "sera",
+      open: "Sera says the forge has a parent. She does not call the parent good.",
+      close: "Sera says the forge lost a parent the pit may still think it sent. Look at the road before you blame the fire.",
+    },
+  },
+  {
+    id: "brick",
+    district: "kiln",
+    open: "The kiln is setting brick. Clay was local. The water or the dry was not.",
+    close: "The kiln stops setting. A flue can look finished and still have no parent for the set.",
+    voice: {
+      who: "tobin",
+      open: "Tobin hears the set take. He calls the flue local and the water a gallery problem.",
+      close: "Tobin says the yard went quiet. Look at the parent you actually removed.",
+    },
+  },
+  {
+    id: "houses",
+    district: "kiln",
+    open: "The kiln houses take the brick. Sleep has a parent that is not a blanket.",
+    close: "The kiln houses go cold. Brick was the wall.",
+  },
+  {
+    id: "kiln-shop",
+    district: "kiln",
+    open: "Jun's board can buy. A license or a hole was the permit. Brick was the stock.",
+    close: "Jun's board stops. Either the brick failed, or the stamp is still the parent of a legal sale.",
+  },
+  {
+    id: "kiln-levy",
+    district: "kiln",
+    open: "Cress can invoice the brick. Restoring the set also restored a bill.",
+    close: "The brick levy has nothing to invoice. The stamp is a hole, or the set is.",
+    voice: {
+      who: "sera",
+      open: "Sera says you restored a bill in a yard that only wanted heat.",
+      close: "Sera says the bill died. She will not tell you whether the houses were worth it.",
+    },
+  },
+  {
+    id: "shed",
+    district: "switch",
+    open: "The yard shed is a floor. Grease was the parent. Wick can stop sleeping on the plates.",
+    close: "The shed goes back to being a rumor. The plates are the bed again.",
+    voice: {
+      who: "tobin",
+      open: "Tobin says the slick was a missing parent, not weather.",
+      close: "Tobin says the plates are billing again. Look at the axle, not the speech.",
+    },
+  },
+  {
+    id: "yard-toll",
+    district: "switch",
+    open: "Rue can invoice the haul. Something is leaving, and the stamp can see it.",
+    close: "The haul levy has nothing to invoice. The table is jammed, the shunt is off-book, or the stamp is a hole.",
+  },
+  {
+    id: "yard-shop",
+    district: "switch",
+    open: "The shed board can sell. Grease, a passing table, and a license or a hole.",
+    close: "The shed board stops. Grease, the table, or the permit failed.",
+    voice: {
+      who: "wren",
+      open: "Wren says the board is a child of the axle and the stamp, not a kindness.",
+      close: "Wren says the board went dark. Count which parent you actually removed.",
+    },
+  },
+  {
+    id: "charge",
+    district: "pane",
+    open: "The glasshouse is melting clear. Sand or cullet was one parent. Heat was the other.",
+    close: "The melt stops. A flue can look finished and still have no parent for the glass.",
+    voice: {
+      who: "tobin",
+      open: "Tobin hears the melt take. He calls the sand local and the heat a thing you had to borrow or seat.",
+      close: "Tobin says the house went quiet. Look at the parent you actually removed.",
+    },
+  },
+  {
+    id: "pane-houses",
+    district: "pane",
+    open: "The glass house takes the melt. Sleep has a parent that is not a blanket.",
+    close: "The glass house goes cold. The melt was the wall.",
+  },
+  {
+    id: "pane-shop",
+    district: "pane",
+    open: "The glass bench can sell. A license or a hole was the permit. The melt was the stock.",
+    close: "The glass bench stops. Either the melt failed, or the stamp is still the parent of a legal sale.",
+    voice: {
+      who: "wren",
+      open: "Wren says the lens on that bench names a parent. It does not replace the one it names.",
+      close: "Wren says the bench went dark. Count which parent you actually removed.",
+    },
+  },
+  {
+    id: "pane-levy",
+    district: "pane",
+    open: "Ness can invoice the melt. Restoring the house also restored a bill.",
+    close: "The glass levy has nothing to invoice. The stamp is a hole, or the melt is.",
+    voice: {
+      who: "sera",
+      open: "Sera says you restored a bill in a house that only wanted to be clear.",
+      close: "Sera says the bill died. She will not tell you whether the glass was worth it.",
+    },
   },
 ];
 
@@ -395,7 +572,30 @@ function readings(live: Record<string, boolean>, d: Data): Record<string, Distri
   road.danger = live.dark ? 70 : live.watch ? 50 : 20;
   road.food = live.supply ? 30 : 0;
 
-  return { sinks, haven, quarry, rust, citadel, road };
+  const kiln = blank();
+  kiln.water = live.pressure ? 60 : live["field-dry"] ? 25 : 0;
+  kiln.heat = live["kiln-bed"] ? 80 : 0;
+  kiln.food = live.houses ? 40 : 10;
+  kiln.commerce = live["kiln-shop"] ? 80 : live.brick ? 25 : 8;
+  kiln.security = live["kiln-levy"] ? 40 : 55;
+  kiln.transport = live.brick ? 50 : 15;
+  kiln.danger = live["stamp-gone"] ? 35 : 12;
+
+  const yard = blank();
+  yard.transport = live["switch-open"] ? (live.moving ? 80 : 40) : 10;
+  yard.commerce = live["yard-shop"] ? 75 : live["yard-toll"] ? 30 : 8;
+  yard.security = live["yard-toll"] ? 45 : 20;
+  yard.danger = live["switch-open"] ? 12 : 35;
+  yard.food = live.shed ? 30 : 8;
+
+  const pane = blank();
+  pane.heat = live["pane-bed"] ? 80 : 0;
+  pane.commerce = live["pane-shop"] ? 75 : live.charge ? 25 : 8;
+  pane.security = live["pane-levy"] ? 40 : 55;
+  pane.food = live["pane-houses"] ? 30 : 8;
+  pane.danger = live["pane-cut"] ? 35 : live["pane-bed"] ? 18 : 10;
+
+  return { sinks, haven, quarry, rust, citadel, road, kiln, switch: yard, pane };
 }
 
 function observe(d: Data, live: Record<string, boolean>) {
@@ -444,6 +644,33 @@ function observe(d: Data, live: Record<string, boolean>) {
   else if (live.lamps && (d.flags.citadelFate || d.flags.seenCitadel)) bits.push("The road lamps are a child of the orrery.");
   if (live.loose) bits.push("The sentry has no hour. The clock stopped.");
   if (live.workers) bits.push("The quarry line has the bellows diagram.");
+  if (d.flags["seen:kiln"] || d.flags.kilnRefused || d.flags.fieldDry) {
+    if (live.brick) bits.push("The kiln is setting brick. Clay was local. The set had water or a field-dry.");
+    else if (d.flags.kilnRefused) bits.push("The kiln bed was refused. A levy cannot invoice a bed that was left down.");
+    else if (live["kiln-bed"] && !live.pressure && !live["field-dry"]) bits.push("The kiln has a bed and no set. Gallery water is still a parent, or a field-dry is.");
+    else bits.push("The kiln is not setting. Look at clay, the bed, and what the set drinks.");
+    if (live["kiln-levy"]) bits.push("A brick levy is riding that set. The stamp is still intact.");
+    if (live["kiln-shop"]) bits.push("Jun's board can buy. The permit was a license or a hole.");
+    else if (live.brick) bits.push("Brick is real and the board is not. The stamp is still parenting the sale.");
+  }
+  if (d.flags["seen:switch"] || d.flags.switchJam || d.flags.switchGreased || d.flags.switchShunt) {
+    if (!live["switch-open"]) bits.push("The Switch table is jammed. A busy pit is not a parent of the citadel.");
+    else if (d.flags.switchShunt) bits.push("The haul is leaving on a shunt. The stamp is not allowed to see it.");
+    else bits.push("The Switch table is passing weight. Jam, shunt, and stamp are different parents.");
+    if (live["yard-toll"]) bits.push("A haul levy is riding the books. The stamp can see the weight.");
+    if (live.shed) bits.push("The yard shed is a floor. Grease was the parent.");
+    else if (d.flags["seen:switch"]) bits.push("The yard plates are still slick. Grease is local. Boots are not the shed.");
+    if (live["yard-shop"]) bits.push("The shed board can sell. The permit was a license or a hole.");
+  }
+  if (d.flags["seen:pane"] || d.flags.paneRefused || d.flags.paneCullet || d.flags.paneBorrowed) {
+    if (live.charge) bits.push("The glasshouse is melting clear. Sand or cullet was one parent. Heat was the other.");
+    else if (d.flags.paneRefused) bits.push("The glass bed was refused. A levy cannot invoice a bed that was left down.");
+    else if (live["pane-bed"] && !live.sand && !live.cullet) bits.push("The glasshouse has a bed and nothing to melt. The pit can be seated again, or cullet can stand in.");
+    else bits.push("The glasshouse is not melting. Look at sand, cullet, and which heat you actually seated.");
+    if (live["pane-levy"]) bits.push("A glass levy is riding that melt. The stamp is still intact.");
+    if (live["pane-shop"]) bits.push("The glass bench can sell. The permit was a license or a hole.");
+    else if (live.charge) bits.push("The melt is real and the bench is not. The stamp is still parenting the sale.");
+  }
   const text = bits.join(" ");
   const hit = d.journal.find((j) => j.id === "network");
   if (hit) {
@@ -493,6 +720,65 @@ export function reconcileNetwork(d: Data) {
   const drive = seam(d.machines.orrery?.nodes, "drive");
   const throat = seam(d.machines.colossus?.nodes, "throat");
   const firebed = seam(d.machines.hearth?.nodes, "bed");
+  const fire = d.machines.kilnfire;
+  const clay = seam(fire?.nodes, "clay");
+  const local = seam(fire?.nodes, "bed");
+  const borrowNode = seam(fire?.nodes, "borrow");
+  const heatUp = firebed ? nodeLive(d.machines.hearth.nodes, firebed) : false;
+  if (borrowNode && d.flags.kilnBorrowed) {
+    borrowNode.severed = !heatUp || d.flags.kilnRefused === true;
+    borrowNode.integrity = borrowNode.severed ? 0 : 100;
+    if (!borrowNode.severed) borrowNode.revealed = true;
+  }
+  if (d.flags.kilnRefused === true && local) {
+    local.severed = true;
+    local.integrity = 0;
+  }
+  const stamp = seam(d.machines.kilnstamp?.nodes, "claim");
+  const yardDesk = d.machines.switchdesk;
+  const yardClaim = seam(yardDesk?.nodes, "claim");
+  const yardTable = d.machines.turntable;
+  const yardAxle = seam(yardTable?.nodes, "axle");
+  const yardGrease = seam(yardTable?.nodes, "grease");
+  const yardShunt = seam(yardTable?.nodes, "shunt");
+  if (yardAxle) {
+    const seated = d.flags.switchJam !== true || d.flags.switchShunt === true;
+    yardAxle.severed = d.flags.switchJam === true && d.flags.switchShunt !== true;
+    yardAxle.integrity = yardAxle.severed ? 0 : 100;
+    if (seated) yardAxle.revealed = true;
+  }
+  if (yardGrease) {
+    yardGrease.severed = d.flags.switchGreased !== true;
+    yardGrease.integrity = yardGrease.severed ? 0 : 100;
+  }
+  if (yardShunt) {
+    yardShunt.severed = d.flags.switchShunt !== true;
+    yardShunt.integrity = yardShunt.severed ? 0 : 100;
+    if (!yardShunt.severed) yardShunt.revealed = true;
+  }
+  const paneFire = d.machines.panefire;
+  const paneSand = seam(paneFire?.nodes, "sand");
+  const paneLocal = seam(paneFire?.nodes, "bed");
+  const paneBorrow = seam(paneFire?.nodes, "borrow");
+  const paneClaim = seam(d.machines.panestamp?.nodes, "claim");
+  if (paneSand && d.flags.paneSpilled === true) {
+    paneSand.severed = true;
+    paneSand.integrity = 0;
+  }
+  const localBed = Boolean(local && fire && nodeLive(fire.nodes, local));
+  const borrowed = Boolean(borrowNode && fire && nodeLive(fire.nodes, borrowNode));
+  const kilnHeat = Boolean((localBed || borrowed) && d.flags.kilnRefused !== true);
+  if (paneBorrow && d.flags.paneBorrowed) {
+    paneBorrow.severed = !kilnHeat || d.flags.paneRefused === true;
+    paneBorrow.integrity = paneBorrow.severed ? 0 : 100;
+    if (!paneBorrow.severed) paneBorrow.revealed = true;
+  }
+  if (d.flags.paneRefused === true && paneLocal) {
+    paneLocal.severed = true;
+    paneLocal.integrity = 0;
+  }
+  const paneBedLive = Boolean(paneLocal && paneFire && nodeLive(paneFire.nodes, paneLocal) && d.flags.paneRefused !== true);
+  const paneBorrowLive = Boolean(paneBorrow && paneFire && nodeLive(paneFire.nodes, paneBorrow) && d.flags.paneRefused !== true);
   const goods = String(d.flags.wardGoods ?? "none");
   const roots: Record<string, boolean> = {
     bellows: reed ? nodeLive(d.machines.bellows.nodes, reed) : true,
@@ -514,9 +800,31 @@ export function reconcileNetwork(d: Data) {
     told: d.flags.toldWren === true,
     "plots-refused": d.flags.plotsRefused === true,
     "stock-refused": d.flags.stockRefused === true,
+    "wash-spill": d.flags.washSpill === true,
     "chute-spill": Boolean(grade?.severed),
     "lamp-dark": Boolean(glass?.severed),
     hoard: d.flags.bramHoard === true,
+    "cart-pin": d.flags.cartPinned === true,
+    clay: clay ? nodeLive(d.machines.kilnfire.nodes, clay) : false,
+    "kiln-bed": Boolean((localBed && d.flags.kilnRefused !== true) || (borrowed && d.flags.kilnRefused !== true)),
+    "kiln-refused": d.flags.kilnRefused === true,
+    "field-dry": d.flags.fieldDry === true,
+    "kiln-stamp": stamp ? nodeLive(d.machines.kilnstamp.nodes, stamp) : false,
+    licensed: d.flags.kilnLicensed === true,
+    "stamp-gone": Boolean(stamp?.severed),
+    "switch-open": d.flags.switchJam !== true || d.flags.switchShunt === true,
+    "on-books": d.flags.switchJam !== true && d.flags.switchShunt !== true,
+    grease: d.flags.switchGreased === true,
+    "yard-stamp": Boolean(yardClaim && yardDesk && nodeLive(yardDesk.nodes, yardClaim)),
+    "yard-licensed": d.flags.switchLicensed === true,
+    "yard-cut": Boolean(yardClaim?.severed),
+    sand: Boolean(paneSand && paneFire && nodeLive(paneFire.nodes, paneSand)),
+    "pane-bed": Boolean(paneBedLive || paneBorrowLive),
+    "pane-refused": d.flags.paneRefused === true,
+    cullet: d.flags.paneCullet === true,
+    "pane-stamp": Boolean(paneClaim && d.machines.panestamp && nodeLive(d.machines.panestamp.nodes, paneClaim)),
+    "pane-licensed": d.flags.paneLicensed === true,
+    "pane-cut": Boolean(paneClaim?.severed),
   };
   const live = derive(roots);
   syncMachines(d, live);
@@ -539,6 +847,21 @@ export function reconcileNetwork(d: Data) {
   d.flags.roadDark = live.dark;
   d.flags.sentryLoose = live.loose;
   d.flags.workersKnow = live.workers;
+  d.flags.brickLive = live.brick;
+  d.flags.kilnHouses = live.houses;
+  d.flags.kilnShop = live["kiln-shop"];
+  d.flags.kilnLevy = live["kiln-levy"];
+  d.flags.stampCut = Boolean(stamp?.severed);
+  d.flags.switchShed = live.shed;
+  d.flags.switchToll = live["yard-toll"];
+  d.flags.switchShop = live["yard-shop"];
+  d.flags.switchCut = Boolean(yardClaim?.severed);
+  d.flags.paneCharge = live.charge;
+  d.flags.paneHouses = live["pane-houses"];
+  d.flags.paneShop = live["pane-shop"];
+  d.flags.paneLevy = live["pane-levy"];
+  d.flags.paneCut = Boolean(paneClaim?.severed);
+  d.flags.paneBed = live["pane-bed"];
   d.flags.foodPrice = live.food ? 6 : live.ration ? 9 : 0;
   d.flags.gearPrice = live.gear ? 18 : 0;
   for (const beat of BEATS) queue(d, beat, Boolean(live[beat.id]));

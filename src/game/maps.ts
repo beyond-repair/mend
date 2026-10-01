@@ -85,6 +85,12 @@ function sinks(): GameMap {
   deep[18][25] = ".";
   deep[19][16] = "^";
   deep[20][20] = "%";
+  fill(deep, 2, 17, 8, 21, ".");
+  deep[18][9] = ".";
+  deep[18][10] = ".";
+  deep[18][11] = ".";
+  deep[18][12] = ".";
+  deep[18][13] = ".";
   return finish("sinks", "The Sinks", "Act I", deep, { x: 3, y: 3 }, "sinks");
 }
 
@@ -118,7 +124,7 @@ function quarry(): GameMap {
   east[8][32] = ".";
   east[8][33] = ".";
   east[7][32] = "%";
-  return finish("quarry", "Abandoned Quarry", "Act III", east, { x: 10, y: 12 }, "quarry");
+  return finish("quarry", "The Clockwork Canyon", "Act III", east, { x: 10, y: 12 }, "quarry");
 }
 
 function rust(): GameMap {
@@ -235,6 +241,7 @@ function road(): GameMap {
   wide[7][3] = ".";
   wide[15][8] = ".";
   wide[15][28] = ".";
+  fill(wide, 26, 1, 28, 2, ".");
   return finish("road", "The Stack Road", "Act II", wide, { x: 3, y: 4 }, "road");
 }
 
@@ -273,6 +280,63 @@ function haven(): GameMap {
   return finish("haven", "Oakhaven Lower Ward", "Act I", wide, { x: 10, y: 12 }, "haven");
 }
 
+function kiln(): GameMap {
+  const g = grid(34, 22);
+  fill(g, 14, 1, 18, 6, ".");
+  vwall(g, 9, 3, 11);
+  g[6][9] = ".";
+  g[7][9] = ".";
+  vwall(g, 25, 3, 12);
+  g[6][25] = ".";
+  g[7][25] = ".";
+  hwall(g, 16, 2, 13);
+  vwall(g, 2, 16, 20);
+  vwall(g, 13, 16, 20);
+  g[16][6] = "+";
+  g[5][4] = "%";
+  g[8][4] = "%";
+  g[9][30] = "^";
+  g[17][22] = "%";
+  g[14][8] = "^";
+  g[18][5] = "%";
+  return finish("kiln", "The Kiln", "Act II", g, { x: 16, y: 3 }, "rust");
+}
+
+function switchyard(): GameMap {
+  const g = grid(30, 18);
+  fill(g, 12, 1, 16, 5, ".");
+  fill(g, 4, 5, 26, 14, ".");
+  vwall(g, 8, 4, 10);
+  g[6][8] = ".";
+  g[7][8] = ".";
+  hwall(g, 13, 3, 12);
+  vwall(g, 3, 13, 16);
+  vwall(g, 12, 13, 16);
+  g[13][6] = "+";
+  g[5][4] = "%";
+  g[10][24] = "^";
+  g[15][9] = "%";
+  return finish("switch", "The Switch", "Act II", g, { x: 14, y: 3 }, "road");
+}
+
+function pane(): GameMap {
+  const g = grid(32, 20);
+  fill(g, 14, 14, 18, 18, ".");
+  fill(g, 3, 3, 29, 13, ".");
+  vwall(g, 20, 3, 12);
+  g[7][20] = ".";
+  g[8][20] = ".";
+  hwall(g, 15, 3, 12);
+  vwall(g, 3, 15, 18);
+  vwall(g, 12, 15, 18);
+  g[15][6] = "+";
+  fill(g, 4, 16, 11, 18, ".");
+  g[5][5] = "%";
+  g[4][12] = "^";
+  g[18][10] = "%";
+  return finish("pane", "The Pane", "Act II", g, { x: 16, y: 16 }, "citadel");
+}
+
 function tundra(): GameMap {
   const g = grid(28, 12);
   vwall(g, 1, 1, 10);
@@ -299,6 +363,9 @@ function tundra(): GameMap {
 export const MAPS: Record<string, GameMap> = {
   sinks: sinks(),
   haven: haven(),
+  kiln: kiln(),
+  switch: switchyard(),
+  pane: pane(),
   quarry: quarry(),
   rust: rust(),
   road: road(),
@@ -323,6 +390,12 @@ export interface Mouth {
 export const MOUTHS: Mouth[] = [
   { map: "sinks", x: 25, y: 18, to: "road", tx: 5, ty: 5, need: null, deny: "The stack mouth is shut." },
   { map: "road", x: 2, y: 7, to: "sinks", tx: 24, ty: 18, need: null, deny: "The Sinks mouth is shut." },
+  { map: "road", x: 16, y: 11, to: "kiln", tx: 16, ty: 3, need: null, deny: "The brick stair is shut." },
+  { map: "kiln", x: 16, y: 1, to: "road", tx: 16, ty: 11, need: null, deny: "The stack mouth is shut." },
+  { map: "road", x: 22, y: 14, to: "switch", tx: 14, ty: 3, need: null, deny: "The yard stair is shut." },
+  { map: "switch", x: 14, y: 1, to: "road", tx: 22, ty: 13, need: null, deny: "The stack mouth is shut." },
+  { map: "road", x: 27, y: 1, to: "pane", tx: 16, ty: 17, need: null, deny: "The glass stair is shut." },
+  { map: "pane", x: 16, y: 18, to: "road", tx: 27, ty: 2, need: null, deny: "The stack mouth is shut." },
   { map: "road", x: 20, y: 1, to: "haven", tx: 33, ty: 6, need: null, deny: "The ward stair is shut." },
   { map: "haven", x: 34, y: 6, to: "road", tx: 20, ty: 3, need: null, deny: "The stack mouth is shut." },
   { map: "road", x: 34, y: 4, to: "quarry", tx: 32, ty: 8, need: "act1", deny: "The quarry road wants a signed stair, or a crawl you already used." },
@@ -348,6 +421,9 @@ export const LOCKED_DOORS: { map: string; x: number; y: number; flag: string; co
   { map: "sinks", x: 19, y: 6, flag: "sumpOpen", convo: "sump-door" },
   { map: "citadel", x: 6, y: 8, flag: "shaftOpen", convo: "shaft-door" },
   { map: "haven", x: 8, y: 16, flag: "ashAccess", convo: "ash-cut" },
+  { map: "kiln", x: 6, y: 16, flag: "kilnCellar", convo: "kiln-cellar" },
+  { map: "switch", x: 6, y: 13, flag: "switchBay", convo: "switch-bay" },
+  { map: "pane", x: 6, y: 15, flag: "paneVault", convo: "pane-vault" },
 ];
 
 for (const m of Object.values(MAPS)) {
@@ -367,8 +443,13 @@ export const WALKABLE = new Set([".", ",", "+", "=", "^", "!", "p", "v"]);
 export const REGIONS: { id: string; name: string; act: string; blurb: string; need: string | null }[] = [
   { id: "sinks", name: "The Sinks", act: "Act I", blurb: "Reclamation under the stacks. The south cut is a mouth onto the road, not a menu.", need: null },
   { id: "haven", name: "Oakhaven Lower Ward", act: "Act I", blurb: "Stalls, a clinic, and plots that drink from the Sinks. Come back. The pipes will have changed.", need: null },
-  { id: "quarry", name: "Abandoned Quarry", act: "Act III", blurb: "Stone, a crane, a colossus, and a rigger the count lost. The east cut returns to the road.", need: "act1" },
+  { id: "road", name: "The Stack Road", act: "Act II", blurb: "Gantries between the districts. The mouths are on the road. The ledger only jumps a throat you have already stood in.", need: "seen:road" },
+  { id: "kiln", name: "The Kiln", act: "Act II", blurb: "A brick yard under the stack road. Clay is local. Water, heat, and a stamp are not.", need: "seen:kiln" },
+  { id: "switch", name: "The Switch", act: "Act II", blurb: "A freight table under the same road. Grease is local. The haul, and the bill on it, are not.", need: "seen:switch" },
+  { id: "pane", name: "The Pane", act: "Act II", blurb: "A glasshouse off the high walk. Sand is local. Heat, a stamp, and a lamp that needs glass are not.", need: "seen:pane" },
+  { id: "quarry", name: "The Clockwork Canyon", act: "Act III", blurb: "Stone, a crane, a colossus, and a rigger the count lost. The east cut returns to the road.", need: "act1" },
   { id: "rust", name: "Rust Districts", act: "Act III", blurb: "Forge, tenements, guild heat. Stock is a grandchild of the quarry and the Sinks.", need: "act1" },
+  { id: "tundra", name: "The Brass Tundra", act: "Act IV", blurb: "Ice, the hollow, and the walk to the ranking stair.", need: "seen:tundra" },
   { id: "citadel", name: "High Citadel", act: "Act V", blurb: "Reached on foot across the tundra. Lamps, siphon, orrery, rank. Not merely a taller room.", need: "citadelOpen" },
   { id: "spire", name: "Void Spire", act: "Act VI", blurb: "No recoverable baseline. The question is whether holding the city together is the problem.", need: "spireOpen" },
 ];

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { SPAWNS, spawnActor } from "./catalog";
 import { CONVOS } from "./dialogue";
 import { WORLD_EDGES } from "./network";
-import { MOUTHS } from "./maps";
+import { MOUTHS, MAPS, tileAt, WALKABLE } from "./maps";
 import { allSkills, maxFocus, maxHp } from "./formulas";
 import {
   actorFate,
@@ -38,6 +38,7 @@ import {
   startCombat,
   strike,
   unmendNode,
+  useItem,
   walkable,
   arrive,
   depart,
@@ -1833,5 +1834,450 @@ describe("the city stays legible without announcing itself", () => {
     assert.match(cut, /Pim|stone/);
     assert.notEqual(kept, cut);
     assert.doesNotMatch(kept + cut, /good ending|bad ending|you were right to/i);
+  });
+
+  it("opens an audit on the seam that is already failing, and lets the moth keep the road", () => {
+    const d = world();
+    d.player.x = 14;
+    d.player.y = 8;
+    openAudit(d, { kind: "machine", id: "pump" });
+    assert.equal(d.uiNode, "valve");
+    d.flags.cinderFed = true;
+    applyEffects(d, [
+      { op: "recruit", id: "cinder" },
+      { op: "flag", key: "cinderSpireStay", value: true },
+      { op: "dismiss", id: "cinder" },
+    ]);
+    assert.equal(d.actors.cinder.companion, false);
+    assert.equal(d.actors.cinder.mapId, "road");
+    assert.equal(d.actors.cinder.x, 20);
+    assert.doesNotMatch(CONVOS["cinder-spire"].nodes.start.text, /Trust|command menu/i);
+    assert.ok(CONVOS["tobin-late"]);
+  });
+
+  it("lets a pinned cart, a cut glaze, and a stolen quench change rooms the player is not standing in", () => {
+    const d = world();
+    d.flags.workersClear = true;
+    d.flags.checkpointLead = "varr";
+    d.flags["crane:dropped"] = true;
+    d.player.x = 16;
+    d.player.y = 11;
+    d.player.mapId = "road";
+    d.mapId = "road";
+    d.focus = 20;
+    reconcileWorld(d);
+    assert.equal(d.flags.stoneMoving, true);
+    assert.equal(d.flags.oreSound, true);
+    runSpecial(d, "relay", "pin-load");
+    assert.equal(d.flags.cartPinned, true);
+    assert.equal(d.flags.oreSound, false);
+    assert.equal(d.actors.moss?.x, 17);
+    assert.equal(d.actors.moss?.mapId, "road");
+    runSpecial(d, "relay", "ease-brake");
+    assert.equal(d.flags.cartPinned, false);
+    assert.equal(d.flags.cartEase, true);
+    assert.equal(d.flags.oreSound, true);
+    assert.equal(d.inventory.some((i) => i.id === "coupler"), true);
+
+    const ice = world();
+    ice.flags.tundraWalked = true;
+    ice.player.x = 18;
+    ice.player.y = 13;
+    ice.player.mapId = "tundra";
+    ice.mapId = "tundra";
+    ice.focus = 12;
+    reconcileWorld(ice);
+    assert.equal(ice.flags.hollowWarm, true);
+    const drive = ice.machines.orrery.nodes.find((n) => n.id === "drive");
+    if (!drive) throw new Error("drive");
+    runSpecial(ice, "stake", "cut-span");
+    assert.equal(ice.flags.iceCut, true);
+    assert.equal(ice.flags.hollowWarm, false);
+    assert.equal(nodeLive(ice.machines.orrery.nodes, drive), true);
+    assert.match(buildEpilogue(ice, "release").join("\n"), /glaze was cut/);
+    assert.doesNotMatch(buildEpilogue(ice, "release").join("\n"), /good ending|bad ending|you were right to/i);
+
+    const rust = world();
+    rust.flags.pumpFate = "mend";
+    rust.player.x = 6;
+    rust.player.y = 15;
+    rust.player.mapId = "rust";
+    rust.mapId = "rust";
+    rust.focus = 20;
+    rust.player.skills.engineering = 80;
+    reconcileWorld(rust);
+    assert.equal(rust.flags.quenchLive, true);
+    runSpecial(rust, "wash", "to-sleepers");
+    assert.equal(rust.flags.washSpill, true);
+    assert.equal(rust.flags.quenchLive, false);
+    assert.equal(rust.flags.washLive, true);
+    assert.ok(CONVOS.moss);
+    assert.ok(CONVOS["tobin-mid"]);
+    assert.doesNotMatch(CONVOS.moss.nodes.start.text, /Trust|QUEST|command menu/i);
+  });
+
+  it("lets a costume gauge, a licensed cup, a live throat, and a stored night change later rooms", () => {
+    const gauge = world();
+    gauge.player.x = 4;
+    gauge.player.y = 18;
+    gauge.mapId = "sinks";
+    gauge.player.mapId = "sinks";
+    gauge.focus = 20;
+    reconcileWorld(gauge);
+    assert.equal(gauge.flags.gaugeSeen, true);
+    gauge.inventory.push({ id: "listener", qty: 1 });
+    useItem(gauge, "listener");
+    assert.equal(gauge.machines.gauge.nodes.find((n) => n.id === "pocket")?.revealed, true);
+    assert.equal(gauge.machines.gauge.nodes.find((n) => n.id === "feed")?.revealed, false);
+    assert.equal(gauge.inventory.some((i) => i.id === "listener"), false);
+    openAudit(gauge, { kind: "machine", id: "gauge" });
+    assert.equal(gauge.uiNode, "face");
+    assert.equal(gauge.machines.gauge.nodes.find((n) => n.id === "face")?.decoy, true);
+    runSpecial(gauge, "gauge", "read-face");
+    assert.equal(gauge.flags.gaugeRead, true);
+    assert.equal(gauge.machines.gauge.nodes.find((n) => n.id === "feed")?.revealed, true);
+    assert.equal(gauge.inventory.some((i) => i.id === "listener"), true);
+    runSpecial(gauge, "gauge", "cut-feed");
+    assert.equal(gauge.flags.gaugeCut, true);
+    assert.equal(gauge.actors.servo.hostile, true);
+    assert.ok(gauge.combat);
+
+    const heard = world();
+    applyEffects(heard, [{ op: "recruit", id: "wren" }]);
+    heard.player.x = 4;
+    heard.player.y = 18;
+    heard.mapId = "sinks";
+    heard.player.mapId = "sinks";
+    heard.actors.wren.mapId = "sinks";
+    heard.actors.wren.x = 5;
+    heard.actors.wren.y = 18;
+    heard.focus = 20;
+    runSpecial(heard, "gauge", "read-face");
+    assert.equal(heard.flags.wrenGauge, true);
+
+    const cup = world();
+    cup.mapId = "haven";
+    cup.player.mapId = "haven";
+    cup.player.x = 7;
+    cup.player.y = 17;
+    cup.focus = 20;
+    reconcileWorld(cup);
+    assert.equal(cup.flags.ashAccess, true);
+    assert.equal(cup.player.y, 17);
+    assert.equal(cup.flags.stillSeen, true);
+    runSpecial(cup, "still", "license-still");
+    assert.equal(cup.flags.stillLicensed, true);
+    assert.match(buildEpilogue(cup, "release").join("\n"), /ash still was licensed/i);
+
+    const pit = world();
+    pit.mapId = "quarry";
+    pit.player.mapId = "quarry";
+    pit.player.x = 7;
+    pit.player.y = 18;
+    pit.focus = 20;
+    reconcileWorld(pit);
+    assert.equal(pit.flags.winchSeen, true);
+    runSpecial(pit, "winchhouse", "brace-winch");
+    assert.equal(pit.flags.crewStood, true);
+    assert.equal(pit.combat, null);
+    assert.equal(pit.inventory.some((i) => i.id === "dog"), true);
+
+    const stillThroat = world();
+    const throat = stillThroat.machines.colossus.nodes.find((n) => n.id === "throat");
+    if (!throat) throw new Error("throat");
+    throat.severed = true;
+    throat.integrity = 0;
+    stillThroat.mapId = "quarry";
+    stillThroat.player.mapId = "quarry";
+    stillThroat.player.x = 7;
+    stillThroat.player.y = 18;
+    stillThroat.focus = 20;
+    reconcileWorld(stillThroat);
+    assert.equal(stillThroat.flags.colossusBreath, false);
+    runSpecial(stillThroat, "winchhouse", "cut-winch");
+    assert.equal(stillThroat.flags.winchCut, true);
+    assert.ok(stillThroat.combat);
+
+    const night = world();
+    night.mapId = "citadel";
+    night.player.mapId = "citadel";
+    night.player.x = 20;
+    night.player.y = 17;
+    night.focus = 30;
+    reconcileWorld(night);
+    assert.equal(night.flags.bufferSeen, true);
+    assert.equal(night.combat, null);
+    runSpecial(night, "buffer", "charge-cell");
+    assert.equal(night.flags.bufferCharged, true);
+    runSpecial(night, "crucible", "sever");
+    assert.equal(night.flags.bufferHeld, true);
+    const told = buildEpilogue(night, "release").join("\n");
+    assert.match(told, /One citadel infirmary/);
+    assert.doesNotMatch(told, /good ending|bad ending|you were right to/i);
+    assert.ok(CONVOS.brin && CONVOS.vetch && CONVOS.holt && CONVOS.ime);
+    assert.doesNotMatch(
+      [CONVOS.brin, CONVOS.vetch, CONVOS.holt, CONVOS.ime].flatMap((c) => Object.values(c.nodes).map((n) => n.text)).join("\n"),
+      /Trust|QUEST|command menu/i,
+    );
+  });
+});
+
+describe("kiln and switch", () => {
+  it("keeps new mouths and feet on walkable ground", () => {
+    for (const mouth of MOUTHS.filter((m) => m.map === "kiln" || m.to === "kiln" || m.map === "switch" || m.to === "switch")) {
+      assert.ok(WALKABLE.has(tileAt(MAPS[mouth.map], mouth.x, mouth.y)), `${mouth.map} ${mouth.x},${mouth.y}`);
+      assert.ok(WALKABLE.has(tileAt(MAPS[mouth.to], mouth.tx, mouth.ty)), `${mouth.to} ${mouth.tx},${mouth.ty}`);
+    }
+    const d = world();
+    for (const id of ["harl", "cress", "jun", "teb", "nim", "voss", "hale", "rue", "ske", "wick"]) {
+      const a = d.actors[id];
+      assert.ok(a, id);
+      assert.ok(WALKABLE.has(tileAt(MAPS[a.mapId], a.x, a.y)), id);
+    }
+  });
+
+  it("does not set brick until water or a field-dry, and a license is not a cut", () => {
+    const d = world();
+    assert.equal(regionOpen(d, "seen:kiln"), false);
+    d.mapId = "kiln";
+    d.player.mapId = "kiln";
+    d.player.x = 6;
+    d.player.y = 7;
+    d.focus = 20;
+    reconcileWorld(d);
+    assert.equal(regionOpen(d, "seen:kiln"), true);
+    assert.equal(d.flags.brickLive, false);
+    runSpecial(d, "kilnfire", "seat-flue");
+    assert.equal(d.flags.brickLive, false);
+    assert.equal(d.flags.kilnLevy, false);
+    addItem(d, "scrap", 1);
+    d.player.skills.engineering = 80;
+    runSpecial(d, "kilnfire", "field-dry");
+    assert.equal(d.flags.brickLive, true);
+    assert.equal(d.flags.kilnLevy, true);
+    assert.equal(d.flags.kilnShop, false);
+    d.player.x = 20;
+    d.player.y = 16;
+    d.player.skills.speech = 10;
+    d.scrip = 30;
+    runSpecial(d, "kilnstamp", "license-stamp");
+    assert.equal(d.flags.kilnLicensed, true);
+    assert.equal(d.flags.kilnShop, true);
+    assert.equal(d.flags.kilnLevy, true);
+    assert.equal(d.actors.cress.hostile, false);
+  });
+
+  it("opens the kiln board by cutting the stamp and makes Cress answer", () => {
+    const d = world();
+    d.mapId = "kiln";
+    d.player.mapId = "kiln";
+    d.player.x = 6;
+    d.player.y = 7;
+    d.focus = 20;
+    d.player.skills.engineering = 80;
+    addItem(d, "scrap", 1);
+    reconcileWorld(d);
+    runSpecial(d, "kilnfire", "seat-flue");
+    runSpecial(d, "kilnfire", "field-dry");
+    d.player.x = 20;
+    d.player.y = 16;
+    runSpecial(d, "kilnstamp", "cut-stamp");
+    assert.equal(d.flags.kilnShop, true);
+    assert.equal(d.flags.kilnLevy, false);
+    assert.equal(d.actors.cress.hostile, true);
+  });
+
+  it("lets a jammed switch starve a moving pit until a shunt", () => {
+    const d = world();
+    assert.equal(regionOpen(d, "seen:switch"), false);
+    d.flags.workersClear = true;
+    d.flags.checkpointLead = "varr";
+    d.mapId = "quarry";
+    d.player.mapId = "quarry";
+    d.player.x = 12;
+    d.player.y = 4;
+    runSpecial(d, "crane", "drop");
+    assert.equal(d.flags.stoneMoving, true);
+    assert.equal(d.flags.citadelSupplied, true);
+    assert.equal(d.flags.switchToll, true);
+    d.flags.switchJam = true;
+    reconcileWorld(d);
+    assert.equal(d.flags.citadelSupplied, false);
+    assert.equal(d.flags.switchToll, false);
+    d.flags.switchShunt = true;
+    reconcileWorld(d);
+    assert.equal(d.flags.citadelSupplied, true);
+    assert.equal(d.flags.switchToll, false);
+    d.mapId = "switch";
+    d.player.mapId = "switch";
+    d.player.x = 16;
+    d.player.y = 8;
+    d.focus = 20;
+    d.player.skills.engineering = 80;
+    addItem(d, "scrap", 1);
+    runSpecial(d, "turntable", "grease-axle");
+    assert.equal(d.flags.switchGreased, true);
+    assert.equal(d.flags.switchShed, true);
+    assert.equal(regionOpen(d, "seen:switch"), true);
+  });
+
+  it("files a till lifted in front of Rue and misses one lifted at a distance", () => {
+    const seen = world();
+    seen.mapId = "switch";
+    seen.player.mapId = "switch";
+    seen.player.x = 4;
+    seen.player.y = 7;
+    seen.player.skills.sneak = 90;
+    reconcileWorld(seen);
+    runSpecial(seen, "switchdesk", "lift-till");
+    assert.equal(seen.flags.switchCaught, true);
+    assert.equal(seen.actors.rue.hostile, true);
+    assert.equal(seen.scrip, 14);
+
+    const quiet = world();
+    quiet.mapId = "switch";
+    quiet.player.mapId = "switch";
+    quiet.player.x = 5;
+    quiet.player.y = 8;
+    quiet.player.skills.sneak = 80;
+    quiet.actors.rue.x = 6;
+    quiet.actors.rue.y = 4;
+    reconcileWorld(quiet);
+    assert.equal(quiet.actors.rue.y, 6);
+    quiet.actors.rue.x = 6;
+    quiet.actors.rue.y = 4;
+    runSpecial(quiet, "switchdesk", "lift-till");
+    assert.equal(quiet.flags.switchCaught, undefined);
+    assert.equal(quiet.scrip, 14);
+    assert.equal(quiet.actors.rue.hostile, false);
+  });
+});
+
+describe("the pane", () => {
+  it("keeps the glass stair and the people on walkable ground", () => {
+    for (const mouth of MOUTHS.filter((m) => m.map === "pane" || m.to === "pane")) {
+      assert.ok(WALKABLE.has(tileAt(MAPS[mouth.map], mouth.x, mouth.y)), `${mouth.map} ${mouth.x},${mouth.y}`);
+      assert.ok(WALKABLE.has(tileAt(MAPS[mouth.to], mouth.tx, mouth.ty)), `${mouth.to} ${mouth.tx},${mouth.ty}`);
+    }
+    const d = world();
+    reconcileWorld(d);
+    assert.equal(d.flags.paneCharge, false);
+    for (const id of ["orla", "ness", "fen", "sol", "panemoth"]) {
+      const a = d.actors[id];
+      assert.ok(a, id);
+      assert.ok(WALKABLE.has(tileAt(MAPS[a.mapId], a.x, a.y)), `${id} ${a.x},${a.y}`);
+    }
+  });
+
+  it("melts on local sand and heat, and a license is not a cut", () => {
+    const d = world();
+    assert.equal(regionOpen(d, "seen:pane"), false);
+    d.mapId = "pane";
+    d.player.mapId = "pane";
+    d.player.x = 8;
+    d.player.y = 7;
+    d.focus = 20;
+    reconcileWorld(d);
+    assert.equal(regionOpen(d, "seen:pane"), true);
+    assert.equal(d.flags.paneCharge, false);
+    runSpecial(d, "panefire", "seat-flue");
+    assert.equal(d.flags.paneCharge, true);
+    assert.equal(d.flags.paneLevy, true);
+    assert.equal(d.flags.paneShop, false);
+    d.player.x = 22;
+    d.player.y = 7;
+    d.player.skills.speech = 10;
+    d.scrip = 30;
+    runSpecial(d, "panestamp", "license-pane");
+    assert.equal(d.flags.paneLicensed, true);
+    assert.equal(d.flags.paneShop, true);
+    assert.equal(d.flags.paneLevy, true);
+    assert.equal(d.actors.ness.hostile, false);
+    runSpecial(d, "panebench", "draw-pane");
+    assert.equal(d.inventory.some((i) => i.id === "clearpane"), false);
+    d.player.x = 26;
+    d.player.y = 7;
+    runSpecial(d, "panebench", "draw-pane");
+    assert.equal(d.inventory.find((i) => i.id === "clearpane")?.qty, 1);
+    addItem(d, "anneallens", 1);
+    openAudit(d, { kind: "machine", id: "panefire" });
+    assert.equal(d.flags["lens:panefire"], true);
+  });
+
+  it("opens the bench by cutting the stamp and lets cullet replace a spilled pit", () => {
+    const cut = world();
+    cut.mapId = "pane";
+    cut.player.mapId = "pane";
+    cut.player.x = 8;
+    cut.player.y = 7;
+    cut.focus = 20;
+    reconcileWorld(cut);
+    runSpecial(cut, "panefire", "seat-flue");
+    cut.player.x = 21;
+    cut.player.y = 8;
+    runSpecial(cut, "panestamp", "cut-pane");
+    assert.equal(cut.flags.paneShop, true);
+    assert.equal(cut.flags.paneLevy, false);
+    assert.equal(cut.actors.ness.hostile, true);
+
+    const spilled = world();
+    spilled.flags.workersClear = true;
+    spilled.flags.checkpointLead = "varr";
+    spilled.mapId = "quarry";
+    spilled.player.mapId = "quarry";
+    spilled.player.x = 12;
+    spilled.player.y = 4;
+    spilled.focus = 30;
+    spilled.player.skills.engineering = 80;
+    runSpecial(spilled, "crane", "drop");
+    spilled.mapId = "kiln";
+    spilled.player.mapId = "kiln";
+    spilled.player.x = 6;
+    spilled.player.y = 7;
+    addItem(spilled, "scrap", 2);
+    runSpecial(spilled, "kilnfire", "seat-flue");
+    runSpecial(spilled, "kilnfire", "field-dry");
+    assert.equal(spilled.flags.brickLive, true);
+    spilled.mapId = "pane";
+    spilled.player.mapId = "pane";
+    spilled.player.x = 8;
+    spilled.player.y = 7;
+    reconcileWorld(spilled);
+    runSpecial(spilled, "panefire", "spill-sand");
+    runSpecial(spilled, "panefire", "seat-flue");
+    assert.equal(spilled.flags.paneCharge, false);
+    runSpecial(spilled, "panefire", "cullet");
+    runSpecial(spilled, "panefire", "borrow-heat");
+    assert.equal(spilled.flags.paneCullet, true);
+    assert.equal(spilled.flags.paneBorrowed, true);
+    assert.equal(spilled.flags.paneCharge, true);
+    assert.equal(spilled.flags.citadelSupplied, true);
+  });
+
+  it("lets a drawn pane become lamp glass the orrery did not make", () => {
+    const d = world();
+    d.mapId = "pane";
+    d.player.mapId = "pane";
+    d.player.x = 8;
+    d.player.y = 7;
+    d.focus = 20;
+    reconcileWorld(d);
+    runSpecial(d, "panefire", "seat-flue");
+    d.player.x = 26;
+    d.player.y = 7;
+    runSpecial(d, "panebench", "draw-pane");
+    const glass = d.machines.lamps.nodes.find((n) => n.id === "glass");
+    if (!glass) throw new Error("glass");
+    glass.severed = true;
+    d.mapId = "citadel";
+    d.player.mapId = "citadel";
+    d.player.x = 24;
+    d.player.y = 17;
+    d.focus = 10;
+    runSpecial(d, "lamps", "seat-glass");
+    assert.equal(glass.severed, false);
+    assert.equal(d.flags.paneGlass, true);
+    assert.equal(d.inventory.some((i) => i.id === "clearpane"), false);
+    assert.match(d.log.join("\n"), /glasshouse/);
   });
 });

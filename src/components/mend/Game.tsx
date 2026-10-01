@@ -1,8 +1,8 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { unlockAudio, setAtmosphere, startBed } from "@/game/audio";
 import { ATTR_LIST, allSkills, comprehension, maxHp, SKILL_LIST } from "@/game/formulas";
 import { MAPS } from "@/game/maps";
-import { gait, nodeLive, weaponOf, boardIntents, weaponsDark } from "@/game/logic";
+import { nodeLive, weaponOf, boardIntents, weaponsDark } from "@/game/logic";
 import { comp, useGame } from "@/game/store";
 import type { Actor, Attr, Data, SkillId } from "@/game/types";
 import {
@@ -25,6 +25,9 @@ export function Game() {
   const boot = useGame((s) => s.boot);
   useEffect(() => {
     boot();
+    if (import.meta.env.DEV) {
+      (window as unknown as { __mend?: typeof useGame }).__mend = useGame;
+    }
     const unlock = () => {
       unlockAudio();
       startBed();
@@ -54,16 +57,18 @@ function TitleScreen() {
   const openPanel = useGame((s) => s.openPanel);
   const panel = useGame((s) => s.data.panel);
   return (
-    <main className="mx-auto flex h-dvh max-w-3xl flex-col overflow-y-auto px-5 py-8">
+    <main className="relative mx-auto flex h-dvh w-full max-w-[440px] flex-col overflow-y-auto">
+      <img src="/game/plates/sinks.jpg?v=5" alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+      <div className="relative m-3 mt-10 border border-brass bg-soot/80 p-5">
       <p className="text-xs uppercase tracking-[0.35em] text-brass-dim">Oakhaven maintenance ledger</p>
-      <h1 className="mt-3 font-display text-6xl text-brass sm:text-7xl">MEND</h1>
-      <p className="mt-3 max-w-xl text-lg leading-snug text-parchment">
+      <h1 className="mt-3 font-display text-6xl text-brass">MEND</h1>
+      <p className="mt-3 text-base leading-snug text-parchment">
         You do not spend power. You spend understanding. Silas Vance reads the relationships that hold the city together, and decides which ones deserve to hold.
       </p>
       <img
-        src="/game/portraits/silas.jpg"
+        src="/game/portraits/silas.jpg?v=3"
         alt="Silas Vance, maintenance mage"
-        className="mt-6 h-52 w-40 border border-brass-dim object-cover"
+        className="mt-5 h-40 w-32 border border-brass object-cover object-top"
       />
       <div className="mt-6 flex max-w-sm flex-col gap-2">
         <button type="button" className="min-h-11 bg-brass px-4 font-display text-lg text-soot" onClick={openCreate}>
@@ -79,6 +84,7 @@ function TitleScreen() {
         <button type="button" className="min-h-11 text-left text-sm text-brass" onClick={() => openPanel("help")}>
           How to read a city
         </button>
+      </div>
       </div>
       {panel === "help" && <HelpPanel />}
     </main>
@@ -97,7 +103,9 @@ function CreateScreen() {
   const hp = maxHp(draft.attrs.body, 1);
   const ready = draft.pool === 0 && draft.tags.length === 3;
   return (
-    <main className="mx-auto h-dvh max-w-3xl overflow-y-auto px-4 py-6">
+    <main className="relative mx-auto h-dvh w-full max-w-[440px] overflow-y-auto">
+      <img src="/game/plates/haven.jpg?v=5" alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+      <div className="relative m-3 mt-6 mb-8 border border-brass bg-soot/85 p-4">
       <p className="text-xs uppercase tracking-[0.28em] text-brass-dim">Bureau diagnostic · zero output</p>
       <h1 className="mt-1 font-display text-3xl text-brass">File the Patch</h1>
       <p className="mt-2 max-w-xl text-sm text-mist">
@@ -158,10 +166,45 @@ function CreateScreen() {
       <p className="mt-4 text-sm">
         Comprehension {c} · HP {hp} · Tags {draft.tags.length}/3
       </p>
-      <button type="button" disabled={!ready} className="mt-4 mb-8 min-h-11 bg-brass px-4 font-display text-lg text-soot" onClick={start}>
+      <button type="button" disabled={!ready} className="mt-4 mb-4 min-h-11 bg-brass px-4 font-display text-lg text-soot" onClick={start}>
         Enter the Sinks
       </button>
+      </div>
     </main>
+  );
+}
+
+function focusLine(d: Data) {
+  if (d.pinned) return d.pinned;
+  const pump = String(d.flags.pumpFate ?? "");
+  if (d.mapId === "sinks") {
+    if (pump === "mend" || pump === "wren" || pump === "speech") return "The pump holds";
+    return "The broken pump";
+  }
+  if (d.mapId === "quarry") return "The buried gears";
+  if (d.mapId === "tundra") return "Activate the main bellows";
+  if (d.mapId === "citadel" || d.mapId === "spire" || d.mapId === "pane") return "The frozen span";
+  if (d.mapId === "road" || d.mapId === "switch") return "The stacked road";
+  if (d.mapId === "kiln" || d.mapId === "rust") return "The cold stacks";
+  if (d.mapId === "haven") return "The quiet ward";
+  return "The city";
+}
+
+function LogChip() {
+  const log = useGame((s) => s.data.log);
+  const line = log[0] ?? "";
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (!line) return;
+    setOn(true);
+    const t = window.setTimeout(() => setOn(false), 3800);
+    return () => window.clearTimeout(t);
+  }, [log, line]);
+  if (!on || !line) return null;
+  return (
+    <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(72%,18rem)]">
+      <p className="scrap">{line}</p>
+    </div>
   );
 }
 
@@ -279,84 +322,84 @@ function PlayScreen() {
   const fighting = Boolean(d.combat);
   const myTurn = !d.combat || d.combat.order[d.combat.index] === "player";
   const map = MAPS[d.mapId];
-  const noWalk = fighting && (!myTurn || d.player.ap < 1 || gait(d.player) === "dead");
   const noStrike = fighting && (!myTurn || d.player.ap < 3);
   const noBrace = fighting && (!myTurn || d.player.ap < 1);
   const faultLine = fighting ? knownFaults(d) : "";
   const intents = fighting && myTurn ? boardIntents(d) : [];
   const canYield = fighting && myTurn && weaponsDark(d);
+  const nearFaces = Object.values(d.actors)
+    .filter((a) => a.alive && a.mapId === d.mapId && Math.abs(a.x - d.player.x) + Math.abs(a.y - d.player.y) <= 8)
+    .slice(0, 3);
+  const turnFaces = fighting && d.combat
+    ? d.combat.order.map((id, i) => ({
+        id: `${id}-${i}`,
+        name: id === "player" ? "You" : (d.actors[id]?.name ?? id),
+        portrait: id === "player" ? d.player.portrait : d.actors[id]?.portrait,
+        on: i === d.combat!.index,
+      }))
+    : [
+        { id: "you", name: "You", portrait: d.player.portrait, on: true },
+        ...nearFaces.map((a) => ({ id: a.id, name: a.name, portrait: a.portrait, on: false })),
+      ];
 
   return (
-    <div className="flex h-dvh flex-col">
-      <header className="plate-head flex items-end justify-between gap-3 px-3 py-2">
-        <div className="min-w-0">
-          <div className="truncate font-display text-sm tracking-[0.18em] text-brass">{map?.name.toUpperCase()}</div>
-          <div className="text-xs text-mist">
-            {map?.act}
-            {fighting ? ` · round ${d.combat?.round}` : ""} · C {comp(d)}
+    <div className="mx-auto flex h-dvh w-full max-w-[440px] flex-col">
+      <header className="plate-head">
+        <div className="head-row">
+          <button type="button" className="head-gear" onClick={() => open("menu")} aria-label="Menu">
+            <img src="/game/ui/head-dots.jpg" alt="" />
+          </button>
+          <button type="button" className="head-gear" onClick={() => open("map")} aria-label="Map">
+            <img src="/game/ui/head-check.jpg" alt="" />
+          </button>
+          <div className="head-knot" aria-hidden>
+            <img src="/game/ui/head-knot.jpg" alt="" />
           </div>
+          <button type="button" className="head-gear lion" onClick={() => open("char")} aria-label="Self">
+            <img src="/game/ui/head-lion.jpg" alt="" />
+          </button>
+          <button type="button" className="head-gear" onClick={() => zoom((d.zoom ?? 1) < 1 ? 1 : -1)} aria-label="Zoom">
+            <img src="/game/ui/head-close.jpg" alt="" />
+          </button>
         </div>
-        <div className="text-right text-xs">
-          <div className="font-display tracking-wide text-brass">Focus {d.focus}</div>
-          <div className="max-w-[46vw] truncate text-mist">{d.pinned || "No pinned entry"}</div>
+        <div className="head-plaque">
+          <div className="min-w-0">
+            <div className="head-title truncate">{map?.name}</div>
+            <div className="head-sub">
+              {map?.act}
+              {fighting ? ` · round ${d.combat?.round}` : ""} · C {comp(d)}
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="head-title">Focus {d.focus}</div>
+            <div className="head-sub head-pin">{focusLine(d)}</div>
+          </div>
         </div>
       </header>
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div className="world-frame relative min-h-0 flex-1 overflow-hidden">
         <WorldCanvas />
-        {!talking && (
-          <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[min(78%,20rem)] flex-col gap-1.5">
-            {d.log.slice(0, 3).map((line, i) => (
-              <p key={i} className="scrap">
-                {line}
-              </p>
-            ))}
-          </div>
-        )}
-        {!talking && (
-          <div className="gear-pad" aria-hidden={false}>
-            <span className="gear-hub" />
-            <Pad className="gear-n" label="N" dim={noWalk} onClick={() => click(d.player.x, d.player.y - 1)} />
-            <Pad className="gear-w" label="W" dim={noWalk} onClick={() => click(d.player.x - 1, d.player.y)} />
-            <Pad className="gear-e" label="E" dim={noWalk} onClick={() => click(d.player.x + 1, d.player.y)} />
-            <Pad className="gear-s" label="S" dim={noWalk} onClick={() => click(d.player.x, d.player.y + 1)} />
-          </div>
-        )}
-        {!talking && (
-          <div className="absolute right-2 top-3 z-10 flex flex-col gap-1">
-            <button type="button" className="zoom-key" onClick={() => zoom(1)} aria-label="Zoom in">
-              Near
-            </button>
-            <button type="button" className="zoom-key" onClick={() => zoom(-1)} aria-label="Zoom out">
-              Far
-            </button>
-          </div>
-        )}
+        {!talking && <LogChip />}
         <DialogueBox />
       </div>
       <footer className="instrument px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <div className="mb-2 flex items-center gap-2">
-          <img src={d.player.portrait} alt="" className="bezel h-16 w-14 shrink-0 bg-soot" />
+          <img src={d.player.portrait} alt="" className="bezel h-[4.75rem] w-[3.7rem] shrink-0 object-cover object-[center_15%] bg-soot" />
           <div className="min-w-0 flex-1">
             <div className="truncate font-display text-sm tracking-wide text-parchment">
               {d.name}
               {d.player.guarding ? " · braced" : ""}
               {d.player.stunned ? " · overloaded" : ""}
             </div>
-            {fighting && d.combat && (
-              <div className="mt-1 flex gap-1 overflow-x-auto text-[10px] uppercase tracking-[0.14em]">
-                {d.combat.order.map((id, i) => {
-                  const name = id === "player" ? "You" : (d.actors[id]?.name ?? id);
-                  const on = i === d.combat!.index;
-                  return (
-                    <span key={`${id}-${i}`} className={on ? "border border-brass px-1.5 py-0.5 text-brass" : "px-1.5 py-0.5 text-mist"}>
-                      {name}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-            <div className="mt-1 h-1.5 bg-soot">
-              <div className="h-1.5 bg-brass" style={{ width: `${Math.max(0, (d.player.hp / d.player.maxHp) * 100)}%` }} />
+            <div className="face-row mt-1">
+              {turnFaces.map((face) => (
+                <span key={face.id} className={face.on ? "face-tab on" : "face-tab"}>
+                  {face.portrait ? <img src={face.portrait} alt="" /> : <span className="bezel inline-block h-9 w-7 bg-soot" />}
+                  <span className="max-w-16 truncate">{face.name}</span>
+                </span>
+              ))}
+            </div>
+            <div className="hp-track mt-1">
+              <div className="hp-fill" style={{ width: `${Math.max(0, (d.player.hp / d.player.maxHp) * 100)}%` }} />
             </div>
             <div className={`mt-1 text-xs ${fighting && myTurn && d.player.ap < 1 ? "text-rust" : "text-mist"}`}>
               HP {d.player.hp}/{d.player.maxHp} · Focus {d.focus}
@@ -377,25 +420,29 @@ function PlayScreen() {
             Stand down — their weapons are already dark
           </button>
         )}
-        <div className="grid grid-cols-4 gap-1">
-          <HudButton icon={<Mark kind="audit" />} label="Audit" onClick={audit} dim={fighting && !myTurn} />
+        <div className="grid grid-cols-4 gap-1.5">
+          <HudButton kind="audit" label="Audit" onClick={audit} dim={fighting && !myTurn} />
           {fighting ? (
-            <HudButton icon={<Mark kind="strike" />} label="Strike" onClick={strike} dim={noStrike} />
+            <HudButton kind="strike" label="Strike" onClick={strike} dim={noStrike} />
           ) : (
-            <HudButton icon={<Mark kind="talk" />} label="Talk" onClick={talk} />
+            <HudButton kind="talk" label="Talk" onClick={talk} />
           )}
           {fighting ? (
-            <HudButton icon={<Mark kind="brace" />} label="Set Brace" onClick={brace} dim={noBrace} />
+            <HudButton kind="brace" label="Brace" onClick={brace} dim={noBrace} />
           ) : (
-            <HudButton icon={<Mark kind="map" />} label="Map" onClick={() => open("map")} />
+            <HudButton kind="map" label="Map" onClick={() => open("map")} />
           )}
-          <HudButton icon={<Mark kind={fighting ? "end" : "menu"} />} label={fighting ? "End" : "Menu"} onClick={fighting ? endTurn : () => open("menu")} />
+          <HudButton kind={fighting ? "end" : "menu"} label={fighting ? "End" : "Menu"} onClick={fighting ? endTurn : () => open("menu")} />
         </div>
-        <div className={`mt-1 grid gap-1 ${fighting ? "grid-cols-4" : "grid-cols-3"}`}>
-          <HudButton icon={<Mark kind="quests" />} label="Quests" onClick={() => open("journal")} />
-          <HudButton icon={<Mark kind="pack" />} label="Pack" onClick={() => open("inventory")} />
-          <HudButton icon={<Mark kind="self" />} label="Self" onClick={() => open("char")} />
-          {fighting && <HudButton icon={<Mark kind="menu" />} label="Menu" onClick={() => open("menu")} />}
+        <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+          <HudButton kind="quests" label="Quests" onClick={() => open("journal")} />
+          <HudButton kind="pack" label="Pack" onClick={() => open("inventory")} />
+          <HudButton kind="self" label="Self" onClick={() => open("char")} />
+          {fighting ? (
+            <HudButton kind="menu" label="Menu" onClick={() => open("menu")} />
+          ) : (
+            <HudButton kind="lens" label="Lens" onClick={() => zoom((d.zoom ?? 1) < 1 ? 1 : -1)} />
+          )}
         </div>
       </footer>
       {d.panel === "audit" && <AuditPanel />}
@@ -436,106 +483,24 @@ function knownFaults(d: Data) {
   return bits.join(" · ");
 }
 
-function Pad({ label, dim, onClick, className }: { label: string; dim?: boolean; onClick: () => void; className: string }) {
-  return (
-    <button
-      type="button"
-      className={`gear-btn ${className} ${dim ? "opacity-35" : ""}`}
-      onClick={onClick}
-      aria-label={`Move ${label}`}
-      aria-disabled={dim || undefined}
-    >
-      {label}
-    </button>
-  );
-}
+const HUD_ART: Record<string, string> = {
+  audit: "/game/ui/audit.jpg",
+  strike: "/game/ui/strike.jpg",
+  talk: "/game/ui/talk.jpg",
+  brace: "/game/ui/brace.jpg",
+  map: "/game/ui/map.jpg",
+  end: "/game/ui/end.jpg",
+  menu: "/game/ui/menu.jpg",
+  quests: "/game/ui/quests.jpg",
+  pack: "/game/ui/pack.jpg",
+  self: "/game/ui/self.jpg",
+  lens: "/game/ui/lens.jpg",
+};
 
-function Mark({ kind }: { kind: "audit" | "strike" | "talk" | "brace" | "map" | "end" | "menu" | "quests" | "pack" | "self" }) {
-  const common = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6, "aria-hidden": true as const };
-  if (kind === "audit") {
-    return (
-      <svg {...common}>
-        <circle cx="10" cy="10" r="5" />
-        <path d="M14 14l6 6" />
-        <path d="M8 10h4M10 8v4" />
-      </svg>
-    );
-  }
-  if (kind === "strike") {
-    return (
-      <svg {...common}>
-        <path d="M4 18l8-14 2 3-5 9h6l-3 4" />
-      </svg>
-    );
-  }
-  if (kind === "talk") {
-    return (
-      <svg {...common}>
-        <path d="M5 6h14v9H9l-4 3z" />
-      </svg>
-    );
-  }
-  if (kind === "brace") {
-    return (
-      <svg {...common}>
-        <path d="M12 3l7 3v6c0 4.5-3 7-7 9-4-2-7-4.5-7-9V6z" />
-        <path d="M8 12h8" />
-      </svg>
-    );
-  }
-  if (kind === "map") {
-    return (
-      <svg {...common}>
-        <path d="M4 6l5-2 6 2 5-2v14l-5 2-6-2-5 2z" />
-        <path d="M9 4v14M15 6v14" />
-      </svg>
-    );
-  }
-  if (kind === "end") {
-    return (
-      <svg {...common}>
-        <circle cx="12" cy="12" r="8" />
-        <path d="M12 12l4-2" />
-      </svg>
-    );
-  }
-  if (kind === "quests") {
-    return (
-      <svg {...common}>
-        <path d="M7 4h10v16l-5-2-5 2z" />
-      </svg>
-    );
-  }
-  if (kind === "pack") {
-    return (
-      <svg {...common}>
-        <path d="M8 8h8v12H8z" />
-        <path d="M10 8V6h4v2" />
-      </svg>
-    );
-  }
-  if (kind === "self") {
-    return (
-      <svg {...common}>
-        <circle cx="12" cy="8" r="3" />
-        <path d="M6 19c1.5-3 3.5-4 6-4s4.5 1 6 4" />
-      </svg>
-    );
-  }
+function HudButton({ kind, label, onClick, dim }: { kind: string; label: string; onClick: () => void; dim?: boolean }) {
   return (
-    <svg {...common}>
-      <circle cx="8" cy="12" r="3" />
-      <circle cx="16" cy="12" r="3" />
-      <path d="M11 12h2" />
-    </svg>
-  );
-}
-
-function HudButton({ icon, label, onClick, dim }: { icon: ReactNode; label: string; onClick: () => void; dim?: boolean }) {
-  return (
-    <button type="button" onClick={onClick} aria-disabled={dim || undefined} className={`hud-key flex flex-col items-center justify-center gap-0.5 px-1 text-[10px] tracking-wide ${dim ? "opacity-35" : ""}`}>
-      {icon}
-      {label}
+    <button type="button" onClick={onClick} aria-label={label} aria-disabled={dim || undefined} className={`hud-key ${dim ? "opacity-40" : ""}`}>
+      <img src={HUD_ART[kind] ?? HUD_ART.menu} alt="" className="hud-art" />
     </button>
   );
 }
@@ -545,7 +510,9 @@ function EpilogueScreen() {
   const ending = useGame((s) => s.data.ending);
   const quit = useGame((s) => s.quit);
   return (
-    <main className="mx-auto h-dvh max-w-2xl overflow-y-auto px-5 py-8">
+    <main className="relative mx-auto h-dvh max-w-[440px] overflow-y-auto">
+      <img src="/game/plates/spire.jpg?v=5" alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+      <div className="relative m-3 mt-8 border border-brass bg-soot/85 p-5">
       <p className="text-xs uppercase tracking-[0.3em] text-brass-dim">{ending === "impose" ? "Baseline imposed" : "Baseline refused"}</p>
       <h1 className="mt-2 font-display text-4xl text-brass">The ledger closes</h1>
       <div className="mt-4 space-y-4 text-sm leading-relaxed">
@@ -553,9 +520,10 @@ function EpilogueScreen() {
           <p key={i}>{line}</p>
         ))}
       </div>
-      <button type="button" className="mt-6 mb-10 min-h-11 bg-brass px-4 font-semibold text-soot" onClick={quit}>
+      <button type="button" className="mt-6 mb-4 min-h-11 bg-brass px-4 font-semibold text-soot" onClick={quit}>
         Return to the title
       </button>
+      </div>
     </main>
   );
 }
@@ -566,7 +534,9 @@ function DeadScreen() {
   const load = useGame((s) => s.load);
   const quit = useGame((s) => s.quit);
   return (
-    <main className="mx-auto flex h-dvh max-w-xl flex-col justify-center px-5">
+    <main className="relative mx-auto flex h-dvh max-w-[440px] flex-col justify-center">
+      <img src="/game/plates/canyon.jpg?v=5" alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+      <div className="relative m-4 border border-rust bg-soot/88 p-5">
       <h1 className="font-display text-4xl text-rust">Baseline lost</h1>
       <p className="mt-3 text-sm leading-relaxed">{text}</p>
       <div className="mt-6 flex flex-col gap-2">
@@ -578,6 +548,7 @@ function DeadScreen() {
         <button type="button" className="min-h-11 border border-brass px-4 text-brass" onClick={quit}>
           Title
         </button>
+      </div>
       </div>
     </main>
   );

@@ -33,6 +33,7 @@ import {
   useItem,
   walkable,
   spendSkill,
+  takePerk,
   brace,
   dismantle,
   gait,
@@ -44,8 +45,8 @@ import {
   noteField,
   reconcileWorld,
 } from "./logic";
-import { LOCKED_DOORS, MAPS } from "./maps";
-import type { Actor, Attr, AuditTarget, Data, GNode, Panel, SkillId } from "./types";
+import { LOCKED_DOORS, MAPS, REGIONS } from "./maps";
+import type { Actor, Attr, AuditTarget, Data, GNode, Machine, Panel, SkillId } from "./types";
 
 const SAVE_PREFIX = "mend-save-v1-";
 
@@ -56,8 +57,8 @@ function blankActor(): Actor {
     template: "player",
     name: "Silas Vance",
     title: "Patch",
-    portrait: "/game/portraits/silas.jpg",
-    sprite: "/game/sprites/silas.png",
+    portrait: "/game/portraits/silas.jpg?v=3",
+    sprite: "/game/sprites/silas.png?v=3",
     scale: 1,
     mapId: "sinks",
     x: 3,
@@ -122,7 +123,7 @@ function initialData(): Data {
     epilogue: [],
     deathText: "",
     hasSave: false,
-    zoom: 1.25,
+    zoom: 0.85,
     verbs: {},
     draft: {
       name: "Silas Vance",
@@ -220,6 +221,7 @@ interface Store {
   equipOrUse: (id: string) => void;
   giveKit: (id: string, slot: "weapon" | "armor" | "accessory", itemId: string | null) => void;
   spend: (id: SkillId) => void;
+  takePerk: (id: string) => void;
   travel: (mapId: string) => void;
   ackLevel: () => void;
   brace: () => void;
@@ -227,7 +229,7 @@ interface Store {
   standDown: () => void;
   auditSelf: () => void;
   setZoom: (dir: 1 | -1) => void;
-  setPref: (key: "uiText" | "reduceMotion", value: string | boolean) => void;
+  setPref: (key: "uiText" | "reduceMotion" | "strain", value: string | boolean) => void;
   dev: (cmd: string) => void;
 }
 
@@ -269,11 +271,37 @@ function commit(
   });
 }
 
+function midScene(d: Data, a: Actor): string | null {
+  if (!a.companion || d.flags[`${a.id}Mid`]) return null;
+  if (a.id === "tobin" && (d.flags["seen:haven"] || d.flags.seenWard) && (d.mapId === "haven" || d.mapId === "road")) return "tobin-mid";
+  if (a.id === "wren" && (d.flags["seen:quarry"] || d.flags.seenQuarry) && (d.mapId === "quarry" || d.mapId === "road")) return "wren-mid";
+  if (a.id === "sera" && (d.flags.gearLive || d.flags.stockRefused || d.flags["seen:rust"]) && (d.mapId === "road" || d.mapId === "tundra")) return "sera-mid";
+  if (a.id === "mara" && d.flags["seen:rust"] && (d.mapId === "road" || d.mapId === "tundra")) return "mara-mid";
+  return null;
+}
+
 function convoFor(d: Data, a: Actor) {
+  const late = Boolean(d.flags.citadelFate || d.flags.spireOpen || d.mapId === "spire");
+  if (
+    a.companion &&
+    late &&
+    !d.flags[`${a.id}Late`] &&
+    (a.id === "tobin" || a.id === "wren" || a.id === "sera" || a.id === "mara")
+  ) {
+    return `${a.id}-late`;
+  }
+  const mid = midScene(d, a);
+  if (mid) return mid;
   if (a.companion && d.mapId === "road") {
     if (a.id === "tobin" || a.id === "wren" || a.id === "sera" || a.id === "mara") return `${a.id}-road`;
   }
   if (a.id === "tobin" && d.flags.metTobin) return "tobin-after";
+  if (a.companion && a.id === "tobin" && d.mapId === "kiln" && !d.flags.tobinKilnSpoke) return "tobin-kiln";
+  if (a.companion && a.id === "wren" && d.mapId === "kiln" && !d.flags.wrenKilnSpoke) return "wren-kiln";
+  if (a.companion && a.id === "tobin" && d.mapId === "switch" && !d.flags.tobinSwitchSpoke) return "tobin-switch";
+  if (a.companion && a.id === "wren" && d.mapId === "switch" && !d.flags.wrenSwitchSpoke) return "wren-switch";
+  if (a.companion && a.id === "tobin" && d.mapId === "pane" && !d.flags.tobinPaneSpoke) return "tobin-pane";
+  if (a.companion && a.id === "wren" && d.mapId === "pane" && !d.flags.wrenPaneSpoke) return "wren-pane";
   return memoryConvo(d, a.id) ?? a.convo;
 }
 
@@ -368,7 +396,7 @@ export const useGame = create<Store>((set, get) => ({
       d.verbs = {};
       d.traces = {};
       d.pendingEncounter = null;
-      d.pinned = "The Sinks";
+      d.pinned = "The broken pump";
       d.inventory = [
         { id: "prybar", qty: 1, condition: 88 },
         { id: "bandage", qty: 2 },
@@ -422,7 +450,8 @@ export const useGame = create<Store>((set, get) => ({
     row.data.intent = null;
     if (!row.data.verbs) row.data.verbs = {};
     if (!row.data.traces) row.data.traces = {};
-    if (!row.data.deeds) row.data.deeds = [];
+    if (!row.data.perks) row.data.perks = [];
+    if (row.data.perkPoints == null) row.data.perkPoints = Math.max(0, (row.data.level ?? 1) - 1);
     if (row.data.combat && row.data.phase === "play") {
       if (!row.data.combat.tally) row.data.combat.tally = { strikes: 0, cuts: 0, mends: 0, kills: 0 };
       freezeIntents(row.data);
@@ -446,13 +475,32 @@ export const useGame = create<Store>((set, get) => ({
         if (d.phase !== "play" || d.dialogue) return;
         if (d.panel !== "none" && d.panel !== "audit") return;
         if (!myTurn(d)) return;
-        const person = actorAt(d, x, y);
-        const gear = machineAt(d, x, y);
+        const person = actorAt(d, x, y) as Actor | null;
+        const gear = machineAt(d, x, y) as Machine | null;
         const door = LOCKED_DOORS.find((door) => door.map === d.mapId && door.x === x && door.y === y && !d.flags[door.flag]);
         if (person) {
+          if (d.combat && person.hostile) {
+            const range = weaponOf(d.player).range ?? 1;
+            if (dist(d.player, person) <= range) strike(d, d.player, person);
+            else if (!refuseWalk(d)) {
+              const path = pathNear(d, person.x, person.y);
+              if (!path?.length) {
+                addLog(d, "No clear path.");
+                return;
+              }
+              d.path = path;
+              d.intent = { type: "strike", id: person.id };
+            }
+            return;
+          }
           if (dist(d.player, person) <= 1) openTalk(d, person);
           else if (!refuseWalk(d)) {
-            d.path = pathNear(d, person.x, person.y) ?? [];
+            const path = pathNear(d, person.x, person.y);
+            if (!path?.length) {
+              addLog(d, "No clear path.");
+              return;
+            }
+            d.path = path;
             d.intent = d.combat && person.hostile ? { type: "strike", id: person.id } : { type: "talk", id: person.id };
           }
           return;
@@ -460,7 +508,12 @@ export const useGame = create<Store>((set, get) => ({
         if (gear) {
           if (dist(d.player, gear) <= 1) openAudit(d, { kind: "machine", id: gear.id });
           else if (!refuseWalk(d)) {
-            d.path = pathNear(d, gear.x, gear.y) ?? [];
+            const path = pathNear(d, gear.x, gear.y);
+            if (!path?.length) {
+              addLog(d, "No clear path.");
+              return;
+            }
+            d.path = path;
             d.intent = { type: "audit", id: gear.id, kind: "machine" };
           }
           return;
@@ -470,7 +523,12 @@ export const useGame = create<Store>((set, get) => ({
             d.dialogue = { convo: door.convo, node: "start" };
             d.panel = "none";
           } else if (!refuseWalk(d)) {
-            d.path = pathNear(d, door.x, door.y) ?? [];
+            const path = pathNear(d, door.x, door.y);
+            if (!path?.length) {
+              addLog(d, "No clear path.");
+              return;
+            }
+            d.path = path;
             d.intent = { type: "door", convo: door.convo, x: door.x, y: door.y };
           }
           return;
@@ -556,7 +614,8 @@ export const useGame = create<Store>((set, get) => ({
           noteField(d, "biology");
         } else if (skill === "psychology") noteField(d, "mind");
         const skillValue = d.player.skills[reply.check.skill];
-        const chance = Math.max(5, Math.min(95, 50 + skillValue - reply.check.dc));
+        let chance = Math.max(5, Math.min(95, 50 + skillValue - reply.check.dc));
+        if (d.perks?.includes("soft-step") && (skill === "lockwork" || skill === "sneak")) chance = Math.min(95, chance + 12);
         const rolled = 1 + Math.floor(Math.random() * 100);
         const ok = rolled <= chance;
         addLog(
@@ -588,7 +647,7 @@ export const useGame = create<Store>((set, get) => ({
   auditSelf: () => commit(set, (d) => openAudit(d, { kind: "actor", id: "player" })),
   setZoom: (dir) =>
     set((s) => {
-      const steps = [0.8, 1, 1.25];
+      const steps = [0.7, 0.85, 1.15];
       const cur = s.data.zoom ?? 1;
       let i = steps.findIndex((n) => Math.abs(n - cur) < 0.05);
       if (i < 0) i = 1;
@@ -596,9 +655,12 @@ export const useGame = create<Store>((set, get) => ({
       return { data: { ...s.data, zoom: steps[i] } };
     }),
   setPref: (key, value) =>
-    set((s) => ({
-      data: { ...s.data, flags: { ...s.data.flags, [key]: value } },
-    })),
+    set((s) => {
+      const data = structuredClone(s.data);
+      data.flags[key] = value;
+      if (!data.ironman && (data.phase === "play" || data.phase === "epilogue")) writeSlot("auto", data);
+      return { data };
+    }),
   dev: (cmd) =>
     commit(set, (d) => {
       if (cmd === "focus") {
@@ -769,14 +831,16 @@ export const useGame = create<Store>((set, get) => ({
   equipOrUse: (id) => commit(set, (d) => useItem(d, id)),
   giveKit: (id, slot, itemId) => commit(set, (d) => equipCompanion(d, id, slot, itemId)),
   spend: (id) => commit(set, (d) => spendSkill(d, id), "none"),
+  takePerk: (id) => commit(set, (d) => takePerk(d, id), "none"),
   travel: (mapId) =>
     commit(set, (d) => {
-      const region = mapId;
-      if (region === d.mapId) {
-        d.panel = "none";
+      const region = REGIONS.find((r) => r.id === mapId);
+      if (!region || !regionOpen(d, region.need) || region.id === d.mapId) {
+        if (region && region.id !== d.mapId && !regionOpen(d, region.need)) addLog(d, "You have not stood there.");
+        if (region?.id === d.mapId) d.panel = "none";
         return;
       }
-      d.pendingMap = region;
+      d.pendingMap = region.id;
       d.panel = "none";
       if (!d.flags.traveled) {
         d.flags.traveled = true;

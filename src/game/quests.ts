@@ -216,6 +216,214 @@ const QUESTS: QuestDef[] = [
     },
     xp: 8,
   },
+  {
+    id: "waystation",
+    title: "The seized brake",
+    open: (d) => Boolean(d.flags["seen:road"] || d.flags.onRoad),
+    met: (d) => Boolean(d.flags.cartEase || d.flags.cartPinned),
+    waiting: "A cart is heavier than its brake. Easing it sends the weight on. Pinning it keeps the weight, and the forge will meet the absence.",
+    resolve: (d) =>
+      d.flags.cartPinned
+        ? "The load stayed pinned. Stone can leave the pit and still not become ore."
+        : "The brake was eased. The cart did not wait for a speech.",
+    xp: 10,
+  },
+  {
+    id: "glaze",
+    title: "The glaze stake",
+    open: (d) => Boolean(d.flags.tundraWalked || d.flags["seen:tundra"]),
+    met: (d) => Boolean(d.flags.iceSpan || d.flags.iceCut),
+    waiting: "The middle of the ice is a bill. Seating the span stops the bill. Cutting it makes the hollow cold even if a clock elsewhere is still sending.",
+    resolve: (d) =>
+      d.flags.iceCut
+        ? "The span was cut. The hollow went cold. The ice kept a harder bill."
+        : "The span was seated. The middle of the ice stopped billing the walk.",
+    xp: 10,
+  },
+  {
+    id: "tenement-wash",
+    title: "The tenement wash",
+    open: (d) => Boolean(d.flags["seen:rust"]),
+    met: (d) => Boolean(d.flags.washChosen),
+    waiting: "A seized valve sits between the gallery and two children: the sleepers, and the forge. Sending the drink one way dries the other. Sharing costs more and still needs a parent.",
+    resolve: (d) => {
+      if (d.flags.washSpill) return "The quench went to the sleepers. The forge was the child that went dry.";
+      if (d.flags.washShared) return "The wash was shared. Both drank only while the gallery had something to send.";
+      return "The quench was sent back toward the forge. The sleeper pipe went dry.";
+    },
+    xp: 10,
+  },
+  {
+    id: "costume-gauge",
+    title: "The costume gauge",
+    open: (d) => Boolean(d.flags.gaugeSeen),
+    met: (d) => Boolean(d.flags.gaugeRead || d.flags.gaugeCut),
+    waiting: "A gauge in the west pocket looks dead. The pocket is not. The face may not be the parent.",
+    resolve: (d) =>
+      d.flags.gaugeCut
+        ? "The real feed was cut. The district pump was not that parent. A drowned servo answered the pocket."
+        : "The gauge face was a costume. The pocket feed behind it was holding.",
+    xp: 10,
+  },
+  {
+    id: "ash-cup",
+    title: "The alley cup",
+    open: (d) => Boolean(d.flags.stillSeen),
+    met: (d) => Boolean(d.flags.stillBroken || d.flags.stillLicensed),
+    waiting: "While the ward is dry, a still in the service cut is drinking the difference. Break it, license it, or leave it.",
+    resolve: (d) =>
+      d.flags.stillLicensed
+        ? "The trickle was written down. It stayed a cup. The alley had a parent that was not a raid."
+        : "The still was broken. The cup went. The clinic kept whatever parent it had.",
+    xp: 10,
+  },
+  {
+    id: "night-winch",
+    title: "The night winch",
+    open: (d) => Boolean(d.flags.winchSeen),
+    met: (d) => Boolean(d.flags.crewStood || d.flags.crewFled || d.flags.winchCut),
+    waiting: "A crew is under a winch that is not the crane. A live throat is a parent they can hear. A dead throat is the reason they fight.",
+    resolve: (d) => {
+      if (d.flags.crewStood) return "The winch was braced. The crew stood down because the colossus was still breathing.";
+      if (d.flags.crewFled) return "The winch was cut. The crew left. They would not stand under a live throat.";
+      return "The winch was cut after the throat had stopped. The crew answered.";
+    },
+    xp: 12,
+  },
+  {
+    id: "one-night",
+    title: "One night in the ward",
+    open: (d) => Boolean(d.flags.bufferSeen),
+    met: (d) => Boolean(d.flags.citadelFate),
+    waiting: "A cell under the ranking floor can keep one infirmary, if it is charged while the siphon is still sending.",
+    resolve: (d) =>
+      d.flags.bufferHeld
+        ? "The siphon was cut. One ward kept the night. The rest of the dark was not spared."
+        : d.flags.bufferCharged
+          ? "The cell was charged. The crucible was answered another way, and the cell was not asked."
+          : "The crucible was answered. The buffer cell had been empty.",
+    xp: 12,
+  },
+  {
+    id: "kiln-set",
+    title: "The set",
+    open: (d) => Boolean(d.flags["seen:kiln"]),
+    met: (d) => Boolean(d.flags.brickLive || d.flags.kilnRefused),
+    waiting:
+      "The kiln can set brick if clay, a bed, and either gallery water or a field-dry are all true. Seating the flue is not the water. Borrowing Rust heat is not the clay. Refusing the yard is also an answer.",
+    resolve: (d) => {
+      if (d.flags.kilnRefused) return "The yard was refused. The levy has nothing to invoice. The houses have nothing to hold.";
+      if (d.flags.fieldDry && !d.flags.quenchLive) return "The set took a field-dry. The gallery did not have to be the parent.";
+      if (d.flags.kilnBorrowed) return "The bed is drinking Rust heat. The local flue did not have to be the whole sentence.";
+      return "The set is holding. Clay was local. Something else had to parent the water or the heat.";
+    },
+    xp: 14,
+  },
+  {
+    id: "kiln-stamp",
+    title: "The stamp",
+    open: (d) => Boolean(d.flags.brickLive || d.flags.kilnLevy || d.flags.stampCut || d.flags.kilnLicensed),
+    met: (d) => Boolean(d.flags.kilnLicensed || d.flags.stampCut || (d.flags.kilnRefused && d.flags["seen:kiln"])),
+    waiting: "Brick that stands up can be licensed, cut free of the stamp, or never made. A quiet sale is a fourth sentence and it does not close the levy.",
+    resolve: (d) => {
+      if (d.flags.kilnRefused && !d.flags.brickLive) return "There is no brick. The stamp has nothing to ride.";
+      if (d.flags.stampCut) return "The stamp is a hole. The levy died with it. Cress did not agree to be a hole.";
+      return "The stamp was licensed. The board can sell. The levy stayed on the same pipe.";
+    },
+    xp: 12,
+  },
+  {
+    id: "kiln-nest",
+    title: "The nested flue",
+    open: (d) => Boolean(d.flags.kilnTold || d.flags.kilnCellar || d.flags.glassLifted),
+    met: (d) => Boolean(d.flags.glassLifted || d.flags.glassSmashed),
+    waiting: "Under the houses, a glass is parenting a nest. It can be read and lifted, or smashed. Those are not the same theft.",
+    resolve: (d) =>
+      d.flags.glassSmashed
+        ? "The glass was smashed. The mite had to stand up because its parent was taken ugly."
+        : "The glass was lifted after it was read. The nest stayed a nest.",
+    xp: 10,
+  },
+  {
+    id: "switch-floor",
+    title: "The slick plates",
+    open: (d) => Boolean(d.flags["seen:switch"]),
+    met: (d) => Boolean(d.flags.switchGreased),
+    waiting:
+      "The yard plates bill a step. Boots keep your feet and do not keep Wick's. Grease wants scrap on the axle. Jamming the table is a different parent and does not make a shed.",
+    resolve: () => "The axle was greased. The shed is a floor. The haul, if it is still moving, was not the thing that changed.",
+    xp: 12,
+  },
+  {
+    id: "switch-haul",
+    title: "The table",
+    open: (d) => Boolean(d.flags["seen:switch"]),
+    met: (d) => Boolean(d.flags.switchJam || d.flags.switchShunt || d.flags.switchLicensed || d.flags.switchCut),
+    waiting:
+      "The table can keep passing weight on Rue's books, be jammed so the citadel loses this parent, be shunted off the books, or be licensed or cut. Those are not the same haul.",
+    resolve: (d) => {
+      if (d.flags.switchJam && !d.flags.switchShunt) return "The table was jammed. A busy pit stopped being a parent of the citadel.";
+      if (d.flags.switchShunt) return "A shunt is carrying the haul off the books. The weight still leaves.";
+      if (d.flags.switchCut) return "The yard stamp is a hole. A haul can leave without that bill.";
+      return "The stamp was licensed. The bill stayed on any haul the books can see.";
+    },
+    xp: 14,
+  },
+  {
+    id: "switch-bill",
+    title: "The held waybill",
+    open: (d) => Boolean(d.flags.switchTold || d.flags.switchBay || d.flags.waybillRead),
+    met: (d) => Boolean(d.flags.waybillRead),
+    waiting: "Under the office, a paper parents a nest. It can be read and lifted, or smashed. It names a cart that was held.",
+    resolve: (d) =>
+      d.flags.waybillSmashed
+        ? "The crate was smashed. The rat had to stand up. The paper still names Bram's cart and this table as one refusal."
+        : "The waybill was read. Bram's held cart and the Switch table are the same sentence.",
+    xp: 10,
+  },
+  {
+    id: "pane-melt",
+    title: "The melt",
+    open: (d) => Boolean(d.flags["seen:pane"] || d.flags.solCullet),
+    met: (d) => Boolean(d.flags.paneCharge || d.flags.paneRefused),
+    waiting:
+      "The glasshouse can melt clear if sand or cullet, and a bed, are both true. The bed is a local flue or a kiln that is actually hot. Spilling the pit is not the end of it. Refusing the house is also an answer.",
+    resolve: (d) => {
+      if (d.flags.paneRefused) return "The house was refused. The levy has nothing to invoice. The glass has nothing to hold.";
+      if (d.flags.paneCullet && d.flags.paneSpilled) return "The melt took cullet. The pit did not have to stay the parent.";
+      if (d.flags.paneBorrowed) return "The bed is drinking a kiln. The local flue did not have to be the whole sentence.";
+      return "The melt is holding. Sand was local. Heat had to be seated or borrowed.";
+    },
+    xp: 14,
+  },
+  {
+    id: "pane-stamp",
+    title: "The glass stamp",
+    open: (d) => Boolean(d.flags.paneCharge || d.flags.paneLevy || d.flags.paneCut || d.flags.paneLicensed),
+    met: (d) => Boolean(d.flags.paneLicensed || d.flags.paneCut || (d.flags.paneRefused && d.flags["seen:pane"])),
+    waiting: "A clear melt can be licensed, cut free of the stamp, or never made. A quiet sale is a third sentence and it does not close the levy.",
+    resolve: (d) => {
+      if (d.flags.paneRefused && !d.flags.paneCharge) return "There is no melt. The stamp has nothing to ride.";
+      if (d.flags.paneCut) return "The stamp is a hole. The levy died with it. Ness did not agree to be a hole.";
+      return "The stamp was licensed. The bench can sell. The levy stayed on the same pipe.";
+    },
+    xp: 12,
+  },
+  {
+    id: "pane-lens",
+    title: "The anneal lens",
+    open: (d) => Boolean(d.flags.paneTold || d.flags.paneVault || d.flags.annealRead || d.flags.lensBought),
+    met: (d) => Boolean(d.flags.annealRead || d.flags.annealSmashed || d.flags.lensBought),
+    waiting:
+      "A lens that names a quiet parent can come off the bench, once the bench is allowed to sell, or out of the vault. The vault can be given, picked, or smashed. Those are not the same taking.",
+    resolve: (d) =>
+      d.flags.annealSmashed
+        ? "The anneal was smashed. The moth had to stand up because its parent was taken ugly. The lens still names a seam."
+        : d.flags.lensBought && !d.flags.annealRead
+          ? "The lens was bought. The vault did not have to be the parent."
+          : "The lens was read and lifted. The nest stayed a nest.",
+    xp: 10,
+  },
 ];
 
 function write(d: Data, entry: JournalEntry) {
@@ -236,6 +444,7 @@ function grant(d: Data, n: number) {
   while (d.level < 8 && d.xp >= xpForLevel(d.level + 1)) {
     d.level += 1;
     d.skillPoints += 4;
+    d.perkPoints = (d.perkPoints ?? 0) + 1;
     d.player.maxHp += 8;
     d.player.hp = Math.min(d.player.maxHp, d.player.hp + 8);
     d.pendingLevel = true;

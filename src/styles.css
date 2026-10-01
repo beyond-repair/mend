@@ -65,28 +65,219 @@
 }
 
 .scrap {
-  border: 1px solid rgba(212, 180, 131, 0.55);
-  border-radius: 4px;
-  background: rgba(16, 14, 12, 0.82);
-  padding: 0.35rem 0.6rem;
+  border: 1px solid rgba(212, 180, 131, 0.72);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(42, 32, 24, 0.88), rgba(10, 8, 6, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(243, 234, 215, 0.18),
+    0 2px 0 rgba(0, 0, 0, 0.45);
+  padding: 0.4rem 0.65rem;
   font-size: 12px;
   line-height: 1.35;
   color: #f3ead7;
 }
 
-.instrument {
+.plate-head {
+  padding: 6px 8px 8px;
   background:
-    linear-gradient(180deg, rgba(212, 180, 131, 0.16), transparent 12px),
-    linear-gradient(180deg, #2a241c, #14110e 28%);
-  border-top: 2px solid #8c7049;
-  box-shadow: inset 0 1px 0 rgba(243, 234, 215, 0.18);
+    radial-gradient(circle at 12% 40%, rgba(196, 165, 116, 0.18), transparent 28%),
+    radial-gradient(circle at 88% 30%, rgba(196, 165, 116, 0.14), transparent 24%),
+    linear-gradient(180deg, #4a3828 0%, #1c1612 46%, #100e0c 100%);
+  border-bottom: 2px solid #c4a574;
+  box-shadow:
+    inset 0 1px 0 rgba(243, 234, 215, 0.28),
+    inset 0 0 0 1px rgba(16, 14, 12, 0.45),
+    0 4px 0 #100e0c;
 }
 
-.plate-head {
+.head-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+}
+
+.head-gear {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  padding: 0;
+  display: block;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: #1a140f;
+  box-shadow: 0 0 0 1px #c4a574;
+}
+
+.head-gear img,
+.head-knot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.head-knot {
+  flex: 1;
+  height: 42px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #1a140f;
+  box-shadow: inset 0 0 0 1px rgba(196, 165, 116, 0.7);
+}
+
+.head-plaque {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 5px 8px 6px;
+  background: rgba(8, 6, 4, 0.78);
+  border: 1px solid rgba(196, 165, 116, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(16, 14, 12, 0.85);
+}
+
+.head-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #f3ead7;
+  line-height: 1.15;
+}
+
+.head-sub {
+  margin-top: 1px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #a89880;
+}
+
+.head-pin {
+  max-width: 42vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gear-btn {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  width: 44px;
+  border-radius: 999px;
+  border: 2px solid #c4a574;
   background:
-    linear-gradient(180deg, #3a3126, #1b1714);
-  border-bottom: 2px solid #8c7049;
-  box-shadow: inset 0 1px 0 rgba(243, 234, 215, 0.2);
+    radial-gradient(circle at 50% 40%, #6a5438, #1b1714 72%);
+  color: #f3ead7;
+  box-shadow:
+    inset 0 0 0 2px #100e0c,
+    inset 0 1px 0 rgba(243, 234, 215, 0.35),
+    0 0 0 1px #5c4630;
+}
+
+.world-frame {
+  box-shadow:
+    inset 0 0 0 1px rgba(196, 165, 116, 0.85),
+    inset 0 0 24px rgba(0, 0, 0, 0.28);
+}
+
+.instrument {
+  background:
+    linear-gradient(180deg, rgba(212, 180, 131, 0.18), transparent 14px),
+    linear-gradient(180deg, #32281f, #100e0c 42%);
+  border-top: 2px solid #c4a574;
+  box-shadow:
+    inset 0 1px 0 rgba(243, 234, 215, 0.22),
+    inset 0 8px 16px rgba(16, 14, 12, 0.35);
+}
+
+.face-row {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.face-tab {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  color: #a89880;
+  min-width: 0;
+}
+
+.face-tab.on {
+  color: #f3ead7;
+  text-shadow: 0 0 8px rgba(212, 180, 131, 0.45);
+}
+
+.face-tab img {
+  height: 36px;
+  width: 28px;
+  object-fit: cover;
+  object-position: center 12%;
+  border: 1px solid #c4a574;
+  box-shadow: inset 0 0 0 1px #100e0c;
+  background: #100e0c;
+}
+
+.hud-key {
+  position: relative;
+  display: block;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  border: 0;
+  background: #120e0a;
+  box-shadow: 0 0 0 1px #8c7049;
+}
+
+.hud-art {
+  display: block;
+  width: 100%;
+  height: 76px;
+  object-fit: cover;
+  object-position: center 62%;
+  pointer-events: none;
+}
+
+.hud-label {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 1px 2px 2px;
+  background: linear-gradient(transparent, rgba(8, 6, 4, 0.88));
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f3ead7;
+  line-height: 1.15;
+  text-align: center;
+  pointer-events: none;
+}
+
+.hp-track {
+  height: 8px;
+  border-radius: 2px;
+  background: #100e0c;
+  border: 1px solid #5c4630;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+}
+
+.hp-fill {
+  height: 100%;
+  background: linear-gradient(180deg, #f6e2b6, #d4a85a 45%, #8c6230);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 220, 0.7);
 }
 
 .bezel {
@@ -96,61 +287,6 @@
     0 0 0 1px rgba(212, 180, 131, 0.25);
   object-fit: cover;
   object-position: center 12%;
-}
-
-.gear-pad {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  z-index: 12;
-  width: 148px;
-  height: 148px;
-  pointer-events: none;
-}
-
-.gear-btn {
-  pointer-events: auto;
-  position: absolute;
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 999px;
-  border: 2px solid #8c7049;
-  background: radial-gradient(circle at 35% 30%, #5c4b38, #1b1714 68%);
-  color: #d4b483;
-  font-family: var(--font-display);
-  font-size: 13px;
-  box-shadow:
-    inset 0 0 0 4px #2a241e,
-    0 2px 0 #000;
-}
-
-.gear-n { left: 50px; top: 0; }
-.gear-s { left: 50px; bottom: 0; }
-.gear-w { left: 0; top: 50px; }
-.gear-e { right: 0; top: 50px; }
-
-.gear-hub {
-  position: absolute;
-  left: 52px;
-  top: 52px;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  border: 2px solid #8c7049;
-  background: repeating-conic-gradient(from 8deg, #4a3c2c 0 10deg, #1b1714 10deg 20deg);
-  box-shadow: inset 0 0 0 6px #14110e;
-}
-
-.hud-key {
-  min-height: 52px;
-  border: 1px solid rgba(140, 112, 73, 0.85);
-  background:
-    linear-gradient(180deg, rgba(212, 180, 131, 0.08), transparent 40%),
-    #1b1714;
-  color: #d4b483;
-  box-shadow: inset 0 0 0 1px rgba(16, 14, 12, 0.8);
 }
 
 .zoom-key {
@@ -165,6 +301,10 @@
 
 .flow-line {
   animation: seam-flow 1.1s linear infinite;
+}
+
+.seam-fail {
+  box-shadow: 0 0 0 1px #c45c26;
 }
 
 @keyframes seam-flow {

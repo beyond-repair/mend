@@ -1,5 +1,8 @@
 import type { Convo, Effect, Reply } from "./types";
 import { extendCampaign } from "./campaign";
+import { KILN_CONVOS } from "./kiln";
+import { SWITCH_CONVOS } from "./switchyard";
+import { PANE_CONVOS } from "./pane";
 
 const log = (text: string): Effect => ({ op: "log", text });
 const flag = (key: string, value: string | number | boolean): Effect => ({ op: "flag", key, value });
@@ -1641,6 +1644,16 @@ CONVOS.lark = {
           goto: "lit",
           requires: [{ flag: "roadLamps", is: true }],
         },
+        {
+          text: "Stone is moving on this road.",
+          goto: "stone",
+          requires: [{ flag: "stoneMoving", is: true }],
+        },
+        {
+          text: "The carts toward the ward got heavier.",
+          goto: "eats",
+          requires: [{ flag: "foodLive", is: true }],
+        },
         end("I'll walk it myself."),
       ],
     },
@@ -1653,6 +1666,16 @@ CONVOS.lark = {
       speaker: "lark",
       text: "Light on the high walk. That light is a child. If the parent stops, do not be surprised that the argument starts here and not in the citadel.",
       replies: [end("I know what it's a child of.")],
+    },
+    stone: {
+      speaker: "lark",
+      text: "The pit is sending weight. I don't need to know who you spared under the boom. The road knows the stone is coming, and Rust will know it before anyone makes a speech.",
+      replies: [end("Then the road is the message.")],
+    },
+    eats: {
+      speaker: "lark",
+      text: "Somebody in the ward is eating. The carts got heavier before I saw a plate. If you want the room, it's up the stair. I'm just the part that felt the change.",
+      replies: [end("The weight arrived first.")],
     },
   },
 };
@@ -2138,3 +2161,4 @@ CONVOS["ash-cut"] = {
 };
 
 extendCampaign(CONVOS);
+Object.assign(CONVOS, KILN_CONVOS, SWITCH_CONVOS, PANE_CONVOS);

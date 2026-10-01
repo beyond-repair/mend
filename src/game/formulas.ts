@@ -101,3 +101,12 @@ export const DOMAIN_NAME: Record<string, string> = {
   causal: "Causality",
   continuity: "Continuity",
 };
+
+/** A way of working. Not a larger number. */
+export const PERKS: { id: string; name: string; blurb: string }[] = [
+  { id: "steady-mend", name: "Steady mend", blurb: "A mend spends two less focus. The baseline does not get easier. Your hands do." },
+  { id: "counter-price", name: "Counter price", blurb: "A kiln price comes down. Scarcity stays. The stamp does not." },
+  { id: "thick-sleep", name: "Thick sleep", blurb: "A real bed puts you back to full. A doorway does not." },
+  { id: "soft-step", name: "Soft step", blurb: "Locks and crawls you were not invited through give more easily. A bad miss is still heard." },
+  { id: "parent-ear", name: "Parent ear", blurb: "The first time you audit a machine, one quiet parent is named before the surface admits it." },
+];

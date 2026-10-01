@@ -68,6 +68,21 @@ function facts(d: Data, a: Actor) {
         d,
       );
     }
+    if (d.flags.brickLive) {
+      remember(a, "brick-set", { respect: 4, accord: 4 }, "Tobin counts the kiln. The set has a parent that was not the clay.", d);
+    }
+    if (d.flags.kilnRefused) {
+      remember(a, "kiln-refused", { accord: -4 }, "Tobin looks at the refused yard and does not call the quiet a fix.", d);
+    }
+    if (d.flags.switchJam && !d.flags.switchShunt) {
+      remember(a, "switch-jam", { respect: 4, accord: -4 }, "Tobin says the pit can look busy and still send nothing. He stays.", d);
+    }
+    if (d.flags.paneCharge) {
+      remember(a, "pane-melt", { respect: 4, accord: 4 }, "Tobin counts the glasshouse. The melt has a parent that was not the sand alone.", d);
+    }
+    if (d.flags.paneRefused) {
+      remember(a, "pane-refused", { accord: -4 }, "Tobin looks at the refused house and does not call the quiet a fix.", d);
+    }
   }
   if (a.id === "sera") {
     if (d.flags.stockRefused) {
@@ -95,6 +110,21 @@ function facts(d: Data, a: Actor) {
     }
     if (d.flags.roadDark) {
       remember(a, "dark-road", { respect: 4 }, "Wren says the lamps were a child. The dark is not a new city.", d);
+    }
+    if (d.flags.switchShunt) {
+      remember(a, "switch-shunt", { respect: 6, accord: 4 }, "Wren counts the shunt. The haul left without asking the stamp.", d);
+    }
+    if (d.flags.switchGreased) {
+      remember(a, "switch-grease", { trust: 4 }, "Wren says the slick was an axle, not weather.", d);
+    }
+    if (d.flags.waybillRead) {
+      remember(a, "waybill", { respect: 4 }, "Wren has the waybill in the sentence. The cart and the table were one refusal.", d);
+    }
+    if (d.flags.paneCullet) {
+      remember(a, "pane-cullet", { respect: 6, accord: 4 }, "Wren counts the cullet. The pit was not asked.", d);
+    }
+    if (d.flags.paneGlass) {
+      remember(a, "pane-glass", { respect: 6 }, "Wren says the lamp glass was made in a house, not issued by the clock.", d);
     }
   }
   if (a.id === "cinder") {
@@ -126,12 +156,22 @@ const TOBIN_MEMORY: Record<string, string> = {
   "lung-cut": "He will not touch a stopped lung as if the work were finished.",
   "varr-dead": "He heard Varr is gone. He kept the step he already had.",
   "standard-kept": "He walks. He does not agree about the standard.",
+  "brick-set": "He still counts which parent the kiln actually seated.",
+  "kiln-refused": "He will not call a refused yard a finished quiet.",
+  "switch-jam": "He says a busy pit can still send nothing.",
+  "pane-melt": "He still counts which parent the glasshouse actually seated.",
+  "pane-refused": "He will not call a refused house a finished quiet.",
 };
 
 const WREN_MEMORY: Record<string, string> = {
   "told-wren": "She is still carrying the diagram. It is not a leash.",
   "worker-hurt": "She counts the rigger the stone took. She does not sand the name.",
   "dark-road": "She says the lamps were a child. The dark is not a new city.",
+  "switch-shunt": "She counts the shunt. The stamp did not get a vote.",
+  "switch-grease": "She says the slick was an axle.",
+  waybill: "She keeps the cart and the table in one sentence.",
+  "pane-cullet": "She counts the cullet. The pit did not get a vote.",
+  "pane-glass": "She says the lamp glass was made, not issued.",
 };
 
 const SERA_MEMORY: Record<string, string> = {
@@ -260,6 +300,15 @@ export function placeCreature(d: Data) {
       d.path = [];
     }
     mothWeather(d, c);
+    return;
+  }
+
+  if (d.flags.cinderSpireStay) {
+    c.companion = false;
+    c.mapId = "road";
+    c.x = 20;
+    c.y = 12;
+    c.home = { mapId: "road", x: 20, y: 12 };
     return;
   }
 
