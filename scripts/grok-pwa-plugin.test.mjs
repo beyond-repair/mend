@@ -21,6 +21,11 @@ import { renderInstallPage } from "./grok-pwa-plugin.mjs";
 
 const TEMPLATE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+// Several helpers default to `process.cwd()` for src/lib/og/site.json and
+// public/og.jpg. This project ships its own share card, so run these
+// template-contract tests from an empty directory instead of the repo root.
+process.chdir(mkdtempSync(join(tmpdir(), "grok-pwa-test-")));
+
 test("injects before </head>", () => {
   const out = injectGrokPwaHead("<html><head><title>x</title></head><body></body></html>");
   assert.match(out, /rel="manifest"/);
