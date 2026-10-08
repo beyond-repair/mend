@@ -24,3 +24,7 @@
 ## Not claimed
 
 Shipped commercial game, live multiplayer, therapeutic or clinical effect, AEGIS integrity product, or identity collapse with `mendthegame`.
+
+## Run verification (2026-10-08)
+
+Local run path only; claim ceiling unchanged. On Node 22.12 from a clean clone: `npm ci`, `npm test` (template/script tests including `scripts/mend-formulas.test.mjs`, app-data/auth tests, and the `src/game/pass3.test.ts` game logic suite), `npm run typecheck`, and `npm run build` exit 0, and `npm run dev` serves a game that can be started (New ledger, Recommended file, Enter the Sinks) and autosaves. This is a local playable sketch, not a shipped game. `npm run lint` still reports pre-existing errors.
