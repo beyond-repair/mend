@@ -164,17 +164,41 @@ const upTap = await tapWalk(page, 12, 5, [20, 1]);
 for (let i = 0; i < 4; i++) { await page.keyboard.press("ArrowRight"); for (let k = 0; k < 20; k++) { if (!(await S(page)).path) break; await page.waitForTimeout(80); } await page.waitForTimeout(160); }
 s = await S(page);
 const wardFromGantry = await stageAt(page, 20, 1);
-const feet = await page.evaluate(async () => { const url = performance.getEntriesByType("resource").map((e) => e.name).find((n) => n.includes("/src/components/mend/stage.ts")); const st = await import(url); const c = document.querySelector("canvas").getBoundingClientRect(); const f = st.stageNow().feet; return { fx: f.sx / c.width, fy: f.sy / c.height }; });
-// Look-ahead (post-2fc0d6f): feet drift left of centre on a clamped road, and the Ward diamond is not clipped at the right rim.
-step(upTap.ok && s.map === "road" && s.x === 16 && s.y === 5 && wardFromGantry.on > 0.5 && feet.fx < 0.5 && wardFromGantry.sx < wardFromGantry.w * 0.88, `L9a' taps back up to the upper gantry (${upTap.taps} taps), then ArrowRight x4 walks east to ${s.x},${s.y}; feet at ${feet.fx.toFixed(2)}w,${feet.fy.toFixed(2)}h (look-ahead left of centre); Ward stair on deck ${wardFromGantry.on.toFixed(2)} at ${Math.round(wardFromGantry.sx)},${Math.round(wardFromGantry.sy)} (not rim-clipped)`);
+const cam = await page.evaluate(async () => {
+  const url = performance.getEntriesByType("resource").map((e) => e.name).find((n) => n.includes("/src/components/mend/stage.ts"));
+  const st = await import(url);
+  const c = document.querySelector("canvas").getBoundingClientRect();
+  const w = c.width, h = c.height;
+  const at = (x, y) => { st.layoutStage({ drawImage() {} }, w, h, x, y, "road"); return { ox: st.stageNow().ox, fx: st.stageNow().feet.sx / w }; };
+  const a = at(5, 5), b = at(9, 5), now = at(16, 5);
+  return { fx: now.fx, plateDelta: b.ox - a.ox, ox5: a.ox, ox9: b.ox };
+});
+// Widened road pan: east walk moves the painted plate; feet stay off DECK.right; Ward not rim-clipped.
+step(upTap.ok && s.map === "road" && s.x === 16 && s.y === 5 && wardFromGantry.on > 0.5 && cam.fx < 0.5 && cam.plateDelta < -40 && wardFromGantry.sx < wardFromGantry.w * 0.88, `L9a' taps back up to the upper gantry (${upTap.taps} taps), then ArrowRight x4 walks east to ${s.x},${s.y}; feet at ${cam.fx.toFixed(2)}w; plate pan 5→9 Δ=${cam.plateDelta.toFixed(0)} (${cam.ox5.toFixed(0)}→${cam.ox9.toFixed(0)}); Ward stair on deck ${wardFromGantry.on.toFixed(2)} at ${Math.round(wardFromGantry.sx)},${Math.round(wardFromGantry.sy)} (not rim-clipped)`);
 const roadTap = await tapWalk(page, 20, 2, [20, 1]);
 s = await S(page);
 const wardOn = await stageAt(page, 20, 1);
 step(roadTap.ok && s.map === "road" && s.x === 20 && s.y === 2 && roadTap.onCanvas && wardOn.on > 0.5, `L9b real canvas taps walk the Stack Road east and north to beside the Ward stair (${roadTap.taps} taps, at ${s.x},${s.y}; Silas on canvas every step: ${roadTap.onCanvas}; Ward stair on deck: ${roadTap.mouthSeen}, now ${wardOn.on.toFixed(2)} at ${Math.round(wardOn.sx)},${Math.round(wardOn.sy)})`);
 await shot(page, `${tag}-05b-by-ward-stair`);
-// Hand re-playtest: "You arrive at The Stack Road." toasted a second time mid-road (every commit re-raised the chip).
+// Hand re-playtest: arrive toast came back mid-road (commit re-raise, and again after closing Lark — LogChip remount).
 const chip = await page.locator(".scrap").allInnerTexts();
 step(!chip.some((t) => /You arrive at The Stack Road/.test(t)), `L9c the arrival toast does not come back mid-road (log[0] "${s.log[0]}"; chip now ${JSON.stringify(chip)})`);
+// Open Lark in place (no HUD Talk walk — that leaves the Ward stair tile) then Esc/leave; chip must stay dark.
+const atWard = { x: s.x, y: s.y };
+await page.evaluate(() => {
+  const g = window.__mend;
+  g.setState((st) => ({ data: { ...st.data, dialogue: { convo: "lark", node: "start" }, panel: "none" } }));
+});
+for (let i = 0; i < 20; i++) { s = await S(page); if (s.dlg) break; await page.waitForTimeout(50); }
+for (let i = 0; i < 6 && (await S(page)).dlg; i++) {
+  await key(page, "Escape");
+  const rs = await replies(page);
+  if ((await S(page)).dlg && rs.length) await page.locator(".ledger li button").last().click();
+  await page.waitForTimeout(120);
+}
+s = await S(page);
+const chipAfterTalk = await page.locator(".scrap").allInnerTexts();
+step(s.map === "road" && !s.dlg && s.x === atWard.x && s.y === atWard.y && !chipAfterTalk.some((t) => /You arrive at The Stack Road/.test(t)), `L9c' after closing mid-road Lark talk the arrive toast stays down (still at ${s.x},${s.y}; dlg ${s.dlg}; log[0] "${s.log[0]}"; chip ${JSON.stringify(chipAfterTalk)})`);
 await page.keyboard.press("ArrowUp");
 for (let i = 0; i < 20; i++) { s = await S(page); if (s.map !== "road" || s.panel === "map") break; await page.waitForTimeout(150); }
 step(s.map === "haven" && s.panel === "none", `L10 ArrowUp onto the Ward stair arrives in Oakhaven Lower Ward (map ${s.map}, at ${s.x},${s.y}); log: ${s.log[0]}`);

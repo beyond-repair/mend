@@ -9,9 +9,12 @@ export type Stage = {
   step: Step;
   w: number;
   h: number;
+  /** Painted plate draw offset (canvas px). Used to assert pan motion / plate↔board lock. */
+  ox: number;
+  oy: number;
 };
 
-type Shot = { src: string; zoom: number; fx: number; fy: number };
+type Shot = { src: string; zoom: number; fx: number; fy: number; ax?: number; ay?: number };
 
 const V = "?v=8";
 
@@ -24,7 +27,11 @@ const PLATES: Record<string, Shot> = {
   haven: { src: `/game/plates/haven.jpg${V}`, zoom: 1.16, fx: 0.46, fy: 0.62 },
   kiln: { src: `/game/plates/kiln.jpg${V}`, zoom: 1.16, fx: 0.5, fy: 0.64 },
   rust: { src: `/game/plates/streets.jpg${V}`, zoom: 1.14, fx: 0.5, fy: 0.62 },
-  road: { src: `/game/plates/road.jpg${V}`, zoom: 1.16, fx: 0.5, fy: 0.6 },
+  // Square road plate at cover≈1 had ~0 X slack, so east walks clamped immediately; look-ahead then
+  // scrolled the board under a frozen plate and floated brass mouths into the void. Widen zoom and
+  // bias fx west so the walk toward Ward (20,1) still pans the picture; slight left aim leaves the
+  // Ward on-deck without trailing-edge look-ahead drift.
+  road: { src: `/game/plates/road.jpg${V}`, zoom: 2.4, fx: 0.28, fy: 0.54, ax: 0.4 },
   switch: { src: `/game/plates/switch.jpg${V}`, zoom: 1.14, fx: 0.48, fy: 0.6 },
   sinks: { src: `/game/plates/sinks.jpg${V}`, zoom: 1.2, fx: 0.42, fy: 0.58 },
 };
@@ -41,20 +48,12 @@ function imageOf(src: string) {
   return image;
 }
 
-const empty: Stage = { plate: false, feet: { sx: 0, sy: 0 }, step: { x: 32, y: 16 }, w: 1, h: 1 };
+const empty: Stage = { plate: false, feet: { sx: 0, sy: 0 }, step: { x: 32, y: 16 }, w: 1, h: 1, ox: 0, oy: 0 };
 let current: Stage = empty;
 
 export function stageNow() {
   return current;
 }
-
-/**
- * When the painted plate has run out of picture, shift Silas toward the *trailing* edge of the
- * frame (look-ahead) instead of pinning him dead-centre or carrying him to the leading edge.
- * That keeps walk motion visible and leaves room on the leading side for the next mouth
- * (Ward stair east/north, Stack mouth south-east). Cap the drift so he never parks on DECK.
- */
-export const LOOK = { carry: 0.22, cap: 0.14 };
 
 export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number, px: number, py: number, mapId: string) {
   const shot = PLATES[mapId] ?? PLATES.sinks;
@@ -75,26 +74,26 @@ export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number,
   const home = MAPS[mapId]?.entry ?? { x: px, y: py };
   const panX = ((px - home.x) - (py - home.y)) * step.x;
   const panY = ((px - home.x) + (py - home.y)) * step.y;
-  const ax = w * 0.46;
-  const ay = h * 0.56;
+  const ax = w * (shot.ax ?? 0.46);
+  const ay = h * (shot.ay ?? 0.56);
   const rawX = ax - dw * shot.fx - panX;
   const rawY = ay - dh * shot.fy - panY;
   const minX = Math.min(0, w - dw);
   const minY = Math.min(0, h - dh);
   const x = Math.max(minX, Math.min(0, rawX));
   const y = Math.max(minY, Math.min(0, rawY));
-  // overshoot is zero while the plate still pans; past the edge it grows as Silas keeps walking.
-  // Negate it so feet drift toward the trailing side (look-ahead), not the leading DECK edge.
-  const overX = x - rawX;
-  const overY = y - rawY;
-  const driftX = Math.max(-w * LOOK.cap, Math.min(w * LOOK.cap, -overX * LOOK.carry));
-  const driftY = Math.max(-h * LOOK.cap, Math.min(h * LOOK.cap, -overY * LOOK.carry));
+  // Once the backdrop has run out of picture it rests at its edge. Feet stay on the home aim so the
+  // board does not scroll under a frozen plate (look-ahead drift floated mouths into empty void).
+  // Carrying the overshoot onto DECK.right is also avoided — that pinned Silas and lost the Ward.
+  // Road pan room is widened above so the Ward walk still moves the plate before this clamp fires.
   current = {
     plate: true,
-    feet: keepOnDeck(ax + driftX, ay + driftY, w, h),
+    feet: keepOnDeck(ax, ay, w, h),
     step,
     w,
     h,
+    ox: x,
+    oy: y,
   };
   ctx.drawImage(image, x, y, dw, dh);
   return current;
@@ -102,9 +101,9 @@ export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number,
 
 /**
  * Safety net for where Silas stands on screen on a plate.
- * The plate pans with him until it hits its own edge; past that, `layoutStage` look-ahead drifts
- * his feet inside a capped band so the board still scrolls and the way ahead stays in frame.
- * This clamp only guarantees the feet can never leave the canvas.
+ * The plate pans with him until it hits its own edge; past that his feet stay on the home aim so
+ * markers stay plate-aligned (no independent board scroll under a frozen backdrop). This band only
+ * guarantees the feet can never leave the canvas.
  */
 export function keepOnDeck(sx: number, sy: number, w: number, h: number): Point {
   return {

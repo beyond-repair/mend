@@ -274,26 +274,55 @@ describe("playtest 2026-10-15", () => {
     }
   });
 
-  it("the plate camera look-ahead drifts feet while walking east on a clamped Stack Road (hand re-play on 2fc0d6f felt frozen)", () => {
+  it("Stack Road east walk pans the plate before clamp, and markers stay plate-aligned (no floating mouths)", () => {
     const ctx = { drawImage() {} } as unknown as CanvasRenderingContext2D;
     const w = 440;
     const h = 250;
-    // Hard-centre (2fc0d6f) pinned feet at ax every east step once the square road plate clamped on X.
-    // Look-ahead drifts Silas toward the trailing edge so motion stays visible and the Ward side opens up.
-    const feetX: number[] = [];
-    for (const x of [5, 8, 10, 12, 14]) {
+    // Hand re-play on 5b4c48b: first ~4 ArrowRight pans, then look-ahead scrolled the board under a frozen
+    // plate so Ward/Quarry/Rust brass floated into empty void. Widened road pan must keep moving the
+    // painted offset for several east steps; while it moves, mouth screen delta matches plate delta.
+    const ox: number[] = [];
+    const wardSx: number[] = [];
+    for (const x of [5, 6, 7, 8, 9]) {
       stage.layoutStage(ctx, w, h, x, 5, "road");
-      feetX.push(stage.stageNow().feet.sx);
+      const s = stage.stageNow();
+      ox.push(s.ox);
+      wardSx.push(stage.projectTile(w, h, x, 5, 20, 1, 1, 64, 32).sx);
+      assert.ok(s.feet.sx < w * stage.DECK.right - 1, `at ${x},5 Silas is not pinned to DECK.right (${Math.round(s.feet.sx)})`);
     }
-    for (let i = 1; i < feetX.length; i++) {
-      assert.ok(feetX[i]! < feetX[i - 1]! - 2, `east step ${i}: feet drift left for look-ahead (${feetX[i - 1]!.toFixed(1)} → ${feetX[i]!.toFixed(1)})`);
+    assert.ok(ox[4]! < ox[0]! - 40, `after 4 east steps plate offset must change (${ox[0]!.toFixed(0)} → ${ox[4]!.toFixed(0)})`);
+    for (let i = 1; i < ox.length; i++) {
+      const plateDelta = ox[i]! - ox[i - 1]!;
+      const wardDelta = wardSx[i]! - wardSx[i - 1]!;
+      assert.ok(Math.abs(plateDelta - wardDelta) < 2, `east step ${i}: mouth stays plate-aligned (plateΔ ${plateDelta.toFixed(1)}, wardΔ ${wardDelta.toFixed(1)})`);
     }
-    // Still inside the deck, never the leading (right) edge.
-    assert.ok(feetX.every((sx) => sx > w * stage.DECK.left && sx < w * 0.5), `look-ahead feet stay left of centre: ${feetX.map((v) => v.toFixed(0)).join(",")}`);
-    // Ward is readable earlier than the hard-centre camera (which first cleared onDeck around 16,5 at the rim).
-    stage.layoutStage(ctx, w, h, 14, 5, "road");
-    const ward = stage.projectTile(w, h, 14, 5, 20, 1, 1, 64, 32);
-    assert.ok(stage.onDeck(ward.sx, ward.sy), `from 14,5 look-ahead already has the Ward on deck (${Math.round(ward.sx)},${Math.round(ward.sy)})`);
+    // Widened pan + leftish road aim: Ward readable from 16,5 without look-ahead rim-clip.
+    stage.layoutStage(ctx, w, h, 16, 5, "road");
+    const ward = stage.projectTile(w, h, 16, 5, 20, 1, 1, 64, 32);
+    assert.ok(stage.onDeck(ward.sx, ward.sy), `from 16,5 Ward is on deck (${Math.round(ward.sx)},${Math.round(ward.sy)})`);
+    assert.ok(ward.sx < w * 0.88, `from 16,5 Ward is not rim-clipped (${Math.round(ward.sx)} / ${w})`);
+  });
+
+  it("closing Lark mid-road does not push a second arrive log line", () => {
+    // LogChip remount-after-talk is covered by playtest-loop L9c'. Here: store must not re-run arrive.
+    useGame.setState((s) => ({
+      data: {
+        ...s.data,
+        flags: { ...s.data.flags, checkpointSpoke: true },
+        player: { ...s.data.player, x: 24, y: 18 },
+      },
+    }));
+    G().clickTile(25, 18);
+    walkOut();
+    assert.equal(D().mapId, "road");
+    assert.match(D().log[0] ?? "", /You arrive at The Stack Road/);
+    const before = D().log.slice();
+    useGame.setState((s) => ({ data: { ...s.data, dialogue: { convo: "lark", node: "start" } } }));
+    const leave = leaveIndex(D());
+    assert.ok(leave >= 0, `Lark opening has an Esc leave (got ${leave})`);
+    G().choose(leave);
+    assert.equal(D().dialogue, null);
+    assert.deepEqual(D().log, before, "closing Lark must not re-push arrive or other log lines");
   });
 
   it("the plate camera is unchanged where the backdrop still has picture: the band only catches feet leaving the canvas", () => {

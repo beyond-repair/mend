@@ -191,13 +191,15 @@ function focusLine(d: Data) {
   return "The city";
 }
 
-function LogChip() {
+function LogChip({ quiet = false }: { quiet?: boolean }) {
   const log = useGame((s) => s.data.log);
   const line = log[0] ?? "";
   const [on, setOn] = useState(false);
   // Every store commit clones `data`, so `log` is a new array on each step even when nothing was written.
   // Only a real new entry (contents changed) re-raises the chip; otherwise the last line, e.g.
   // "You arrive at The Stack Road.", popped up again mid-walk.
+  // Stay mounted while talking (`quiet`) so `seen` survives talk open/close — unmounting remounted
+  // with an empty `seen` and re-toasted the arrive line after closing Lark mid-road.
   const seen = useRef<string[]>([]);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => {
@@ -210,7 +212,7 @@ function LogChip() {
     timer.current = window.setTimeout(() => setOn(false), 3800);
   }, [log, line]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
-  if (!on || !line) return null;
+  if (quiet || !on || !line) return null;
   return (
     <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(72%,18rem)]">
       <p className="scrap">{line}</p>
@@ -397,7 +399,7 @@ function PlayScreen() {
       </header>
       <div className="world-frame relative min-h-0 flex-1 overflow-hidden">
         <WorldCanvas />
-        {!talking && <LogChip />}
+        <LogChip quiet={talking} />
         <DialogueBox />
       </div>
       <footer className="instrument px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
