@@ -187,7 +187,7 @@ Non-blocking polish leftovers from this pass were addressed in **Polish pass 1**
 
 ## Polish pass 1 (2026-10-15)
 
-Play tip for prior HUD/Wren-leave/fight-reach round: **`2c9d817`** (~5:31–5:34 AM ET live recheck). Fixes below land on the next tip of `fix/mend-playtest-rc`. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
+Play tip for this round: **`a6d0ded`** (dismiss/focus/fight-reach; prior HUD/Wren-leave tip `2c9d817`, ~5:31–5:34 AM ET live recheck). Branch `fix/mend-playtest-rc`. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
 
 | Finding | Root cause | Fix | Regression test |
 | --- | --- | --- | --- |
