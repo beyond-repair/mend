@@ -172,6 +172,9 @@ function citadel(): GameMap {
   wide[8][21] = "p";
   wide[9][21] = "p";
   wide[6][24] = "^";
+  // The south throat (22–24, 15) used to open onto solid rock at rows 13–14, so the
+  // tundra stair landing (32,18) could not walk to the ranking floor at all.
+  fill(wide, 22, 13, 24, 14, "p");
   const tall = grow(wide, 32, 22);
   tall[15][22] = "p";
   tall[15][23] = "p";

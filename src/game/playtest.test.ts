@@ -751,4 +751,103 @@ describe("playtest 2026-10-15", () => {
     assertRouteClear("rust", 33, 8, 4, 4, [cutter]); // beside Ives
     assertRouteClear("rust", 33, 8, 8, 8, [cutter]); // beside hearth
   });
+  it("High Citadel: the tundra stair landing walks to the ranking floor (bug 25)", () => {
+    // The south throat (22–24,15) opened onto rock at rows 13–14, so the only on-foot way in
+    // (Tundra → Ranking stair → 32,18) could reach lamps / buffer / Ime and nothing else.
+    const d = D();
+    d.flags.act1 = true;
+    d.flags.checkpointSpoke = true;
+    d.flags.citadelOpen = true;
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.mapId = "tundra";
+    d.player.mapId = "tundra";
+    d.player.x = 26;
+    d.player.y = 5;
+    depart(d);
+    assert.equal(d.mapId, "citadel");
+    assert.deepEqual([d.player.x, d.player.y], [32, 18], "Ranking stair lands on the tundra stair landing");
+    reconcileWorld(d);
+    for (const [x, y, what] of [[13, 8, "beside crucible"], [13, 5, "beside Vane"], [25, 9, "beside orrery"], [17, 7, "beside Sarn"], [9, 13, "west wing walk"]] as const) {
+      d.player.x = 32;
+      d.player.y = 18;
+      const route = pathTo(d, x, y);
+      assert.ok(route && route.length > 0, `citadel 32,18 → ${x},${y} (${what}) must path on foot`);
+    }
+  });
+
+  it("High Citadel primary routes from the tundra stair stay outside hostile vision (bug 26)", () => {
+    // Warden on the landing corridor (28,19) and both guards beside Vane/Sarn/crucible started
+    // combat on arrival or before the first Act V talk. Optional fights stay, off the routes.
+    const d = D();
+    d.flags.act1 = true;
+    d.flags.checkpointSpoke = true;
+    d.flags.citadelOpen = true;
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.mapId = "citadel";
+    d.player.mapId = "citadel";
+    reconcileWorld(d);
+    const hostiles = Object.values(d.actors).filter((a) => a.alive && a.mapId === "citadel" && a.hostile && a.aggro && a.vision > 0);
+    assert.ok(["warden1", "guard1", "guard2"].every((id) => hostiles.some((a) => a.id === id)), "the citadel fights still exist");
+    const sarnSpots: [number, number][] = [[14, 8], [18, 6], [30, 10]]; // default, guardToll, sever
+    const goals: [number, number, string][] = [
+      [25, 18, "beside lamps"], [21, 19, "beside buffer"], [22, 19, "beside Ime"],
+      [25, 9, "beside orrery"], [13, 8, "beside crucible"], [13, 5, "beside Vane"],
+      ...sarnSpots.map(([x, y]) => [x, y + 1, `beside Sarn@${x},${y}`] as [number, number, string]),
+    ];
+    for (const [tx, ty, what] of goals) {
+      d.player.x = 32;
+      d.player.y = 18;
+      d.combat = null;
+      const route = pathTo(d, tx, ty);
+      assert.ok(route && route.length > 0, `32,18 → ${tx},${ty} (${what}) must path`);
+      for (const p of [{ x: 32, y: 18 }, ...route]) {
+        for (const a of hostiles) {
+          assert.ok(dist(a, p) > a.vision, `${a.id}@${a.x},${a.y} vision ${a.vision} covers ${p.x},${p.y} on the way to ${what}`);
+        }
+      }
+    }
+    d.player.x = 32;
+    d.player.y = 18;
+    checkVision(d);
+    assert.equal(d.combat, null, "arriving on the tundra stair landing does not start a fight");
+  });
+  it("a long road walk that crosses another mouth does not depart through it (bug 27)", () => {
+    // Tundra walk (8,14) → beside Spire mouth (28,14): the shortest route runs over the Yard stair
+    // (22,14). step() departed on any mouth tile, so Silas landed in The Switch mid-walk.
+    const d = D();
+    d.flags.act1 = true;
+    d.flags.checkpointSpoke = true;
+    d.flags.citadelOpen = true;
+    d.flags.spireOpen = true;
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.mapId = "road";
+    d.player.mapId = "road";
+    d.player.x = 8;
+    d.player.y = 14;
+    d.path = [];
+    d.intent = null;
+    reconcileWorld(d);
+    G().clickTile(28, 14);
+    const route = D().path.map((p) => `${p.x},${p.y}`);
+    assert.ok(route.length > 0, "road 8,14 → 28,14 paths");
+    const crossed = MOUTHS.filter((m) => m.map === "road" && route.slice(0, -1).includes(`${m.x},${m.y}`));
+    assert.ok(crossed.length > 0, `fixture route crosses a mouth mid-walk (${route.join(" ")})`);
+    walkOut();
+    assert.equal(D().mapId, "road", `walk stays on the road (crossed ${crossed.map((m) => m.label).join(", ")})`);
+    assert.deepEqual([D().player.x, D().player.y], [28, 14]);
+    // The last step onto a mouth still departs: arrow onto the Spire mouth.
+    G().clickTile(28, 15);
+    walkOut();
+    assert.equal(D().mapId, "spire", "stepping onto the Spire mouth at the end of a route still leaves");
+  });
+
 });

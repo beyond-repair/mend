@@ -597,6 +597,9 @@ export const useGame = create<Store>((set, get) => ({
         }
         movePlayer(d, next.x, next.y);
         d.path = d.path.slice(1);
+        // Only the last step of a route goes through a mouth. A long walk on the road used to
+        // cross the Yard stair (22,14) on the way to the Spire mouth and drop Silas into The Switch.
+        const arrived = !d.path.length;
         const tone = d.mapId === "tundra" ? "ice" : d.mapId === "rust" || d.mapId === "quarry" ? "metal" : d.mapId === "haven" ? "timber" : "sinks";
         play("step", tone);
         if (!d.path.length && d.intent) {
@@ -622,7 +625,7 @@ export const useGame = create<Store>((set, get) => ({
             }
           }
         }
-        if (d.phase === "play" && !d.combat && isExit(d.mapId, d.player.x, d.player.y)) depart(d);
+        if (arrived && d.phase === "play" && !d.combat && isExit(d.mapId, d.player.x, d.player.y)) depart(d);
         checkVision(d);
         if (!d.path.length) writeSlot("auto", d);
       },

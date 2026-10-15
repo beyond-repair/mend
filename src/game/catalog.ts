@@ -1436,8 +1436,11 @@ export const SPAWNS: Spawn[] = [
   { id: "sera", template: "sera", map: "rust", x: 6, y: 11 },
   { id: "vane", template: "vane", map: "citadel", x: 12, y: 4 },
   { id: "sentry", template: "sentry", map: "citadel", x: 8, y: 8 },
-  { id: "guard1", template: "guard", map: "citadel", x: 19, y: 5, name: "Guard Senn" },
-  { id: "guard2", template: "guard", map: "citadel", x: 16, y: 4, name: "Guard Oll" },
+  // On the south line of the ranking floor (watching the west-wing walk) instead of beside
+  // Vane, Sarn, and the crucible, so the Act V primary talks/audit are not forced into combat.
+  // Same class as bug 23. The sever / failed-ceremony fights still call them by id.
+  { id: "guard1", template: "guard", map: "citadel", x: 17, y: 13, name: "Guard Senn" },
+  { id: "guard2", template: "guard", map: "citadel", x: 12, y: 13, name: "Guard Oll" },
   { id: "sovereign", template: "sovereign", map: "spire", x: 8, y: 6 },
   { id: "echo", template: "echo", map: "spire", x: 11, y: 8, aggro: false, hostile: false },
   { id: "nessa", template: "nessa", map: "haven", x: 7, y: 3 },
@@ -1458,7 +1461,9 @@ export const SPAWNS: Spawn[] = [
   // combat. Same class as Nim/Ske/Sol landing/door clearance. Optional fights stay.
   { id: "rubble", template: "bruiser", map: "quarry", x: 20, y: 3 },
   { id: "mill1", template: "mill", map: "quarry", x: 10, y: 20, name: "Unlicensed mill" },
-  { id: "warden1", template: "warden", map: "citadel", x: 28, y: 19, name: "Plate warden" },
+  // North-east corner of the orrery hall, off the tundra-stair landing corridor (was 28,19:
+  // vision 3 covered the stair landing and every step to lamps / buffer / Ime).
+  { id: "warden1", template: "warden", map: "citadel", x: 30, y: 5, name: "Plate warden" },
   { id: "caller1", template: "chanter", map: "citadel", x: 3, y: 4, name: "Line caller" },
   // Off Nell's tenement tile so Rust primary talk is not forced into combat.
   { id: "cutter1", template: "lurker", map: "rust", x: 4, y: 19, name: "Ash cutter" },
