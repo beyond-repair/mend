@@ -187,7 +187,7 @@ Non-blocking polish leftovers from this pass were addressed in **Polish pass 1**
 
 ## Polish pass 1 (2026-10-15)
 
-Landed on tip **`1167c2f`** (play build still rooted in `c82cd73` first-act COMPLETE). First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
+Play build **`1167c2f`** (first-act COMPLETE root `c82cd73`); Continue-grey fix + this hand-check note land on the tip that follows. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
 
 | Finding | Root cause | Fix | Regression test |
 | --- | --- | --- | --- |
@@ -195,15 +195,21 @@ Landed on tip **`1167c2f`** (play build still rooted in `c82cd73` first-act COMP
 | Mouth tap target is only the brass diamond | Label is drawn below the tile centre (`sy+16` plate / `sy+26` board); pointer hit tested the tile centre diamond only, so taps on the brass name often walked a neighbour tile instead. | `hitMouthLabel` / `mouthLabelBox` in `stage.ts`; WorldCanvas takes a drawn usable mouth when the tap is on its label. Walkable neighbour tile centres win over the label when equally close (label sits on the tile south of a stair — without that gate, Stack Road east taps stole the Ward exit). Same nearOnly / presence rules as drawing. | `playtest`: "a tap on a mouth's brass label…"; headless loop L9b/L9c' |
 | Combat action buttons have no accessible names | HUD keys were image-only. `aria-label` was present but the unused `.hud-label` CSS never rendered, so names were easy to miss and tooling/hand notes called them unlabeled. | `HUD_LABELS` in `hud.ts`; `HudButton` renders `<span className="hud-label">` plus `aria-label`. Combat End reads **End turn**. | `playtest`: "combat HUD keys expose accessible names…" |
 | Menu "Close the ledger" returns to the title | Intended quit (`quit()` → `phase: "title"`), but the wording sounded like dismissing the panel. The panel **X** already closes via `closePanel`. | Renamed control to **Return to the title** (`MENU_QUIT_LABEL`), matching the epilogue. Behaviour unchanged. | `playtest`: "Menu quit label names the title return…" |
+| Title **Continue** looks greyed on first page load even when auto + slot1 exist; click still works; after Menu → title it looks enabled | Two layers: (1) `hasSave` started `false` until `boot()` after paint; (2) SSR renders `disabled` with no `localStorage`, client has a save → React hydration **does not patch** the `disabled` attribute, so Continue can stay grey forever after reload. Menu quit remounted with client-only state, so it looked fine. | Seed `hasSave` via `hasStoredLedger()`; `boot()`/`quit()` share that scan; title gates `disabled={titleReady && !hasSave}` so SSR and first client paint both omit disabled, then mount+boot set the real state before paint. | `playtest`: "title Continue reads disk before paint…" |
 
-**Verification (automated):** `npm test` **196 + 55 + 47 PASS** (was 196 + 55 + 43; +4 polish regressions); `npm run typecheck` clean; headless `SEED=4 node scripts/playtest-loop.mjs` **PASS** (17 steps + L8b, L9a, L9a', L9b, L9c, L9c').
+**Verification (automated):** `npm test` **196 + 55 + 48 PASS** (was 196 + 55 + 47; +1 Continue regression); `npm run typecheck` clean; headless `SEED=4 node scripts/playtest-loop.mjs` **PASS** (17 steps + L8b, L9a, L9a', L9b, L9c, L9c').
 
-**Live hand re-check: pending** (next human pass on the :8080 build). Suggested checks:
+**Live hand re-check (2026-10-15 ~5:06–5:08 AM ET on `1167c2f` play / `1b6cbea` docs):** real mouse clicks, no Map.
 
-1. **Act plaque** — Stack Road → Ward stair → Oakhaven: header should say **Act I** under "Oakhaven Lower Ward" (correct).
-2. **Mouth label tap** — In the Sinks after Moll, tap the words **Stack mouth** (not only the diamond) and confirm you path onto the road; on the road, tap **Ward stair** text likewise.
-3. **Combat HUD names** — Optional Moll checkpoint fight: on the south plate choose **Move.** → **Read them.** (or any hostile). Confirm Strike / Brace / **End turn** captions on the image keys.
-4. **Menu quit wording** — Menu → **Return to the title** leaves to the title; Menu **X** only closes the panel and stays in play.
+| Check | Result |
+| --- | --- |
+| Oakhaven Lower Ward header **ACT I · C 5**; Stack Road **ACT II · C 5** | PASS |
+| Tap **Stack mouth** label text in Oakhaven → The Stack Road (arrive toast once); tap **Ward stair** text → Oakhaven; plain ground near the label does not take an exit (walk under that tap not clearly seen) | PASS |
+| Menu **Field notes** → **Return to the title** → title; **X** only closes panel; Continue returns to Oakhaven | PASS |
+| Combat captions (Strike / Brace / End turn) | NOT checked live (no fight came up) |
+| New: title Continue greyed on first load with autosave + slot1; click still works; after Menu → title looks normally enabled | FOUND → fixed (row above); re-check on next tip |
+
+**Still pending live:** combat HUD captions — fastest path below under fight-reach notes (parent report).
 
 ## Before COMPLETE — PLAYTEST VERIFIED: record (all done on c82cd73)
 
