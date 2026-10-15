@@ -1,6 +1,6 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven: Act II yards (Kiln/Switch/Pane), Act III (Quarry/Rust), and Acts IV–VI (Brass Tundra → High Citadel → Void Spire → epilogue: Splice/decline, fight→impose, fight→Leave the holes, Sever/impose, Sever+shaftOpen, iceCut+cleats, lamp glass cut) are played in headless Chromium; see sections below. Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop. On this tip the headless SEED=4 Act I loop, Act II, Act III, and Act IV harnesses all pass.
+**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven: Act II–VI critical paths and side branches (incl. Vane ceremony, Sarn toll/stores via `NETWORK=varr`, Sovereign fight→Leave, Sever/impose, iceCut, lamp cut) are harness-played in headless Chromium; see sections below. Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop. On this tip the headless SEED=4 Act I loop, Act II, Act III, and Act IV harnesses all pass.
 Scope of the first-act verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Act III Quarry + Rust and the Act IV–VI critical path are harness-played (see "Beyond Oakhaven — Act III" and "Beyond Oakhaven — Acts IV–VI").
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
@@ -480,7 +480,7 @@ Also on this tip: `npm test` **196 + 55 + 74 PASS** (playtest +6), `npm run type
 | `SEED=4 VANE=horns` | Speech 95 → **horns holds** (3 vs 87) → `citadelFate=expose`, `spireOpen`, Causality → crucible refuses a second answer → Vane: no second ceremony → Spire → decline → epilogue ("The ceremony heard the diagram") | **64/64 PASS** |
 | `SEED=4 VANE=history` | History 84 → **history holds** → expose → same as above | **64/64 PASS** |
 | `SEED=4 VANE=fail` | History 36 → **fails** → "Then the floor will be cleaned." → **No.** → guard fight → stood down (8 rounds; 25 deaths, 12 slot loads, won on Strain story) → Vane talks → answer on the machine → Splice → Spire → epilogue | **65/65 PASS** (64/65 before bug 32) |
-| `SEED=4 NETWORK=varr SARN=toll` | "Move." → "Read them." → **checkpoint fight** (Varr + Moll + Hess, level 1). Slot 1 is filed first. | **STOPPED at A0w:** fight not won. 31 deaths and slot reloads, including Strain story; cut-rifle + Stand down never landed, and the last ledger came back at 1–23 HP. `checkpointLead` was never set, so the quarry detour, `stoneMoving`, and Sarn's stores beat were not reached. |
+| `SEED=4 NETWORK=varr SARN=toll` | earlier tip: checkpoint fight not won (31 deaths). **Superseded** — see next section (won + stores). | superseded |
 | `SEED=4 SARN=toll` | Sarn with `guardToll` → **"The plate is unfed."** → toll line → "A missing meal, not a new law." (`sarnMet`) → no combat → Splice → decline → epilogue | **61/61 PASS** |
 | `SEED=4` default | regression (now +C8b/C8c) | **59/59 PASS** |
 | `SEED=4 CRUCIBLE=sever SPIRE=impose` | regression | **65/65 PASS** |
@@ -511,10 +511,49 @@ Z0 page/console errors: 0 in all runs that finished.
 
 **Evidence kept (design calls, unchanged):** the mid-fight auto ledger again returned 1–23 HP over and over, in the Act I checkpoint fight and in the ceremony guard fight. The level-1 checkpoint fight and the level-3 ceremony guard fight are both punishing for the harness's cut-and-stand-down line.
 
+### Still unplayed (browser) — superseded by next section
+
+See **Beyond Oakhaven — Act I Varr network + Sarn stores** below. Sarn stores and the quarry detour are now harness-played. Seize / Cinder / Kael / hand pass remain open there.
+
+## Beyond Oakhaven — Act I Varr network + Sarn stores + bug 33 (IN PROGRESS) (2026-10-15, ~3:30–3:45 PM ET)
+
+**Status:** **IN PROGRESS.** The Act I **checkpoint fight** (Varr + Moll + Hess) is now harness-winnable without nerfing combat or cheating state. Winning with **"Strip the coupling and let him crawl"** sets `checkpointLead=varr` / `plateStair`, the Quarry detour (Hask → Cut the brake) sets `stoneMoving` → `citadelSupplied`, and Sarn's **"Stone reached the stores."** beat is played through to the epilogue. One game bug was found (33) and fixed. These are harness plays, not hand plays.
+
+**How the Varr network is reached (legitimate character only, no state edits):**
+- At Moll's plate line take **"Move."** → **"Read them."** (not the Engineering talk-past).
+- Rest at Tobin's Reclamation bench first (`NET_REST` default on): focus full, HP topped — the pump mend leaves focus short for Unmend.
+- File slot 1, walk onto the plate, fight. `NET_TACTIC=varr` (default) plays for Varr: stand on him, re-read until confident, cut live weapon/armor seams (Rifle / Rivet line with `dependsOn`), prybar strikes, Brace (not a wasted End turn), bandage under 60%. When Varr hits zero the squad stands down and **varr-down** offers **"Strip the coupling and let him crawl"** (no check) → `checkpointLead=varr`.
+- Deaths reload slot 1 and re-enter the plate. Variance is high (0–25 deaths observed on SEED=4 field Strain). Mid-fight **"Open the last ledger"** still returns thin HP — design call, unchanged; the harness reloads slot 1 after each death rather than fighting from 1–23 HP.
+- Quarry: Hask clears the riggers → **Cut the brake** → `quarryStone=clear`, `stoneMoving`, `citadelSupplied`. Leave via Stack mouth (bug 33: rubble must stay off the crane→mouth walk).
+- Citadel: Sarn offers **"Stone reached the stores."** when `citadelSupplied` (and `guardToll` may still be false on a fed-plate Act I).
+
+### Results (this tip)
+
+| Run | Path | Result |
+| --- | --- | --- |
+| `SEED=4 NETWORK=varr SARN=toll` | Move → Read them → checkpoint (varr broken open; 9 deaths / 9 loads / 25 cuts) → rest → Quarry Hask → Cut the brake (`stoneMoving`, `citadelSupplied`) → Rust Ives → Tundra seat → Citadel → **Sarn stores** → Splice → Spire decline → epilogue | **69/69 PASS** |
+| `SEED=4` default | regression | **59/59 PASS** |
+| Act III `SEED=4` | regression | **47/47 PASS** |
+| Act I loop `SEED=4` | regression | **PASS** (0 FAIL) |
+
+Also on this tip: `npm test` **196 + 55 + 75 PASS**, `npm run typecheck` clean. (Bug 33 adds route asserts inside the existing Act III hostile-path test; suite count stays 75.)
+
+Z0 page/console errors: 0.
+
+Harness-only (not a game bug): `mouthStep` now files a pending level before Arrow keys. `Game.tsx` holds walk keys while `pendingLevel` is set; after the long Ives walk the level modal could block Rust Stack-mouth departure (B4 flake on an earlier varr run).
+
+### Bugs found / fixed this pass
+
+| # | Found by play | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 33 | **MED — Cut the brake, then leave Quarry = forced rubble fight.** After Hask → Cut the brake the natural walk is crane → Stack mouth along row 6. Rubble at (20,3) still saw that corridor (bug 23 had moved him off the east mouth / Rill grade, not far enough north). | Spawn too close to the post-brake exit walk. | Move rubble `(20,3)` → `(18,1)` (same north pit, five tiles off every primary leg; optional fight stays if you walk up). | `playtest`: Act III primary paths now assert crane/Hask/Pim ↔ Stack mouth routes clear of rubble/mill; act4 `NETWORK=varr` Q4v |
+
 ### Still unplayed (browser)
 
-- **Sarn stores** (`citadelSupplied` via `stoneMoving`): needs Varr to keep the plate stair (`checkpointLead=varr`). The `NETWORK=varr` harness reaches the checkpoint fight but has not won it, so the quarry detour (already scripted: Hask → Cut the brake) and the Citadel stores line are untested. A Kael duel / RelSec fight is also unplayed.
-- **Seize**: needs comprehension 8 or Continuity. Not attempted. Comprehension = 1 + ⌊mind/3⌋ + ⌊audit/40⌋ + (level − 1). For the Recommended file that is 1 + 2 + ⌊audit/40⌋ + (level − 1). Even with every point in Audit (⌊95/40⌋ = 2), it is 8 only at level 4. Silas reaches the crucible at level ≤ 3 (level 3 comes with the crucible/Spire XP), so the most he can have there is 7. It is not legitimately reachable on the critical path.
-- Cinder companion dark-mouth and Spire refusals.
-- A design call on the mid-fight auto ledger, and on the balance of the Sovereign, Sever, ceremony, and checkpoint fights for a critical-path character.
+- **Kael duel / RelSec** (`kael` + `rel1` on Quarry): Kael stands at quarry (13,5) with `kael-pre`; reachable on the Varr quarry detour without cheating, but not harnessed this pass (Hask → brake → leave does not talk to him).
+- **Seize**: needs comprehension 8 or Continuity. At the crucible on this path: level 3, mind 8, audit 62 → comprehension **6**, no Continuity. Max ~7 on critical path before Spire. Leave documented; do not cheat.
+- **Cinder** companion dark-mouth / Spire refusals: needs scrap feed + recruit earlier; not on this network's critical path.
+- Design calls (unchanged): mid-fight auto ledger thin HP; balance of the level-1 checkpoint fight (winnable but punishing), Sovereign, Sever, and ceremony guards for a critical-path character.
 - A full hand pass of Acts IV–VI without the harness.
+
+**BLACKSITE PR #5** remains **BLOCKED** on human held-key — not worked this run.
