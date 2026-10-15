@@ -1,7 +1,7 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven (Act II yards Kiln/Switch/Pane + Act III Quarry/Rust played in headless Chromium; see sections below). Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop; headless SEED=4 Act I loop, Act II, and Act III harnesses pass on this tip.
-Scope of the first-act verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Act III Quarry + Rust primary loops are harness-played (see "Beyond Oakhaven — Act III").
+**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven: Act II yards (Kiln/Switch/Pane), Act III (Quarry/Rust), and Acts IV–VI (Brass Tundra → High Citadel → Void Spire → epilogue, one branch) are played in headless Chromium; see sections below. Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop. On this tip the headless SEED=4 Act I loop, Act II, Act III, and Act IV harnesses all pass.
+Scope of the first-act verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Act III Quarry + Rust and the Act IV–VI critical path are harness-played (see "Beyond Oakhaven — Act III" and "Beyond Oakhaven — Acts IV–VI").
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
 **Date:** 2026-10-15, about 1:30–2:00 AM ET (first pass); hand playtest 1 and its fixes about 2:20–2:45 AM ET; hand re-play + Stack Road camera about 2:50–3:10 AM ET; look-ahead / Ward fade / Brick soft about 3:30–3:50 AM ET; pan lock + LogChip remount about 4:00–4:20 AM ET; hand re-playtest 6 (COMPLETE) on `c82cd73` about 4:20–4:35 AM ET
@@ -307,3 +307,61 @@ Brass Tundra, High Citadel, Void Spire, epilogue (Quarry + Rust moved to Act III
 ### Still unplayed (browser)
 
 Brass Tundra, High Citadel, Void Spire, epilogue. Also unplayed: Kael duel / RelSec fight, scarred-drop branch, Varr-held stair → stoneMoving → tenementWarm / Seat stock with live ore, refuse-stock, combat vs rubble/mill/cutter, and a full hand pass without the harness. Death → "Open the last ledger" mid-fight design call unchanged.
+
+## Beyond Oakhaven — Acts IV–VI Tundra, Citadel, Spire, epilogue (IN PROGRESS) (2026-10-15, ~11:52 AM–12:30 PM ET)
+
+**Status:** **IN PROGRESS.** The first-act **COMPLETE — PLAYTEST VERIFIED** verdict and the Act II / Act III harness results do not change. One critical path through Acts IV–VI was played end-to-end in headless Chromium: `scripts/playtest-act4.mjs` with SEED=4 against `npm run dev`. It runs from New ledger through **The Brass Tundra**, the **High Citadel**, and the **Void Spire** to the **epilogue** ("Leave the holes") and back to the title. Save/Continue was checked on all three maps. This was a harness play, not a hand play.
+
+**How the late gates open (existing content, nothing invented):**
+- `citadelOpen` is set by Ives in Rust. The path is "I'm looking for the people who maintain the maintainers." → "I'll speak to Mara before I decide anything about a city." (`ives/welcome`). It is also set by Kael's down lines and by Ives's `siphon` node.
+- `spireOpen` is set by `finishCitadel` (crucible: Sever, Splice, or Seize), by Vane's ceremony checks (horns or history), or by Vane's "already touched it" lines.
+- Mouths: road (8,15) Tundra walk needs `citadelOpen`. Tundra (26,5) Ranking stair leads to citadel (32,18). Road (28,15) Spire mouth needs `spireOpen`.
+
+**Path played (act4):** New ledger → Moll Engineering talk-past → Stack mouth → real taps to the Rust cut → **Rust**: Ives welcome sets `citadelOpen` → Stack mouth → road west → ArrowDown onto the Tundra walk → **Tundra**: Kel → Audit Brass hollow → Read the hollow → Drift → Audit Glaze stake → Seat the span → Save/Continue → ArrowRight onto the Ranking stair → **Citadel**: Ime → Audit Infirmary buffer → Charge the cell → Audit lamp glass → up the south throat to the Frost orrery → Read the drive → Sarn → Vane (look → choice → "I'll answer on the machine itself.") → Audit Crucible core → **Splice toward the Sinks** (`citadelFate=redirect`, `spireOpen`, no fight) → Vane "already touched it" → Map lists all three regions → Save/Continue → Tundra stair → Tundra Stack mouth → road east → ArrowDown onto the Spire mouth → **Spire**: Sovereign "I'll circle" (fight declined) → Save/Continue → Audit Unissued baseline → Read what is holding → **Leave the holes** → epilogue screen → Return to the title. Long walks use the store `clickTile`, the same call a canvas tap makes. Mouths are stepped onto with real arrow keys, and machine and NPC targets are hit with real canvas taps where they are on deck.
+
+### Results (act4, tip of this note)
+
+| Slice | Result |
+| --- | --- |
+| A0–A1 Act I talk-past → Stack Road | PASS |
+| B1–B4 taps to the Rust cut → Rust → Ives welcome (`citadelOpen`, `guildBriefed`) → back to the road | PASS |
+| T0–T1c beside the Tundra walk (mouth on deck) → ArrowDown → Brass Tundra arrive, feet on canvas, no combat | PASS |
+| T2–T5c Kel → hollow read (`hollowRead`, `hollowWarm`) → Drift (`driftMet`) → Seat the span (`iceSpan`) | PASS |
+| T6 Save → reload → Continue on the Tundra | PASS |
+| C0–C1b Ranking stair → High Citadel arrive (`seenCitadel`), no combat on the landing | PASS (FAIL before bug 26) |
+| C2–C3 Ime → Charge the cell (`bufferCharged`) → lamp glass audit | PASS (FAIL before bug 26) |
+| C4–C4b walk up the south throat → Frost orrery → Read the drive | PASS (FAIL before bug 25: no path) |
+| C5–C6c Sarn → Vane look/choice → "answer on the machine", no combat | PASS (FAIL before bugs 25/26) |
+| C7–C8 Crucible → Splice toward the Sinks (`citadelFate=redirect`, `spireOpen`) → Vane after | PASS |
+| C9–C10 Map lists Tundra/Citadel/Spire; Save → reload → Continue in the Citadel | PASS |
+| C11–C12 Tundra stair → Tundra → Stack mouth → road | PASS |
+| V0–V1b road east to beside the Spire mouth → ArrowDown → Void Spire, no combat | PASS (FAIL before bug 27: landed in The Switch) |
+| V2–V3 Sovereign "I'll circle" (no fight) → Save/Continue in the Spire | PASS |
+| V4–E3 Unissued baseline → Read what is holding → Leave the holes → epilogue (16 lines) → title | PASS |
+| Z0 page and console errors | 0 |
+
+**57/57 PASS.** Also on this tip: `npm test` **196 + 55 + 65 PASS** (playtest +3: bugs 25, 26, 27), `npm run typecheck` clean, Act I loop SEED=4 **PASS** (0 FAIL), act2 **106/106**, act3 **47/47**.
+
+### Bugs found / fixed this pass
+
+| # | Found by play | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 25 | **HIGH — the High Citadel could not be walked into.** The Ranking stair landed Silas at (32,18). From there only the south annex could be reached: lamps, buffer, and Ime. The crucible, Vane, Sarn, and the orrery had no path ("No clear path"), so Act V could not be finished on foot. A flood fill from the landing reached 71 tiles. | `citadel()` in maps.ts opens a 3-wide throat at (22–24,15), but rows 13–14 above it were still solid rock left by `grow`. The orrery hall fill stopped at row 12. Present on `main` since the export. | `fill(wide, 22, 13, 24, 14, "p")`: the throat now joins the orrery hall. No new room or content. | `playtest`: "High Citadel: the tundra stair landing walks to the ranking floor" (fails on 29aee5b: no path to beside the crucible); act4 C4 |
+| 26 | **HIGH — forced combat on the Act V primary path.** With the throat open, stepping off the landing into the annex started a fight with the Plate warden. Walking to Vane or to Sarn (who stands at (18,6) when the plate is unfed) pulled in Guard Senn and Guard Oll. | The warden at (28,19), vision 3, covered the landing corridor (25–31,18–19). The guards at (19,5) and (16,4) covered the tiles beside Vane and Sarn. Same class as bugs 21 and 23. | Optional hostiles moved off the primary routes: warden1 to (30,5), the north-east corner of the orrery hall; guard1 to (17,13) and guard2 to (12,13), the south line of the ranking floor. The scripted fights still call them by id: a failed ceremony, and sever without `shaftOpen`. | `playtest`: "High Citadel primary routes from the tundra stair stay outside hostile vision" (covers lamps, buffer, Ime, orrery, crucible, Vane, and Sarn at all three spots); act4 C1b–C6c |
+| 27 | **HIGH — a long road walk departed through a mouth it was only passing over.** Walking from the Tundra walk (8,14) to beside the Spire mouth (28,14) dropped Silas into **The Switch**. The shortest route crosses the Yard stair (22,14). | `step()` called `depart()` whenever Silas stood on any exit tile, including mid-route. | `step()` departs only on the last step of a route (`arrived`). Arrowing or tapping onto a mouth still leaves, because that is a one-step route or a route that ends on the mouth. | `playtest`: "a long road walk that crosses another mouth does not depart through it" (fails on 29aee5b); act4 V0–V1 |
+
+**Seen and left alone (low):** on a first visit the painted plate takes about 1 s to load. The very first frame of a map shows only the tile board on black; act4 shot `05-citadel-arrive`. It fills in without input. The Act I talk-past harness step is timing-sensitive to `Math.random` draws from rendering. One cold run right after a Vite dependency re-optimize failed it 12 times; every later run passed on attempt 1. This is a harness artefact, not a game bug.
+
+### Still unplayed (browser)
+
+- The other Act V answers:
+  - **Sever**: forces the guard fight when `shaftOpen` is not set. This is by design: "The floor notices the dark."
+  - **Seize**: needs comprehension 8 or Continuity.
+  - Vane's **horns** (speech 58) and **history** (60) checks, and the failed-ceremony fight.
+  - Shaft door and sentry, lamp glass **cut** (`roadDark`, dark-road and shade beats), and Sarn toll and stores beats with `citadelSupplied`.
+- The **Sovereign fight**: "Then I'll read you while you move" → Sovereign + Echo → `sovereign-down` → Write the shape / Leave the holes.
+- The **impose** ending.
+- Tundra branches: cut the span (`iceCut`) and Kel's cleats.
+- Cinder companion dark-mouth and Spire refusals.
+- A full hand pass of Acts IV–VI without the harness.
+
