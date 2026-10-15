@@ -1459,7 +1459,9 @@ export const SPAWNS: Spawn[] = [
   // Off the east mouth corridor and the Rill/Pim south grade so Act III primary
   // loop (Quarry road → Hask → clear → crane drop → Rill/Pim) is not forced into
   // combat. Same class as Nim/Ske/Sol landing/door clearance. Optional fights stay.
-  { id: "rubble", template: "bruiser", map: "quarry", x: 20, y: 3 },
+  // (20,3) still saw the crane → Stack mouth walk along row 6 (bug 33: Cut the brake, then leave = forced fight).
+  // (18,1) is the same north pit, five tiles off every primary leg; the fight is still there if you walk up.
+  { id: "rubble", template: "bruiser", map: "quarry", x: 18, y: 1 },
   { id: "mill1", template: "mill", map: "quarry", x: 10, y: 20, name: "Unlicensed mill" },
   // North-east corner of the orrery hall, off the tundra-stair landing corridor (was 28,19:
   // vision 3 covered the stair landing and every step to lamps / buffer / Ime).

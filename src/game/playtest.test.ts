@@ -700,7 +700,7 @@ describe("playtest 2026-10-15", () => {
     assert.equal(D().audit?.id, "crane", `Audit must not walk off to the chute (got ${D().audit?.id})`);
   });
 
-  it("Act III primary paths (Quarry mouth→Hask→Rill, Rust mouth→Nell) stay outside hostile vision", () => {
+  it("Act III primary paths (Quarry mouth→Hask→Rill, crane→Stack mouth, Rust mouth→Nell) stay outside hostile vision", () => {
     // Bug 23: rubble on the east corridor and mill beside Rill / cutter beside Nell forced combat
     // before the primary talks. Same class as Nim/Ske/Sol clearance — optional fights stay, off-path.
     const d = D();
@@ -747,6 +747,11 @@ describe("playtest 2026-10-15", () => {
     assertRouteClear("quarry", 6, 10, 21, 16, [rubble, mill]); // beside Rill
     assertRouteClear("quarry", 6, 10, 11, 4, [rubble, mill]); // beside crane
     assertRouteClear("quarry", 21, 16, 17, 16, [rubble, mill]); // Rill → beside Pim
+    // Bug 33: after Cut the brake the natural walk is crane → Stack mouth (row 6); rubble at (20,3) saw it.
+    assertRouteClear("quarry", 11, 4, 32, 8, [rubble, mill]); // beside crane → Stack mouth
+    assertRouteClear("quarry", 6, 10, 32, 8, [rubble, mill]); // beside Hask → Stack mouth
+    assertRouteClear("quarry", 17, 16, 32, 8, [rubble, mill]); // beside Pim → Stack mouth
+    assertRouteClear("quarry", 32, 8, 11, 4, [rubble, mill]); // Stack mouth → beside crane
     assertRouteClear("rust", 33, 8, 12, 16, [cutter]); // beside Nell
     assertRouteClear("rust", 33, 8, 4, 4, [cutter]); // beside Ives
     assertRouteClear("rust", 33, 8, 8, 8, [cutter]); // beside hearth
