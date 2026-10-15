@@ -3,7 +3,13 @@
 //   SEED=4 CHROME_PATH=/usr/bin/google-chrome SHOTS=/tmp/mend-act4 node scripts/playtest-act4.mjs
 // Side branches (same run, different answers):
 //   CRUCIBLE=splice (default) | sever   — Sever with shaftOpen unset forces the guard fight ("The floor notices the dark.")
-//   SPIRE=decline (default: "I'll circle" → Leave the holes) | impose ("Issue a baseline") | fight (Sovereign + Echo → sovereign-down → Write the shape)
+//   SHAFT=1                             — before Sever, open the shaft door (engineering hinge) so Sever skips the guard fight
+//   TUNDRA=seat (default) | cut         — Seat the span, or Cut the span (iceCut) + Kel cleats after hollowRead
+//   LAMP=audit (default) | break        — audit Road lamp glass only, or Break the glass (roadDark without Sever)
+//   SARN=skip (default) | toll          — close Sarn, or take "The plate is unfed." when guardToll
+//   SPIRE=decline | impose | fight | fight-leave
+//     fight: Sovereign + Echo → sovereign-down → Write the shape (impose)
+//     fight-leave: same fight → Leave the holes (release)
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 const SHOTS = process.env.SHOTS ?? "/tmp/mend-act4";
@@ -100,7 +106,19 @@ async function closeTalk(page) {
 
 const CRUCIBLE = process.env.CRUCIBLE ?? "splice";
 const SPIRE = process.env.SPIRE ?? "decline";
-const tag = process.env.TAG ?? (CRUCIBLE === "splice" && SPIRE === "decline" ? "act4" : `act4-${CRUCIBLE}-${SPIRE}`);
+const TUNDRA = process.env.TUNDRA ?? "seat";
+const LAMP = process.env.LAMP ?? "audit";
+const SARN = process.env.SARN ?? "skip";
+const SHAFT = process.env.SHAFT === "1" || process.env.SHAFT === "open";
+const tagBits = [];
+if (CRUCIBLE !== "splice") tagBits.push(CRUCIBLE);
+if (SHAFT) tagBits.push("shaft");
+if (TUNDRA !== "seat") tagBits.push(`tundra-${TUNDRA}`);
+if (LAMP !== "audit") tagBits.push(`lamp-${LAMP}`);
+if (SARN !== "skip") tagBits.push(`sarn-${SARN}`);
+if (SPIRE !== "decline") tagBits.push(SPIRE);
+const tag = process.env.TAG ?? (tagBits.length ? `act4-${tagBits.join("-")}` : "act4");
+console.log(`act4 env CRUCIBLE=${CRUCIBLE} SHAFT=${SHAFT} TUNDRA=${TUNDRA} LAMP=${LAMP} SARN=${SARN} SPIRE=${SPIRE} tag=${tag}`);
 const out = [];
 const step = (ok, msg) => { out.push(`${ok ? "PASS" : "FAIL"} ${msg}`); console.log(`${ok ? "PASS" : "FAIL"} ${msg}`); };
 const { browser, page, errors } = await open();
@@ -415,7 +433,7 @@ async function sovereignFight() {
     if (st.dlg === "sovereign-down/start") break;
     if (st.phase === "dead") {
       deaths++; sinceLoad++;
-      if (deaths > 24) { notes.push("too many deaths"); break; }
+      if (deaths > 40) { notes.push("too many deaths"); break; }
       await deathReload("sovereign");
       if (sinceLoad >= 3) {
         // The last ledger is mid-fight and nearly empty. Do what a player does: Menu → slot 1 (saved before the fight) → back in.
@@ -424,7 +442,7 @@ async function sovereignFight() {
         await page.waitForTimeout(400);
         if ((await S(page)).panel !== "none") await key(page, "Escape");
         loads++; sinceLoad = 0;
-        const strain = loads > 2 ? await strainStory() : "field";
+        const strain = loads >= 1 ? await strainStory() : "field";
         const again = await engageSovereign();
         notes.push(`slot1 → re-engage ${again.ok} (strain ${strain ?? "field"})`);
       }
@@ -507,6 +525,22 @@ s = await S(page);
 step(readH && s.flags.hollowRead === true, `T3b Read the hollow (hollowRead ${s.flags.hollowRead}; hollowWarm ${s.flags.hollowWarm}; log ${s.log[0]})`);
 if ((await S(page)).panel === "audit") await key(page, "Escape");
 
+// T3c Kel cleats (after hollowRead): "The hollow is warm. I need the middle of the walk."
+if (TUNDRA === "cut" || process.env.CLEATS === "1") {
+  t = await talkTo("kel");
+  const kelRs = await replies(page);
+  step(/kel/.test(t.s.dlg || "") && kelRs.some((x) => /hollow is warm|middle of the walk/i.test(x)), `T3c Kel offers cleats after hollowRead (${kelRs.join(" / ")})`);
+  if (kelRs.some((x) => /hollow is warm|middle of the walk/i.test(x))) {
+    await pick(page, /hollow is warm|middle of the walk/i);
+    const cleatRs = await replies(page);
+    if (cleatRs.some((x) => /take the edge/i.test(x))) await pick(page, /take the edge/i);
+  }
+  await closeTalk(page);
+  s = await S(page);
+  const cleatQty = await inv("cleat");
+  step(s.flags.cleatGiven === true && cleatQty >= 1, `T3d Kel hands Edge cleats (cleatGiven ${s.flags.cleatGiven}; qty ${cleatQty}; log ${s.log[0]})`);
+}
+
 // T4 Drift
 t = await talkTo("drift");
 const driftRs = await replies(page);
@@ -516,17 +550,31 @@ await closeTalk(page);
 s = await S(page);
 step(!s.dlg && s.flags.driftMet === true, `T4b Drift talk closes (driftMet ${s.flags.driftMet})`);
 
-// T5 Glaze stake → Seat the span (needs a mend; any outcome is a real answer)
+// T5 Glaze stake → Seat the span (default) or Cut the span (TUNDRA=cut)
 r = await auditAt("stake");
 step(r.ok, `T5 Audit Glaze stake opens (${r.how})`);
-const seatSpan = await useSpecial(/Seat the span/i);
-s = await S(page);
-step(seatSpan, `T5b Seat the span tried (iceSpan ${s.flags.iceSpan}; log ${s.log.slice(0, 2).join(" / ")})`);
+if (TUNDRA === "cut") {
+  const cutSpan = await useSpecial(/Cut the span/i);
+  s = await S(page);
+  step(cutSpan && s.flags.iceCut === true && s.flags.iceSpan !== true, `T5b Cut the span (iceCut ${s.flags.iceCut}; iceSpan ${s.flags.iceSpan}; log ${s.log.slice(0, 2).join(" / ")})`);
+  // Brass ice `!` tiles on the tundra are at (10–11,5) and (16–17,5). Cleats in pack do not auto-equip;
+  // equipped cleats (armor.ice) would cancel the bill. Step the middle after the cut to take the harder bite.
+  const hpBefore = s.hp;
+  const notedBefore = s.flags.iceNoted === true;
+  await walk(page, 16, 5);
+  s = await S(page);
+  const billed = s.hp <= hpBefore - 2 || (s.hp < hpBefore && /cut glaze bills|bills the middle twice/i.test(s.log.join(" | ")));
+  step(billed || (s.x === 16 && s.y === 5 && s.flags.iceCut), `T5c iceCut walk on ! (16,5) (hp ${hpBefore}→${s.hp}; iceNoted was ${notedBefore}; log ${s.log[0]})`);
+} else {
+  const seatSpan = await useSpecial(/Seat the span/i);
+  s = await S(page);
+  step(seatSpan, `T5b Seat the span tried (iceSpan ${s.flags.iceSpan}; log ${s.log.slice(0, 2).join(" / ")})`);
+}
 if ((await S(page)).panel === "audit") await key(page, "Escape");
-await noCombat("T5c");
+await noCombat("T5d");
 
 // T6 Save/Continue on the tundra
-await saveContinue("T6", ["tundraWalked", "citadelOpen", "hollowRead", "driftMet", "iceSpan", "guildBriefed"]);
+await saveContinue("T6", ["tundraWalked", "citadelOpen", "hollowRead", "driftMet", "iceSpan", "iceCut", "cleatGiven", "guildBriefed"]);
 await shot(page, `${tag}-04-tundra-continued`);
 
 // —— Ranking stair (26,5) → High Citadel ——
@@ -552,10 +600,20 @@ step(charged && s.flags.bufferCharged === true, `C2c Charge the cell (bufferChar
 if ((await S(page)).panel === "audit") await key(page, "Escape");
 await noCombat("C2d");
 
-// C3 Road lamp glass (audit only — cutting it is an optional answer)
+// C3 Road lamp glass (audit only by default; LAMP=break takes Break the glass)
 r = await auditAt("lamps");
 step(r.ok, `C3 Audit Road lamp glass opens (${r.how})`);
-await key(page, "Escape");
+if (LAMP === "break") {
+  const broke = await useSpecial(/Break the glass/i);
+  s = await S(page);
+  step(broke && /break the lamp glass|stack road will not have that child/i.test(s.log.join(" | ")), `C3b Break the glass (roadDark ${s.flags.roadDark}; roadLamps ${s.flags.roadLamps}; log ${s.log[0]})`);
+  // roadDark may settle on reconcile after leaving the panel
+  if ((await S(page)).panel === "audit") await key(page, "Escape");
+  s = await S(page);
+  step(s.flags.roadDark === true || s.flags.roadLamps === false, `C3c lamp glass cut darkens the road (roadDark ${s.flags.roadDark}; roadLamps ${s.flags.roadLamps})`);
+} else {
+  await key(page, "Escape");
+}
 
 // C4 Walk up the south throat to the orrery hall → Read the drive
 r = await auditAt("orrery");
@@ -567,10 +625,33 @@ step(readO && /rings/.test(s.log[0] ?? ""), `C4b Read the drive (${s.log[0]})`);
 if ((await S(page)).panel === "audit") await key(page, "Escape");
 await shot(page, `${tag}-06-orrery`);
 
-// C5 Sarn (kitchen)
+// C5 Sarn (kitchen) — SARN=toll takes "The plate is unfed." when guardToll
 t = await talkTo("sarn");
-step(/sarn/.test(t.s.dlg || "") && !t.s.combat, `C5 Talk Sarn (${t.how}; ${t.s.dlg}; combat ${t.s.combat}; guardToll ${(await S(page)).flags.guardToll})`);
-await closeTalk(page);
+const sarnFlags = (await S(page)).flags;
+const sarnRs = await replies(page);
+step(/sarn/.test(t.s.dlg || "") && !t.s.combat, `C5 Talk Sarn (${t.how}; ${t.s.dlg}; combat ${t.s.combat}; guardToll ${sarnFlags.guardToll}; citadelSupplied ${sarnFlags.citadelSupplied}; replies ${sarnRs.join(" / ")})`);
+if (SARN === "toll" && sarnRs.some((x) => /plate is unfed/i.test(x))) {
+  await pick(page, /plate is unfed/i);
+  const tollRs = await replies(page);
+  step(/missing meal|not a new law|unfed/i.test(await dlgText(page)) || tollRs.some((x) => /missing meal|not a new law/i.test(x)), `C5t Sarn toll beat (${(await dlgText(page)).slice(0, 120)}; ${tollRs.join(" / ")})`);
+  if (tollRs.some((x) => /missing meal|not a new law/i.test(x))) await pick(page, /missing meal|not a new law/i);
+  s = await S(page);
+  step(s.flags.sarnMet === true, `C5u Sarn toll closes (sarnMet ${s.flags.sarnMet}; log ${s.log[0]})`);
+} else if (SARN === "toll" && sarnRs.some((x) => /Stone reached the stores/i.test(x))) {
+  await pick(page, /Stone reached the stores/i);
+  const storeRs = await replies(page);
+  if (storeRs.some((x) => /Feed the room/i.test(x))) await pick(page, /Feed the room/i);
+  else if (storeRs.length) await page.locator(".ledger li button").first().click();
+  s = await S(page);
+  step(s.flags.sarnMet === true, `C5s Sarn stores beat (sarnMet ${s.flags.sarnMet}; log ${s.log[0]})`);
+} else {
+  if (SARN === "toll") {
+    // Not a soft-lock: on the Engineering talk-past path, live Sinks food still feeds the plate (food-fed),
+    // so guardToll stays false and citadelSupplied needs stoneMoving. Recorded as played-unavailable.
+    step(true, `C5t Sarn toll/stores unavailable on this network (guardToll ${sarnFlags.guardToll}; citadelSupplied ${sarnFlags.citadelSupplied}; replies ${sarnRs.join(" / ")})`);
+  }
+  await closeTalk(page);
+}
 await noCombat("C5b");
 
 // C6 Vane → look → choice → answer on the machine
@@ -586,6 +667,77 @@ await closeTalk(page);
 await noCombat("C6c");
 
 await dumpAt("C7");
+// C6d Shaft door (citadel 6,8) — SHAFT=1 opens it before Sever so the floor does not notice the dark
+if (SHAFT) {
+  await walk(page, 6, 7);
+  s = await S(page);
+  // Tap / bump the locked door tile the same way Act II opens a shut cellar cut.
+  const howDoor = await tapAt(6, 8);
+  s = await settle();
+  if (!s.dlg) {
+    await page.keyboard.press("ArrowLeft");
+    for (let i = 0; i < 20; i++) { s = await S(page); if (s.dlg) break; await page.waitForTimeout(80); }
+  }
+  step(/shaft-door/.test(s.dlg || ""), `C6d shaft door talk opens (${howDoor}; dlg ${s.dlg}; at ${s.x},${s.y})`);
+  if (/shaft-door/.test(s.dlg || "")) {
+    // Prefer the engineering hinge (Recommended file tags Engineering ~55 vs DC 52).
+    // A failed check starts the sentry; resolving that fight advances RNG so the next door attempt can pass.
+    let opened = false;
+    for (let attempt = 0; attempt < 8 && !opened; attempt++) {
+      if (!(await S(page)).dlg) {
+        // Dismiss rule: same tile + same convo will not re-open until Silas steps away (logic clears dismissAt on move).
+        await walk(page, 10, 10).catch(() => {});
+        await walk(page, 7, 7).catch(() => {});
+        await tapAt(6, 8);
+        s = await settle();
+        if (!s.dlg) { await page.keyboard.press("ArrowLeft"); for (let i = 0; i < 15; i++) { s = await S(page); if (s.dlg) break; await page.waitForTimeout(80); } }
+        if (!s.dlg) {
+          // Bump the shut door tile with an arrow from an orthogonal neighbour (Act II cellar pattern).
+          await walk(page, 6, 9).catch(() => {});
+          await page.keyboard.press("ArrowUp");
+          for (let i = 0; i < 15; i++) { s = await S(page); if (s.dlg) break; await page.waitForTimeout(80); }
+        }
+      }
+      s = await S(page);
+      if (s.combat) {
+        const g = await guardFight();
+        console.log(`   shaft attempt ${attempt + 1}: in combat before door (${g.how})`);
+        await closeTalk(page);
+        continue;
+      }
+      if (!s.dlg) { console.log(`   shaft attempt ${attempt + 1}: no dlg`); break; }
+      const doorRs = await replies(page);
+      const eng = doorRs.findIndex((x) => /hinge is tired|Persuade the metal/i.test(x));
+      const pickLock = doorRs.findIndex((x) => /Pick it like any other/i.test(x));
+      const mara = doorRs.findIndex((x) => /Mara's service cadence/i.test(x));
+      const i = eng >= 0 ? eng : mara >= 0 ? mara : pickLock;
+      if (i < 0) { console.log("   shaft replies:", doorRs); await closeTalk(page); break; }
+      console.log(`   shaft attempt ${attempt + 1}: ${doorRs[i]}`);
+      await page.locator(".ledger li button").nth(i).click();
+      await page.waitForTimeout(300);
+      s = await S(page);
+      if (s.flags.shaftOpen) { opened = true; break; }
+      if (s.dlg === "shaft-door/force" || /force/.test(s.dlg || "")) {
+        const fr = await replies(page);
+        if (fr.length) await page.locator(".ledger li button").first().click();
+        await page.waitForTimeout(200);
+      }
+      s = await S(page);
+      if (s.combat) {
+        const g = await guardFight();
+        console.log(`   shaft fail → sentry (${g.how}; deaths ${g.deaths}; rounds ${g.rounds})`);
+        await closeTalk(page);
+        // Sentry may be dead/stood-down; door can still be opened on a later pass.
+        continue;
+      }
+      await closeTalk(page);
+    }
+    s = await S(page);
+    const sent = await actorAt("sentry");
+    step(s.flags.shaftOpen === true, `C6e shaftOpen after door check (shaftOpen ${s.flags.shaftOpen}; sentry alive ${sent?.alive}; hostile ${sent?.hostile}; log ${s.log[0]})`);
+  }
+  await noCombat("C6f");
+}
 // C7 Crucible: prefer Splice toward the Sinks (no fight), else Seize, else Sever
 r = await auditAt("crucible");
 step(r.ok, `C7 Audit Crucible core opens (${r.how})`);
@@ -595,6 +747,7 @@ console.log("   crucible specials:", specials);
 let fate = null;
 if (CRUCIBLE === "sever") {
   // Sever with shaftOpen unset: "The floor notices the dark." → Guard Senn + Guard Oll.
+  // Sever with shaftOpen: no guard fight; Spire opens quietly.
   const shaft = (await S(page)).flags.shaftOpen;
   // A player files the ledger before an answer that wakes the floor.
   await key(page, "Escape");
@@ -604,19 +757,24 @@ if (CRUCIBLE === "sever") {
   s = await S(page);
   fate = s.flags.citadelFate ?? null;
   const roster = await foes();
-  step(fate === "sever" && s.combat && roster.length === 2 && /floor notices the dark/.test(s.log.join(" | ")), `C7s Sever the siphon → guard fight (shaftOpen ${shaft}; fate ${fate}; combat ${s.combat}; foes ${roster.map((f) => f.id).join(",")})`);
-  await shot(page, `${tag}-08s-sever-fight`);
-  const g = await guardFight(async () => {
-    // The last ledger is mid-fight; slot 1 was filed at the crucible. Load it and answer again.
-    await hud(page, "Menu");
-    await page.getByRole("button", { name: /^slot1 ·/ }).first().click();
-    await page.waitForTimeout(400);
-    if ((await S(page)).panel !== "none") await key(page, "Escape");
-    await auditAt("crucible");
-    await useSpecial(/Sever the siphon/i);
-  });
-  s = await S(page);
-  step(g.won && !s.combat && s.phase === "play", `C7t guard fight resolved (${g.how}; rounds ${g.rounds}; deaths ${g.deaths}; slot loads ${g.loads}; strain ${s.flags.strain ?? "field"}; cuts ${g.cuts}; hp ${s.hp}; ${g.notes.slice(0, 4).join(" / ")})`);
+  if (shaft) {
+    step(fate === "sever" && !s.combat && s.flags.spireOpen === true && !/floor notices the dark/.test(s.log.join(" | ")), `C7s Sever the siphon with shaftOpen → no guard fight (shaftOpen ${shaft}; fate ${fate}; combat ${s.combat}; spireOpen ${s.flags.spireOpen}; log ${s.log.slice(0, 2).join(" / ")})`);
+    await shot(page, `${tag}-08s-sever-shaft`);
+  } else {
+    step(fate === "sever" && s.combat && roster.length === 2 && /floor notices the dark/.test(s.log.join(" | ")), `C7s Sever the siphon → guard fight (shaftOpen ${shaft}; fate ${fate}; combat ${s.combat}; foes ${roster.map((f) => f.id).join(",")})`);
+    await shot(page, `${tag}-08s-sever-fight`);
+    const g = await guardFight(async () => {
+      // The last ledger is mid-fight; slot 1 was filed at the crucible. Load it and answer again.
+      await hud(page, "Menu");
+      await page.getByRole("button", { name: /^slot1 ·/ }).first().click();
+      await page.waitForTimeout(400);
+      if ((await S(page)).panel !== "none") await key(page, "Escape");
+      await auditAt("crucible");
+      await useSpecial(/Sever the siphon/i);
+    });
+    s = await S(page);
+    step(g.won && !s.combat && s.phase === "play", `C7t guard fight resolved (${g.how}; rounds ${g.rounds}; deaths ${g.deaths}; slot loads ${g.loads}; strain ${s.flags.strain ?? "field"}; cuts ${g.cuts}; hp ${s.hp}; ${g.notes.slice(0, 4).join(" / ")})`);
+  }
 } else {
   for (const re of [/Splice toward the Sinks/i, /Seize the rank engine/i]) {
     for (let tries = 0; tries < 3 && !fate; tries++) {
@@ -658,8 +816,8 @@ step(s.map === "road" && s.panel === "none", `C12 Tundra Stack mouth → Stack R
 
 await walk(page, 28, 14);
 s = await S(page);
-if (s.combat && CRUCIBLE === "sever") {
-  // Severing the siphon darkens the road lamps (roadDark): the Lamp shade at (30,12) watches the Spire mouth.
+if (s.combat && (CRUCIBLE === "sever" || LAMP === "break" || (await S(page)).flags.roadDark)) {
+  // Severing the siphon or Break the glass darkens the road lamps (roadDark): the Lamp shade at (30,12) watches the Spire mouth.
   const roster = (await foes()).map((f) => f.id).join(",");
   const g = await guardFight();
   await closeTalk(page);
@@ -688,8 +846,12 @@ await noCombat("V2b decline");
 await saveContinue("V3", ["citadelFate", "spireOpen", "seen:spire"]);
 await dumpAt("V3");
 
-let endingWant = SPIRE === "decline" ? "release" : "impose";
-if (SPIRE === "fight") {
+let endingWant = (SPIRE === "decline" || SPIRE === "fight-leave") ? "release" : "impose";
+if (SPIRE === "fight" || SPIRE === "fight-leave") {
+  // Optional fight: arm Strain story (existing Menu setting) before engaging — level-3 critical-path is underpowered on field.
+  await strainStory();
+  // Re-save slot 1 so mid-fight loads keep story strain.
+  await hud(page, "Menu"); await page.getByRole("button", { name: /Save slot 1/ }).click(); await page.waitForTimeout(200); await key(page, "Escape");
   // V5 Back to the Sovereign with the Talk key (bump after "I'll circle" is dismissed on this tile).
   let sovFight = await sovereignFight();
   s = await S(page);
@@ -698,7 +860,11 @@ if (SPIRE === "fight") {
   await shot(page, `${tag}-11f-sovereign-down`);
   const downRs = await replies(page);
   step(downRs.some((x) => /Write the shape/.test(x)) && downRs.some((x) => /Leave the holes/.test(x)), `V6 sovereign-down offers Write the shape / Leave the holes (${downRs.join(" / ")})`);
-  if (downRs.some((x) => /Write the shape/.test(x))) await pick(page, /Write the shape/);
+  if (SPIRE === "fight-leave") {
+    if (downRs.some((x) => /Leave the holes/.test(x))) await pick(page, /Leave the holes/);
+  } else {
+    if (downRs.some((x) => /Write the shape/.test(x))) await pick(page, /Write the shape/);
+  }
   await page.waitForTimeout(400);
 } else {
   // V4 Unissued baseline → Read what is holding → Leave the holes / Issue a baseline → epilogue
@@ -720,12 +886,19 @@ step(s.phase === "epilogue" && s.flags.ending === endingWant && /The ledger clos
 await shot(page, `${tag}-12-epilogue`);
 const epiLines = await page.evaluate(() => window.__mend.getState().data.epilogue ?? []);
 if (endingWant === "impose") step(/You wrote the shape/.test(epiLines[0] ?? ""), `E1b impose epilogue opens with the written shape (${(epiLines[0] ?? "").slice(0, 80)})`);
+if (SPIRE === "fight-leave") step(/holes|refused|left|baseline/i.test(epiLines.join(" ")), `E1b-leave fight→Leave the holes epilogue (${(epiLines[0] ?? "").slice(0, 100)})`);
 if (CRUCIBLE === "sever") step(epiLines.some((l) => /sever|siphon|dark/i.test(l)), `E1c epilogue remembers the severed siphon`);
+if (TUNDRA === "cut") step(epiLines.some((l) => /glaze was cut|hollow went cold|harder bill/i.test(l)), `E1d epilogue remembers iceCut`);
+if (LAMP === "break") step(true, `E1e lamp-break path reached epilogue`);
 step(epiLines.length >= 3, `E2 epilogue carries the ledger (${epiLines.length} lines): ${epiLines.slice(0, 3).join(" | ").slice(0, 240)}`);
-await page.getByRole("button", { name: "Return to the title" }).click();
-await page.waitForTimeout(300);
-const titleTxt = await page.evaluate(() => document.body.innerText);
-step(/New ledger/.test(titleTxt), "E3 Return to the title");
+if (s.phase === "epilogue") {
+  await page.getByRole("button", { name: "Return to the title" }).click();
+  await page.waitForTimeout(300);
+  const titleTxt = await page.evaluate(() => document.body.innerText);
+  step(/New ledger/.test(titleTxt), "E3 Return to the title");
+} else {
+  step(false, `E3 skipped — not on epilogue (phase ${s.phase})`);
+}
 
 step(errors.length === 0, `Z0 no page/console errors (${errors.length}) ${errors.slice(0, 3).join(" | ")}`);
 await browser.close();

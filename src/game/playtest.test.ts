@@ -954,4 +954,182 @@ describe("playtest 2026-10-15", () => {
     assert.match(D().epilogue[0], /You wrote the shape/);
   });
 
+  it("sovereign-down Leave the holes records the release ending (fight-leave)", () => {
+    const d = D();
+    d.phase = "play";
+    d.combat = null;
+    d.panel = "none";
+    d.dialogue = { convo: "sovereign-down", node: "start" };
+    pick(/Leave the holes/);
+    assert.equal(D().phase, "epilogue");
+    assert.equal(D().ending, "release");
+    assert.equal(D().flags.ending, "release");
+    assert.match(D().epilogue[0], /left the holes|You left/i);
+  });
+
+  it("Cut the span sets iceCut, colds the hollow, and bills the ice middle harder (TUNDRA=cut)", () => {
+    const d = D();
+    Object.assign(d.flags, { act1: true, checkpointSpoke: true, citadelOpen: true, tundraWalked: true });
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.mapId = "tundra";
+    d.player.mapId = "tundra";
+    d.player.x = 18;
+    d.player.y = 14;
+    d.player.hp = d.player.maxHp;
+    d.path = [];
+    d.intent = null;
+    reconcileWorld(d);
+    openAudit(d, { kind: "machine", id: "stake" });
+    assert.equal(D().panel, "audit");
+    assert.equal(D().audit?.id, "stake");
+    G().special("cut-span");
+    assert.equal(D().flags.iceCut, true);
+    assert.equal(D().flags.iceSpan, false);
+    assert.equal(D().flags.hollowWarm, false, "cutting the glaze colds the hollow even if the orrery still sends");
+    // Step a brass-ice `!` tile: (16,5). Cleats in pack are not equipped, so the middle still bills.
+    const hp = D().player.hp;
+    D().flags.iceNoted = false;
+    D().panel = "none";
+    G().clickTile(16, 5);
+    walkOut();
+    assert.deepEqual([D().player.x, D().player.y], [16, 5]);
+    assert.ok(D().player.hp <= hp - 2, `iceCut bills 2 (hp ${hp}→${D().player.hp})`);
+    assert.match(D().log[0] ?? "", /cut glaze bills the middle twice/);
+  });
+
+  it("Kel hands Edge cleats after the hollow is read", () => {
+    const d = D();
+    Object.assign(d.flags, { act1: true, checkpointSpoke: true, citadelOpen: true, tundraWalked: true, hollowRead: true });
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.mapId = "tundra";
+    d.player.mapId = "tundra";
+    reconcileWorld(d);
+    const kel = d.actors.kel;
+    d.player.x = kel.x;
+    d.player.y = kel.y;
+    // Bump talk
+    d.dialogue = { convo: "kel", node: "start" };
+    pick(/hollow is warm|middle of the walk/i);
+    pick(/take the edge/i);
+    assert.equal(D().flags.cleatGiven, true);
+    assert.ok((D().inventory.find((i) => i.id === "cleat")?.qty ?? 0) >= 1);
+  });
+
+  it("Break the lamp glass darkens the stack road without Sever (LAMP=break)", () => {
+    const d = D();
+    Object.assign(d.flags, { act1: true, checkpointSpoke: true, citadelOpen: true, seenCitadel: true });
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.mapId = "citadel";
+    d.player.mapId = "citadel";
+    d.focus = 10;
+    d.path = [];
+    reconcileWorld(d);
+    const lamps = d.machines.lamps;
+    d.player.x = lamps.x;
+    d.player.y = lamps.y + 1; // beside the glass (24,18)
+    assert.ok(dist(d.player, lamps) <= 1);
+    assert.equal(D().flags.roadDark, false);
+    openAudit(d, { kind: "machine", id: "lamps" });
+    G().special("break-glass");
+    reconcileWorld(D());
+    assert.equal(D().flags.roadDark, true, "severing the lamp glass child darkens the road");
+    assert.equal(D().flags.roadLamps, false);
+    assert.ok(D().machines.lamps.nodes.some((n) => n.id === "glass" && n.severed));
+  });
+
+  it("Sever with shaftOpen skips the guard fight; without it the floor notices the dark", () => {
+    const boot = () => {
+      const d = D();
+      Object.assign(d.flags, { act1: true, checkpointSpoke: true, citadelOpen: true, seenCitadel: true });
+      d.phase = "play";
+      d.dialogue = null;
+      d.panel = "none";
+      d.combat = null;
+      d.mapId = "citadel";
+      d.player.mapId = "citadel";
+      d.player.x = 13;
+      d.player.y = 8;
+      d.focus = 12;
+      d.path = [];
+      reconcileWorld(d);
+      return d;
+    };
+    // Without shaftOpen: guard fight.
+    {
+      const d = boot();
+      d.flags.shaftOpen = false;
+      openAudit(d, { kind: "machine", id: "crucible" });
+      G().special("sever");
+      assert.equal(D().flags.citadelFate, "sever");
+      assert.ok(D().combat, "floor notices the dark");
+      assert.ok(D().combat!.order.includes("guard1"));
+      assert.ok(D().combat!.order.includes("guard2"));
+    }
+    // With shaftOpen: no fight.
+    {
+      mem.clear();
+      G().openCreate();
+      G().recommend();
+      G().startNew();
+      pick(/show me the pump/);
+      pick(/audit it/);
+      const d = boot();
+      d.flags.shaftOpen = true;
+      for (const id of ["guard1", "guard2"]) {
+        d.actors[id].hostile = false;
+        d.actors[id].aggro = false;
+      }
+      openAudit(d, { kind: "machine", id: "crucible" });
+      G().special("sever");
+      assert.equal(D().flags.citadelFate, "sever");
+      assert.equal(D().flags.spireOpen, true);
+      assert.equal(D().combat, null, "shaftOpen means the floor does not notice");
+      assert.match(D().log.join(" | "), /Void Spire is on the map|Something there has no baseline/);
+    }
+  });
+
+  it("a dismissed shaft door reopens after Silas steps away (Sever-with-shaft harness)", () => {
+    // Same dismiss rule as plate-stair / locked doors: Leave or a failed check that ends the talk
+    // marks dismissAt; a second bump from the same tile is swallowed until a step clears it.
+    const d = D();
+    Object.assign(d.flags, { act1: true, checkpointSpoke: true, citadelOpen: true, seenCitadel: true });
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.mapId = "citadel";
+    d.player.mapId = "citadel";
+    d.player.x = 7;
+    d.player.y = 7;
+    d.path = [];
+    reconcileWorld(d);
+    G().clickTile(6, 8);
+    assert.equal(D().dialogue?.convo, "shaft-door");
+    // Leave it shut.
+    pick(/Leave it shut/);
+    assert.equal(D().dialogue, null);
+    assert.ok(D().flags.dismissAt, "dismiss marked");
+    G().clickTile(6, 8);
+    assert.equal(D().dialogue, null, "same-tile bump stays dismissed");
+    G().clickTile(10, 10);
+    walkOut();
+    assert.equal(D().flags.dismissAt, undefined, "a step clears dismissAt");
+    G().clickTile(6, 8);
+    walkOut();
+    if (!D().dialogue) {
+      D().player.x = 7; D().player.y = 7;
+      G().clickTile(6, 8);
+    }
+    assert.equal(D().dialogue?.convo, "shaft-door", "door talk is available again after moving");
+  });
+
 });

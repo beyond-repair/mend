@@ -1,6 +1,6 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven: Act II yards (Kiln/Switch/Pane), Act III (Quarry/Rust), and Acts IV–VI (Brass Tundra → High Citadel → Void Spire → epilogue: Splice/decline, Splice/Sovereign fight, Sever/impose) are played in headless Chromium; see sections below. Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop. On this tip the headless SEED=4 Act I loop, Act II, Act III, and Act IV harnesses all pass.
+**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven: Act II yards (Kiln/Switch/Pane), Act III (Quarry/Rust), and Acts IV–VI (Brass Tundra → High Citadel → Void Spire → epilogue: Splice/decline, fight→impose, fight→Leave the holes, Sever/impose, Sever+shaftOpen, iceCut+cleats, lamp glass cut) are played in headless Chromium; see sections below. Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop. On this tip the headless SEED=4 Act I loop, Act II, Act III, and Act IV harnesses all pass.
 Scope of the first-act verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Act III Quarry + Rust and the Act IV–VI critical path are harness-played (see "Beyond Oakhaven — Act III" and "Beyond Oakhaven — Acts IV–VI").
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
@@ -412,13 +412,54 @@ Also on this tip: `npm test` **196 + 55 + 68 PASS** (playtest +3), `npm run type
 
 **Not a bug (noted):** after "I'll circle", bumping the Sovereign from the same tile does not reopen the talk. That is the dismiss rule; the Talk key (force) reopens it.
 
+### Still unplayed (browser) — superseded by the next section for items played there
+
+- **Seize**: needs comprehension 8 or Continuity. Continuity is only opened by accepting the Sovereign fight, which comes after the Citadel, so a critical-path character needs comprehension 8 (this one has 6). See next section.
+- Vane's **horns** / **history**, failed-ceremony fight, Cinder companion, Sarn toll/stores (network), hand pass — see next section.
+
+## Beyond Oakhaven — Acts V–VI side branches: fight-leave, iceCut, lamp cut, shaftOpen Sever (IN PROGRESS) (2026-10-15, ~1:29–1:53 PM ET)
+
+**Status:** **IN PROGRESS.** More Act V/VI side branches were played end-to-end in headless Chromium. `scripts/playtest-act4.mjs` now also takes `SPIRE=fight-leave`, `TUNDRA=cut`, `LAMP=break`, `SARN=toll`, and `SHAFT=1`. No new game bugs were found this pass (numbering stays at 31). Harness-only: shaft-door retry must step away first (dismiss rule), and the optional Sovereign fight arms Strain story before engage. These are harness plays, not hand plays.
+
+**How the new branches are reached (existing content only):**
+- **fight-leave:** same Sovereign + Echo fight as `SPIRE=fight`, then **Leave the holes** from `sovereign-down` (release epilogue).
+- **iceCut + cleats:** after Read the hollow, Kel → "The hollow is warm. I need the middle of the walk." → Edge cleats; Audit Glaze stake → **Cut the span** (`iceCut`, hollow goes cold). Brass ice `!` tiles at (16–17,5) bill 2 HP (cleats in pack do not auto-equip).
+- **Lamp glass cut:** Audit Road lamp glass → **Break the glass** → `roadDark` without Sever; Lamp shade on the road (bug 30 still holds).
+- **Sever with `shaftOpen`:** before the crucible, open the shaft door at citadel (6,8) (engineering hinge, DC 52). Then **Sever the siphon** skips the guard fight ("The floor notices the dark." only when shaft is shut).
+- **Sarn toll / stores:** on the Engineering talk-past path, live Sinks food still feeds the plate (`food-fed`), so `guardToll` stays false and `citadelSupplied` needs `stoneMoving`. Toll/stores replies are unavailable without changing the city network; recorded as played-unavailable, not a soft-lock.
+
+### Results (tip of this note)
+
+| Run | Path | Result |
+| --- | --- | --- |
+| `SEED=4` default | Splice → decline → Leave the holes (regression) | **57/57 PASS** |
+| `SEED=4 SPIRE=fight-leave` | Splice → Sovereign fight → **Leave the holes** (release) | **59/59 PASS** (14 deaths / 4 slot loads on Strain story) |
+| `SEED=4 TUNDRA=cut LAMP=break SARN=toll` | Kel cleats → **Cut the span** → Break the glass → shade stood down → decline epilogue (remembers iceCut) | **67/67 PASS** |
+| `SEED=4 CRUCIBLE=sever SHAFT=1 SPIRE=decline` | shaft door open → **Sever with shaftOpen** (no guard fight) → shade → decline | **64/64 PASS** |
+| Act I loop `SEED=4` | regression | **23 PASS / 0 FAIL** |
+| Act II / Act III | regression | **106/106** / **47/47** |
+
+Z0 page/console errors: 0 in all runs.
+
+**Evidence kept (not changed):** mid-fight auto-ledger still returns to 1–few HP; Sovereign fight still punishing on a level-3 critical-path file (this fight-leave run needed Strain story). Design calls unchanged.
+
+### Bugs found / fixed this pass
+
+None in game code. Harness and regression coverage only:
+
+| # | Note | Detail |
+| --- | --- | --- |
+| — | Harness | Shaft-door retry after a failed check must step away first (`dismissAt` clears on move). Same locked-door dismiss rule as Act II cellars. |
+| — | Harness | `SPIRE=fight` / `fight-leave` arms Menu → Strain story before engage and re-saves slot 1. |
+| — | Tests | playtest +6: fight-leave ending, iceCut billing, Kel cleats, Break the glass → roadDark, Sever±shaftOpen, shaft-door dismiss reopen. |
+
+Also on this tip: `npm test` **196 + 55 + 74 PASS** (playtest +6), `npm run typecheck` clean.
+
 ### Still unplayed (browser)
 
-- **Seize**: needs comprehension 8 or Continuity. Continuity is only opened by accepting the Sovereign fight, which comes after the Citadel, so a critical-path character needs comprehension 8 (this one has 6).
+- **Seize**: needs comprehension 8 or Continuity. Continuity opens only by accepting the Sovereign fight (after the Citadel). Critical-path Recommended file has comprehension 6 at level 3 — not attempted without cheating state.
 - Vane's **horns** (speech 58) and **history** (60) checks, and the failed-ceremony fight.
-- Shaft door and sentry (Sever with `shaftOpen`), lamp glass **cut**, and Sarn toll and stores beats.
-- Sovereign fight → **Leave the holes** from `sovereign-down` (the reply is offered, V6; only Write the shape was taken).
-- Tundra **iceCut** and Kel's cleats.
-- Cinder companion dark-mouth and Spire refusals.
+- Sarn **toll** / **stores** beats (need unfed plate or `citadelSupplied` / `stoneMoving` — not on this Engineering talk-past network).
+- Cinder companion dark-mouth and Spire refusals (needs scrap feed + recruit earlier).
 - A design call on the mid-fight auto ledger, and on the Sovereign / Sever balance for a level-3 critical-path character.
 - A full hand pass of Acts IV–VI without the harness.
