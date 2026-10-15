@@ -18,7 +18,7 @@ import {
   ToolsPanel,
 } from "./Panels";
 import { WorldCanvas } from "./WorldCanvas";
-import { HUD_LABELS } from "./hud";
+import { HUD_LABELS, hudShowsCaption } from "./hud";
 
 export function Game() {
   const phase = useGame((s) => s.data.phase);
@@ -382,7 +382,7 @@ function PlayScreen() {
       ];
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-[440px] flex-col">
+    <div className="relative mx-auto flex h-dvh w-full max-w-[440px] flex-col">
       <header className="plate-head">
         <div className="head-row">
           <button type="button" className="head-gear" onClick={() => open("menu")} aria-label="Menu">
@@ -418,10 +418,11 @@ function PlayScreen() {
       <div className="world-frame relative min-h-0 flex-1 overflow-hidden">
         <WorldCanvas />
         <LogChip quiet={talking} />
-        <DialogueBox />
       </div>
+      {/* Outside world-frame overflow: last replies used to sit under the party strip and eat clicks. */}
+      <DialogueBox />
       <footer className="instrument px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        <div className="mb-2 flex items-center gap-2">
+        <div className={`mb-2 flex items-center gap-2${talking ? " pointer-events-none" : ""}`}>
           <img src={d.player.portrait} alt="" className="bezel h-[4.75rem] w-[3.7rem] shrink-0 object-cover object-[center_15%] bg-soot" />
           <div className="min-w-0 flex-1">
             <div className="truncate font-display text-sm tracking-wide text-parchment">
@@ -464,23 +465,23 @@ function PlayScreen() {
           {fighting ? (
             <HudButton kind="strike" label={HUD_LABELS.strike} onClick={strike} dim={noStrike} />
           ) : (
-            <HudButton kind="talk" label="Talk" onClick={talk} />
+            <HudButton kind="talk" label={HUD_LABELS.talk} onClick={talk} />
           )}
           {fighting ? (
             <HudButton kind="brace" label={HUD_LABELS.brace} onClick={brace} dim={noBrace} />
           ) : (
-            <HudButton kind="map" label="Map" onClick={() => open("map")} />
+            <HudButton kind="map" label={HUD_LABELS.map} onClick={() => open("map")} />
           )}
           <HudButton kind={fighting ? "end" : "menu"} label={fighting ? HUD_LABELS.end : HUD_LABELS.menu} onClick={fighting ? endTurn : () => open("menu")} />
         </div>
         <div className="mt-1.5 grid grid-cols-4 gap-1.5">
-          <HudButton kind="quests" label="Quests" onClick={() => open("journal")} />
-          <HudButton kind="pack" label="Pack" onClick={() => open("inventory")} />
-          <HudButton kind="self" label="Self" onClick={() => open("char")} />
+          <HudButton kind="quests" label={HUD_LABELS.quests} onClick={() => open("journal")} />
+          <HudButton kind="pack" label={HUD_LABELS.pack} onClick={() => open("inventory")} />
+          <HudButton kind="self" label={HUD_LABELS.self} onClick={() => open("char")} />
           {fighting ? (
-            <HudButton kind="menu" label="Menu" onClick={() => open("menu")} />
+            <HudButton kind="menu" label={HUD_LABELS.menu} onClick={() => open("menu")} />
           ) : (
-            <HudButton kind="lens" label="Lens" onClick={() => zoom((d.zoom ?? 1) < 1 ? 1 : -1)} />
+            <HudButton kind="lens" label={HUD_LABELS.lens} onClick={() => zoom((d.zoom ?? 1) < 1 ? 1 : -1)} />
           )}
         </div>
       </footer>
@@ -540,7 +541,7 @@ function HudButton({ kind, label, onClick, dim }: { kind: string; label: string;
   return (
     <button type="button" onClick={onClick} aria-label={label} aria-disabled={dim || undefined} className={`hud-key ${dim ? "opacity-40" : ""}`}>
       <img src={HUD_ART[kind] ?? HUD_ART.menu} alt="" className="hud-art" />
-      <span className="hud-label">{label}</span>
+      {hudShowsCaption(kind) ? <span className="hud-label">{label}</span> : null}
     </button>
   );
 }

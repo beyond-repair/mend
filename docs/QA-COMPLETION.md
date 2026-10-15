@@ -187,17 +187,31 @@ Non-blocking polish leftovers from this pass were addressed in **Polish pass 1**
 
 ## Polish pass 1 (2026-10-15)
 
-Play tip **`eb7b0f9`** (Continue grey fix; prior polish play `1167c2f`, first-act COMPLETE root `c82cd73`); this note on **`ef739af`**. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
+Play tip for this hand-check round: **`eb7b0f9`** (~5:17–5:21 AM ET Continue PASS). Fixes below land on the next tip of `fix/mend-playtest-rc`. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
 
 | Finding | Root cause | Fix | Regression test |
 | --- | --- | --- | --- |
 | Act I vs Act II header on return to Oakhaven | Not a bug. Header subline is `MAPS[mapId].act`. Oakhaven Lower Ward and The Sinks are **Act I**; The Stack Road is **Act II**. Returning via the Ward stair correctly flips the plaque back to Act I. | None (documented). | `playtest`: "Oakhaven stays Act I and Stack Road Act II…" |
 | Mouth tap target is only the brass diamond | Label is drawn below the tile centre (`sy+16` plate / `sy+26` board); pointer hit tested the tile centre diamond only, so taps on the brass name often walked a neighbour tile instead. | `hitMouthLabel` / `mouthLabelBox` in `stage.ts`; WorldCanvas takes a drawn usable mouth when the tap is on its label. Walkable neighbour tile centres win over the label when equally close (label sits on the tile south of a stair — without that gate, Stack Road east taps stole the Ward exit). Same nearOnly / presence rules as drawing. | `playtest`: "a tap on a mouth's brass label…"; headless loop L9b/L9c' |
-| Combat action buttons have no accessible names | HUD keys were image-only. `aria-label` was present but the unused `.hud-label` CSS never rendered, so names were easy to miss and tooling/hand notes called them unlabeled. | `HUD_LABELS` in `hud.ts`; `HudButton` renders `<span className="hud-label">` plus `aria-label`. Combat End reads **End turn**. | `playtest`: "combat HUD keys expose accessible names…" |
+| Combat / HUD names | Image keys need accessible names. An earlier polish painted `.hud-label` on every key; the JPGs already bake the word (Audit / Talk / Strike / Brace / End / …), so the hand check saw **two overlapping captions**. | `HUD_LABELS` still set `aria-label` (combat End → **End turn**). `HUD_ART_HAS_WORD` + `hudShowsCaption`: visible span only when the art has no word (none of the current keys). | `playtest`: "combat HUD keys expose accessible names…"; "HUD visible captions only where the art has no baked word…" |
 | Menu "Close the ledger" returns to the title | Intended quit (`quit()` → `phase: "title"`), but the wording sounded like dismissing the panel. The panel **X** already closes via `closePanel`. | Renamed control to **Return to the title** (`MENU_QUIT_LABEL`), matching the epilogue. Behaviour unchanged. | `playtest`: "Menu quit label names the title return…" |
 | Title **Continue** looks greyed on first page load even when auto + slot1 exist; click still works; after Menu → title it looks enabled | Two layers: (1) `hasSave` started `false` until `boot()` after paint; (2) SSR renders `disabled` with no `localStorage`, client has a save → React hydration **does not patch** the `disabled` attribute, so Continue can stay grey forever after reload. Menu quit remounted with client-only state, so it looked fine. | Seed `hasSave` via `hasStoredLedger()`; `boot()`/`quit()` share that scan; title gates `disabled={titleReady && !hasSave}` so SSR and first client paint both omit disabled, then mount+boot set the real state before paint. | `playtest`: "title Continue reads disk before paint…" |
+| Wren **"Back to the iron."** click leaves the option list open; Esc closes it | `choose` was fine. Dialogue lived inside `.world-frame` (`overflow: hidden`). The leave line sat below the frame edge under the party strip (`Silas Vance` / near-face row), so real mouse hits landed on the footer, not the button. Esc has no pointer target. | Move `DialogueBox` out of the world frame onto the play column; `bottom-[10.5rem]` so it overlays the party strip above the HUD keys; party strip `pointer-events-none` while talking. | `playtest`: "Wren's Back to the iron leave closes…"; browser mouse click on :8080 |
+| Fight-reach steps failed for the live tester | Walking near Moll/Varr only fills the **near-face** strip (actors within 8 tiles) — it does **not** start a fight. Guard-line fires only when a step crosses **y &lt; 12 → y ≥ 12** in the Sinks with no crawl/act1/checkpoint yet. Tobin's opening has **no leave line** on purpose (Esc does nothing; bug 4). | Documented reliable path below; store regression walks (14,10)→(14,12) → **Move.** → **Read them.** | `playtest`: "checkpoint fight from a fresh ledger…" |
 
-**Verification (automated):** `npm test` **196 + 55 + 48 PASS** (was 196 + 55 + 47; +1 Continue regression); `npm run typecheck` clean; headless `SEED=4 node scripts/playtest-loop.mjs` **PASS** (17 steps + L8b, L9a, L9a', L9b, L9c, L9c').
+### Fight-reach (checkpoint combat, verified store + :8080)
+
+Fresh **New ledger** → **Recommended file** → **Enter the Sinks**:
+
+1. Tobin opening: **"Then show me the pump."** → **"I'll audit it."** (only those two lines — **no leave**; Esc does nothing here by design).
+2. Optional: Audit → pump, or skip straight south. Start tile after Tobin is about **(3,3)**.
+3. Walk to **(14,10)** (north of the plate), then step onto **(14,12)** (or any path whose first plate tile is y≥12). Moll's **guard-line** opens.
+4. Choose **"Move."** → **"Read them."** → combat vs **Varr, Moll (en1), Hess (en2)**. HUD shows Strike / Brace / End (art words) with `aria-label` End turn.
+5. Do **not** take the Engineering/Speech talk-past first if you want this fight on the same ledger (`checkpointSpoke` closes the line). Wren's crawl also bypasses it.
+
+If Moll and Captain Varr appear in the party strip but no dialogue opens, you are only in near-face range — keep walking **south across y=12**.
+
+**Verification (automated):** `npm test` **196 + 55 + 51 PASS** (playtest +3: HUD caption rule, Wren leave, fight-reach); `npm run typecheck` clean; headless `SEED=4 node scripts/playtest-loop.mjs` **PASS**.
 
 **Live hand re-check (2026-10-15 ~5:06–5:08 AM ET on `1167c2f` play / `1b6cbea` docs):** real mouse clicks, no Map.
 
@@ -206,10 +220,10 @@ Play tip **`eb7b0f9`** (Continue grey fix; prior polish play `1167c2f`, first-ac
 | Oakhaven Lower Ward header **ACT I · C 5**; Stack Road **ACT II · C 5** | PASS |
 | Tap **Stack mouth** label text in Oakhaven → The Stack Road (arrive toast once); tap **Ward stair** text → Oakhaven; plain ground near the label does not take an exit (walk under that tap not clearly seen) | PASS |
 | Menu **Field notes** → **Return to the title** → title; **X** only closes panel; Continue returns to Oakhaven | PASS |
-| Combat captions (Strike / Brace / End turn) | NOT checked live (no fight came up) |
-| New: title Continue greyed on first load with autosave + slot1; click still works; after Menu → title looks normally enabled | FOUND → fixed (row above); re-check on next tip |
+| Combat captions (Strike / Brace / End turn) | NOT checked live on that tip (no fight); re-checked after fight-reach fix — art words only, no double `.hud-label` |
+| New: title Continue greyed on first load with autosave + slot1; click still works; after Menu → title looks normally enabled | FOUND → fixed on `eb7b0f9`; live ~5:17–5:21 AM ET Continue enabled after hard reload + loads Oakhaven **PASS** |
 
-**Still pending live:** combat HUD captions — fastest path below under fight-reach notes (parent report).
+**Live hand re-check (2026-10-15 ~5:17–5:21 AM ET on play tip `eb7b0f9`):** Continue PASS; double HUD captions FOUND; Wren leave click FOUND; fight-reach steps insufficient FOUND. Fixes in the table above.
 
 ## Before COMPLETE — PLAYTEST VERIFIED: record (all done on c82cd73)
 

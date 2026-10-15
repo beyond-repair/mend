@@ -28,7 +28,7 @@ const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road
   }
 };
 const stage = await import("../components/mend/stage.ts");
-const { HUD_LABELS, MENU_QUIT_LABEL } = await import("../components/mend/hud.ts");
+const { HUD_LABELS, HUD_ART_HAS_WORD, hudShowsCaption, MENU_QUIT_LABEL } = await import("../components/mend/hud.ts");
 
 const G = () => useGame.getState();
 const D = () => G().data;
@@ -382,6 +382,48 @@ describe("playtest 2026-10-15", () => {
     for (const [kind, label] of Object.entries(HUD_LABELS)) {
       assert.ok(label.trim().length > 0, `${kind} needs a name`);
     }
+  });
+
+  it("HUD visible captions only where the art has no baked word (no double labels)", () => {
+    // Hand check on eb7b0f9: every key showed the JPG word plus a .hud-label on top.
+    for (const kind of Object.keys(HUD_LABELS) as (keyof typeof HUD_LABELS)[]) {
+      assert.equal(HUD_ART_HAS_WORD.has(kind), true, `${kind} art already names the key`);
+      assert.equal(hudShowsCaption(kind), false, `${kind} must not paint a second caption`);
+    }
+    assert.equal(hudShowsCaption("unknown-future-key"), true, "a key without art-word still gets a caption");
+  });
+
+  it("Wren's Back to the iron leave closes the talk (click index, same as the button)", () => {
+    const wren = D().actors.wren;
+    assert.ok(wren?.alive && wren.mapId === "sinks");
+    useGame.setState((s) => ({ data: { ...s.data, player: { ...s.data.player, x: wren.x - 1, y: wren.y } } }));
+    G().clickTile(wren.x, wren.y);
+    walkOut();
+    assert.equal(D().dialogue?.convo, "wren");
+    const replies = visibleReplies(D());
+    const i = replies.findIndex((r) => /Back to the iron/.test(r.text));
+    assert.ok(i >= 0, "leave is on the board");
+    assert.equal(leaveIndex(D()), i, "Esc targets the same leave a click takes");
+    G().choose(i);
+    assert.equal(D().dialogue, null, "choosing the leave must clear the talk");
+  });
+
+  it("checkpoint fight from a fresh ledger: step onto y>=12, Move, Read them", () => {
+    // Live testers who only walked near Moll/Varr saw them in the party strip (near faces ≤8)
+    // and never crossed the plate line — no guard-line, no fight. Tobin's opening has no leave
+    // on purpose (Esc does nothing there). Reliable path:
+    assert.equal(D().player.y < 12, true);
+    useGame.setState((s) => ({ data: { ...s.data, player: { ...s.data.player, x: 14, y: 10 } } }));
+    G().clickTile(14, 12);
+    walkOut();
+    assert.equal(D().dialogue?.convo, "guard-line");
+    assert.equal(D().dialogue?.node, "start");
+    pick(/^Move\.$/);
+    assert.equal(D().dialogue?.node, "fight");
+    pick(/Read them/);
+    assert.ok(D().combat, "Read them starts the three-guard fight");
+    assert.deepEqual(D().combat?.order.slice().sort(), ["en1", "en2", "player", "varr"].sort());
+    assert.equal(D().dialogue, null);
   });
 
   it("Menu quit label names the title return; quit() restores the title phase", () => {

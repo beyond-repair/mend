@@ -869,7 +869,7 @@ export function DialogueBox() {
     convo.convo.startsWith("checkpoint-") ||
     convo.node.startsWith("checkpoint");
   return (
-    <div className="pointer-events-auto absolute inset-x-2 bottom-1 z-40 max-h-[46%] overflow-y-auto overscroll-contain">
+    <div className="pointer-events-auto absolute inset-x-2 bottom-[10.5rem] z-40 max-h-[min(46dvh,22rem)] overflow-y-auto overscroll-contain">
       <div className="ledger rivet mx-auto flex max-w-[440px] gap-2 p-2">
         {speakerId.portrait ? (
           <img src={speakerId.portrait} alt="" className="h-16 w-14 shrink-0 border border-brass object-cover object-top" />
