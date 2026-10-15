@@ -1311,7 +1311,11 @@ function ensureCast(d) {
 function syncShade(d) {
   const shade = d.actors.shade;
   if (!shade || !shade.alive || d.combat) return;
-  const dark = Boolean(d.flags.roadDark);
+  // A shade that stood down (or left the engagement) stays down. Re-arming it every reconcile
+  // re-engaged Silas on the next step, so the dark road could only be crossed by killing it,
+  // and each stand-down paid out again (bug 30).
+  const settled = didStandDown(d, "shade") || didEscape(d, "shade");
+  const dark = Boolean(d.flags.roadDark) && !settled;
   shade.hostile = dark;
   shade.aggro = dark;
   shade.vision = dark && d.flags.cartPinned ? 6 : dark ? 4 : 0;
@@ -7430,6 +7434,10 @@ function applyEffects(d, effects) {
     else if (e.op === "arrive") arrive(d);
     else if (e.op === "epilogue") {
       d.ending = e.ending;
+      // The Sovereign's "Write the shape." / "Leave the holes." list the epilogue first; once the
+      // phase flips the later flag op is skipped. Record the ending here, same as the Spire heart
+      // special does, so both routes leave the same ledger (bug 31).
+      d.flags.ending = e.ending;
       d.epilogue = buildEpilogue(d, e.ending);
       d.phase = "epilogue";
       d.combat = null;

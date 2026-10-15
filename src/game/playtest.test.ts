@@ -15,7 +15,7 @@ const mem = new Map<string, string>();
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex, hasStoredLedger } = await import("./store.ts");
 const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS, LOCKED_DOORS, tileAt, WALKABLE } = await import("./maps.ts");
-const { regionOpen, openAudit, reconcileWorld, depart, pathTo, checkVision, dist } = await import("./logic.ts");
+const { regionOpen, openAudit, reconcileWorld, depart, pathTo, checkVision, dist, startCombat } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
 const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
 (globalThis as unknown as { Image: unknown }).Image = class {
@@ -848,6 +848,110 @@ describe("playtest 2026-10-15", () => {
     G().clickTile(28, 15);
     walkOut();
     assert.equal(D().mapId, "spire", "stepping onto the Spire mouth at the end of a route still leaves");
+  });
+
+  it("in a fight, Audit reads the foe in reach, not the machine Silas is beside; Strike/Audit stay on the roster (bugs 28–29)", () => {
+    // Citadel Sever starts the guard fight at the crucible. Audit is the only way to read a foe in a
+    // fight (a tap on a hostile strikes), and it reopened the crucible every turn. Strike / Audit also
+    // aimed at Sentry Quill, who is hostile on the map but not in the engagement's turn order.
+    const d = D();
+    d.flags.act1 = true;
+    d.flags.checkpointSpoke = true;
+    d.flags.citadelOpen = true;
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.mapId = "citadel";
+    d.player.mapId = "citadel";
+    reconcileWorld(d);
+    const crucible = d.machines.crucible;
+    d.player.x = 13;
+    d.player.y = 8;
+    assert.ok(dist(d.player, crucible) <= 1, "fixture: Silas beside the crucible");
+    startCombat(d, ["guard1"]);
+    const fight = D().combat;
+    assert.ok(fight, "guard fight started");
+    const g = d.actors.guard1;
+    const sentry = d.actors.sentry;
+    g.x = 14; g.y = 9; g.hp = g.maxHp;
+    sentry.x = 12; sentry.y = 9; sentry.hostile = true; sentry.aggro = true;
+    assert.ok(!fight.order.includes("sentry"), "fixture: the sentry is not in this engagement");
+    d.player.hp = d.player.maxHp;
+    fight.index = fight.order.indexOf("player");
+    d.player.ap = 8;
+    d.panel = "none";
+    d.audit = null;
+    G().auditNearest();
+    assert.equal(D().panel, "audit");
+    assert.deepEqual(D().audit, { kind: "actor", id: "guard1" }, "Audit opens the guard in reach, not the crucible or the sentry");
+    G().closePanel();
+    const sentryHp = D().actors.sentry.hp;
+    const guardHp = D().actors.guard1.hp;
+    const ap = D().player.ap;
+    G().strikeNearest();
+    assert.equal(D().actors.sentry.hp, sentryHp, "Strike does not spend the turn on the off-roster sentry");
+    assert.ok(D().player.ap < ap, "Strike swung");
+    assert.ok(D().actors.guard1.hp <= guardHp, "the swing went at the guard");
+    // Out of a fight the machine beside Silas still wins Audit (bug 24 order unchanged).
+    const e = D();
+    e.combat = null;
+    e.panel = "none";
+    e.audit = null;
+    for (const a of Object.values(e.actors)) { a.hostile = false; a.aggro = false; }
+    G().auditNearest();
+    assert.deepEqual(D().audit, { kind: "machine", id: "crucible" });
+  });
+
+  it("a stood-down Lamp shade stays down on the dark road; the Spire mouth is reachable without a kill (bug 30)", () => {
+    // Sever (or a cut lamp glass) darkens the road. syncShade re-armed the shade on every reconcile,
+    // so after "They step out of the engagement" the next step started the same fight again.
+    const d = D();
+    Object.assign(d.flags, { act1: true, checkpointSpoke: true, citadelOpen: true, spireOpen: true, roadDark: true, citadelFate: "sever" });
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.mapId = "road";
+    d.player.mapId = "road";
+    d.player.x = 8;
+    d.player.y = 14;
+    d.path = [];
+    d.intent = null;
+    reconcileWorld(d);
+    assert.ok(d.actors.shade.hostile, "the dark road arms the shade");
+    G().clickTile(28, 14);
+    walkOut();
+    assert.ok(D().combat?.order.includes("shade"), "walking to the Spire mouth meets the shade");
+    const e = D();
+    e.actors.shade.nodes.find((n) => n.effect === "weapon")!.severed = true;
+    e.player.skills.speech = 95;
+    e.combat!.index = e.combat!.order.indexOf("player");
+    for (let k = 0; k < 6 && D().combat; k++) {
+      D().player.ap = 8;
+      G().standDown();
+    }
+    assert.equal(D().combat, null, "the shade stands down once its knife is cut");
+    while (D().dialogue) G().choose(0);
+    assert.equal(D().actors.shade.alive, true);
+    assert.equal(D().actors.shade.hostile, false, "stood-down shade is not re-armed by the next reconcile");
+    G().clickTile(28, 14);
+    walkOut();
+    assert.equal(D().combat, null, "no second engagement on the way to the mouth");
+    assert.deepEqual([D().player.x, D().player.y], [28, 14]);
+  });
+
+  it("the Sovereign's down choice records the ending like the Spire heart does (bug 31)", () => {
+    const d = D();
+    d.phase = "play";
+    d.combat = null;
+    d.panel = "none";
+    d.dialogue = { convo: "sovereign-down", node: "start" };
+    pick(/Write the shape/);
+    assert.equal(D().phase, "epilogue");
+    assert.equal(D().ending, "impose");
+    assert.equal(D().flags.ending, "impose", "flags.ending set on the fight route too");
+    assert.match(D().epilogue[0], /You wrote the shape/);
   });
 
 });

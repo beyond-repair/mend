@@ -323,6 +323,19 @@ function markDismiss(d: Data, convo: string | undefined) {
   if (convo) d.flags.dismissAt = dismissKey(d, convo);
 }
 
+/**
+ * Hostiles the HUD Strike / Audit keys should aim at. In a fight that is the engagement roster:
+ * a hostile elsewhere on the map (the Citadel sentry during the Sever guard fight) is not in the
+ * turn order, so striking or reading it spent the turn on someone who never answers (bug 29).
+ * Falls back to any hostile on the map when the roster has none.
+ */
+function engagedFoes(d: Data): Actor[] {
+  const onMap = Object.values(d.actors).filter((a) => a.alive && a.hostile && a.mapId === d.mapId);
+  if (!d.combat) return onMap;
+  const roster = onMap.filter((a) => d.combat!.order.includes(a.id));
+  return roster.length ? roster : onMap;
+}
+
 function openTalk(d: Data, a: Actor, opts?: { force?: boolean }) {
   if (!a.alive) return;
   if (d.combat) {
@@ -778,9 +791,7 @@ export const useGame = create<Store>((set, get) => ({
     commit(set, (d) => {
       if (!d.combat || !myTurn(d)) return;
       const range = weaponOf(d.player).range ?? 1;
-      const foes = Object.values(d.actors)
-        .filter((a) => a.alive && a.hostile && a.mapId === d.mapId)
-        .sort((a, b) => dist(d.player, a) - dist(d.player, b));
+      const foes = engagedFoes(d).sort((a, b) => dist(d.player, a) - dist(d.player, b));
       const hit = foes.find((a) => dist(d.player, a) <= range);
       if (hit) strike(d, d.player, hit);
       else if (foes[0] && !refuseWalk(d)) {
@@ -826,10 +837,13 @@ export const useGame = create<Store>((set, get) => ({
         remoteBroken.length ? remoteBroken :
         pool;
       const machine = ranked.sort((a, b) => steps(a) - steps(b))[0];
-      const person = Object.values(d.actors)
-        .filter((a) => a.alive && a.mapId === d.mapId && (d.combat ? a.hostile : true))
+      const person = (d.combat ? engagedFoes(d) : Object.values(d.actors).filter((a) => a.alive && a.mapId === d.mapId))
         .sort((a, b) => dist(d.player, a) - dist(d.player, b))[0];
-      if (machine && dist(d.player, machine) <= 1) openAudit(d, { kind: "machine", id: machine.id });
+      // In a fight, Audit is the only way to read a foe (a tap on a hostile strikes). A foe in reach
+      // beats the machine Silas is standing beside — Citadel Sever starts the guard fight at the
+      // crucible, and Audit used to reopen the crucible every turn (bug 28).
+      if (d.combat && person && dist(d.player, person) <= 1) openAudit(d, { kind: "actor", id: person.id });
+      else if (machine && dist(d.player, machine) <= 1) openAudit(d, { kind: "machine", id: machine.id });
       else if (person && person.hostile && dist(d.player, person) <= 1) openAudit(d, { kind: "actor", id: person.id });
       else if (d.combat && person) {
         d.path = pathNear(d, person.x, person.y) ?? [];

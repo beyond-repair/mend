@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Headless browser playtest: Act I → Rust (Ives opens the Citadel) → Brass Tundra → High Citadel → Void Spire → epilogue.
 //   SEED=4 CHROME_PATH=/usr/bin/google-chrome SHOTS=/tmp/mend-act4 node scripts/playtest-act4.mjs
+// Side branches (same run, different answers):
+//   CRUCIBLE=splice (default) | sever   — Sever with shaftOpen unset forces the guard fight ("The floor notices the dark.")
+//   SPIRE=decline (default: "I'll circle" → Leave the holes) | impose ("Issue a baseline") | fight (Sovereign + Echo → sovereign-down → Write the shape)
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 const SHOTS = process.env.SHOTS ?? "/tmp/mend-act4";
@@ -84,7 +87,7 @@ async function tapWalk(page, x, y, mouth) {
   return { ok: i >= route.length, taps, onCanvas, mouthSeen };
 }
 async function key(page, k, n = 1) { for (let i = 0; i < n; i++) { await page.keyboard.press(k); await page.waitForTimeout(180); } }
-async function hud(page, label) { await page.getByRole("button", { name: label, exact: true }).first().click(); await page.waitForTimeout(200); }
+async function hud(page, label) { await fileLevel(page); await page.getByRole("button", { name: label, exact: true }).first().click(); await page.waitForTimeout(200); }
 async function shot(page, name) { await page.screenshot({ path: `${SHOTS}/${name}.png` }); }
 async function closeTalk(page) {
   for (let i = 0; i < 8 && (await S(page)).dlg; i++) {
@@ -95,7 +98,9 @@ async function closeTalk(page) {
   }
 }
 
-const tag = process.env.TAG ?? "act4";
+const CRUCIBLE = process.env.CRUCIBLE ?? "splice";
+const SPIRE = process.env.SPIRE ?? "decline";
+const tag = process.env.TAG ?? (CRUCIBLE === "splice" && SPIRE === "decline" ? "act4" : `act4-${CRUCIBLE}-${SPIRE}`);
 const out = [];
 const step = (ok, msg) => { out.push(`${ok ? "PASS" : "FAIL"} ${msg}`); console.log(`${ok ? "PASS" : "FAIL"} ${msg}`); };
 const { browser, page, errors } = await open();
@@ -260,6 +265,194 @@ async function useSpecial(re) {
   await b.first().click(); await page.waitForTimeout(300); await fileLevel(page);
   return true;
 }
+// DUMP=/tmp/x DUMP_AT=C7|V3 writes localStorage (slot 1 + auto) for scratch probes of side branches.
+async function dumpAt(label) {
+  if (!process.env.DUMP || (process.env.DUMP_AT ?? "V3") !== label) return;
+  if (label !== "V3") { await hud(page, "Menu"); await page.getByRole("button", { name: /slot ?1/i }).first().click(); await page.waitForTimeout(200); await key(page, "Escape"); }
+  writeFileSync(process.env.DUMP, JSON.stringify(await page.evaluate(() => ({ ...localStorage }))));
+}
+// —— real-UI combat (the player's verbs: canvas tap strikes a hostile, HUD Audit reads the foe in reach,
+// seam button + Unmend/Confirm cuts, Pack → Use a bandage, Brace / End turn / Stand down) ——
+const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+const myTurn = () => page.evaluate(() => { const d = window.__mend.getState().data; return Boolean(d.combat && d.phase === "play" && d.combat.order[d.combat.index] === "player" && !d.dialogue); });
+const foes = () => page.evaluate(() => { const d = window.__mend.getState().data; if (!d.combat) return []; return d.combat.order.map((id) => d.actors[id]).filter((a) => a && a.alive && a.hostile).map((a) => ({ id: a.id, x: a.x, y: a.y, hp: a.hp, armed: a.nodes.some((n) => n.effect === "weapon" && !n.severed), weapon: a.nodes.find((n) => n.effect === "weapon" && !n.severed)?.name })); });
+async function untilMyTurnOrDone(max = 15000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < max) {
+    const st = await S(page);
+    if (st.phase !== "play" || !st.combat || st.dlg) return st;
+    await fileLevel(page);
+    if (await myTurn() && !st.path) return st;
+    await page.waitForTimeout(80);
+  }
+  return S(page);
+}
+async function bandageIfLow(frac = 0.45) {
+  const st = await page.evaluate(() => { const d = window.__mend.getState().data; return { hp: d.player.hp, max: d.player.maxHp, n: d.inventory.find((r) => r.id === "bandage")?.qty ?? 0 }; });
+  if (st.hp >= st.max * frac || st.n < 1) return false;
+  await hud(page, "Pack");
+  const row = page.locator("li", { hasText: "Brass bandage" }).getByRole("button", { name: "Use" });
+  if (await row.count()) await row.first().click();
+  await page.waitForTimeout(150);
+  await key(page, "Escape");
+  return true;
+}
+async function tapFoe(id) {
+  const a = await actorAt(id);
+  const ap0 = (await S(page)).ap;
+  await tapAt(a.x, a.y);
+  await settle(6000);
+  return (await S(page)).ap !== ap0;
+}
+async function endOrBrace() {
+  if (!(await myTurn())) return;
+  const ap = (await S(page)).ap;
+  await hud(page, ap >= 1 ? "Brace" : "End turn");
+  if (await myTurn()) await hud(page, "End turn");
+}
+async function cutWeaponInReach() {
+  // HUD Audit opens the foe in reach (bug 28: not the machine Silas is beside).
+  await hud(page, "Audit");
+  await fileLevel(page);
+  const au = await page.evaluate(() => { const d = window.__mend.getState().data; return d.panel === "audit" && d.audit ? d.audit : null; });
+  if (!au || au.kind !== "actor") { if ((await S(page)).panel === "audit") await key(page, "Escape"); return { ok: false, why: `audit ${au?.kind}:${au?.id}` }; }
+  const w = await page.evaluate((id) => { const n = window.__mend.getState().data.actors[id].nodes.find((n) => n.effect === "weapon" && !n.severed); return n && { name: n.name, revealed: n.revealed }; }, au.id);
+  if (!w?.revealed) { await key(page, "Escape"); return { ok: false, why: `no readable weapon on ${au.id}` }; }
+  await page.getByRole("button", { name: new RegExp(w.name) }).first().click();
+  await page.getByRole("button", { name: /^(Reckless )?unmend$/i }).click();
+  await page.getByRole("button", { name: /Confirm unmend/i }).click();
+  await page.waitForTimeout(150);
+  const log = (await S(page)).log[0];
+  if ((await S(page)).panel === "audit") await key(page, "Escape");
+  return { ok: true, id: au.id, why: log };
+}
+// Existing difficulty setting (Menu → Strain story: hits on Silas land at 0.7). It lives in the
+// ledger flags, so loading slot 1 resets it; set it again after each load once field strain has lost twice.
+async function strainStory() {
+  await hud(page, "Menu");
+  await page.getByRole("button", { name: /^Strain story/ }).click();
+  await page.waitForTimeout(150);
+  await key(page, "Escape");
+  return (await S(page)).flags.strain;
+}
+async function deathReload(label) {
+  const st = await S(page);
+  if (st.phase !== "dead") return false;
+  const deathTxt = await page.evaluate(() => document.body.innerText);
+  console.log(`   [${label}] Baseline lost → Open the last ledger (${/Baseline lost/.test(deathTxt)})`);
+  await page.getByRole("button", { name: "Open the last ledger" }).click();
+  await page.waitForTimeout(400);
+  const back = await S(page);
+  console.log(`   [${label}] last ledger → phase ${back.phase}; combat ${back.combat}; hp ${back.hp}; ap ${back.ap}`);
+  return true;
+}
+async function guardFight(reload = null) {
+  const notes = []; let deaths = 0, cuts = 0, rounds = 0, how = "none", auditOk = null, sinceLoad = 0, loads = 0;
+  for (let turn = 0; turn < 240; turn++) {
+    let st = await untilMyTurnOrDone();
+    if (st.phase === "dead") {
+      deaths++; sinceLoad++;
+      if (deaths > 30) { how = "too many deaths"; break; }
+      await deathReload(reload ? "fight" : "guards");
+      if (reload && sinceLoad >= 2) {
+        await reload(); loads++; sinceLoad = 0;
+        const strain = loads > 2 ? await strainStory() : "field";
+        notes.push(`slot1 → again (strain ${strain ?? "field"})`);
+      }
+      continue;
+    }
+    if (!st.combat) { how = /rumor|step out/.test(st.log.join(" ")) ? "stood down" : "ended"; break; }
+    rounds = (await page.evaluate(() => window.__mend.getState().data.combat?.round)) ?? rounds;
+    await bandageIfLow();
+    for (let k = 0; k < 3 && (await myTurn()); k++) {
+      const p = await S(page);
+      const T = (await foes()).filter((f) => f.armed).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
+      if (!T) break;
+      if (cheb(T, p) > 1) {
+        const spots = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]].map(([dx, dy]) => ({ x: T.x + dx, y: T.y + dy })).sort((a, b) => cheb(a, p) - cheb(b, p));
+        for (const q of spots) { await tapAt(q.x, q.y); if ((await S(page)).path) break; }
+        await settle(8000);
+        if (!(await myTurn())) break;
+        if (cheb((await actorAt(T.id)), await S(page)) > 1) break;
+      }
+      const focus = await page.evaluate(() => window.__mend.getState().data.focus);
+      if ((await S(page)).ap < 5 || focus < 9) break;
+      const c = await cutWeaponInReach();
+      if (auditOk === null) auditOk = c.ok || !/machine/.test(c.why);
+      if (c.ok) { cuts++; notes.push(`cut ${c.id}: ${c.why}`); } else { notes.push(c.why); break; }
+    }
+    const yieldBtn = page.getByRole("button", { name: /Stand down/ });
+    if ((await myTurn()) && (await yieldBtn.count())) { await yieldBtn.click(); await page.waitForTimeout(200); if (!(await S(page)).combat) { how = "stood down"; break; } }
+    for (let k = 0; k < 2 && (await myTurn()) && (await S(page)).ap >= 3; k++) {
+      const p = await S(page);
+      const near = (await foes()).sort((a, b) => cheb(a, p) - cheb(b, p))[0];
+      if (!near || cheb(near, p) > 1) break;
+      await tapFoe(near.id);
+    }
+    await endOrBrace();
+  }
+  const st = await S(page);
+  return { won: !st.combat && st.phase === "play", how, deaths, loads, cuts, rounds, notes, auditOk };
+}
+async function engageSovereign() {
+  const sv = await actorAt("sovereign");
+  await walk(page, sv.x + 1, sv.y + 1);
+  await hud(page, "Talk");
+  for (let i = 0; i < 40 && !(await S(page)).dlg; i++) await page.waitForTimeout(100);
+  const rs = await replies(page);
+  if (!rs.some((x) => /read you while you move/.test(x))) return { ok: false, rs };
+  await pick(page, /read you while you move/);
+  await page.waitForTimeout(200);
+  return { ok: (await S(page)).combat, rs };
+}
+async function sovereignFight() {
+  const notes = []; let deaths = 0, loads = 0, strikes = 0, rounds = 0, sinceLoad = 0, auditId = null, pinBtn = false;
+  const e = await engageSovereign();
+  notes.push(`engage ${e.ok} (${e.rs.join(" / ")})`);
+  const continuity = (await page.evaluate(() => window.__mend.getState().data.disciplines)).includes("continuity");
+  for (let turn = 0; turn < 120; turn++) {
+    let st = await untilMyTurnOrDone();
+    if (st.dlg === "sovereign-down/start") break;
+    if (st.phase === "dead") {
+      deaths++; sinceLoad++;
+      if (deaths > 24) { notes.push("too many deaths"); break; }
+      await deathReload("sovereign");
+      if (sinceLoad >= 3) {
+        // The last ledger is mid-fight and nearly empty. Do what a player does: Menu → slot 1 (saved before the fight) → back in.
+        await hud(page, "Menu");
+        await page.getByRole("button", { name: /^slot1 ·/ }).first().click();
+        await page.waitForTimeout(400);
+        if ((await S(page)).panel !== "none") await key(page, "Escape");
+        loads++; sinceLoad = 0;
+        const strain = loads > 2 ? await strainStory() : "field";
+        const again = await engageSovereign();
+        notes.push(`slot1 → re-engage ${again.ok} (strain ${strain ?? "field"})`);
+      }
+      continue;
+    }
+    if (!st.combat) { notes.push(`combat ended without down (${st.log[0]})`); break; }
+    rounds++;
+    await bandageIfLow();
+    const p = await S(page);
+    const sv = await actorAt("sovereign");
+    if (!auditId && cheb(sv, p) <= 1 && p.ap >= 7) {
+      await hud(page, "Audit");
+      auditId = await page.evaluate(() => { const d = window.__mend.getState().data; return d.panel === "audit" ? d.audit?.id : null; });
+      pinBtn = (await page.getByRole("button", { name: "Pin seam" }).count()) > 0;
+      await shot(page, `${tag}-11a-sovereign-audit`);
+      if ((await S(page)).panel === "audit") await key(page, "Escape");
+    }
+    for (let k = 0; k < 3 && (await myTurn()) && (await S(page)).ap >= 3; k++) {
+      if (await tapFoe("sovereign")) strikes++;
+      else break;
+      if ((await S(page)).dlg) break;
+    }
+    if ((await S(page)).dlg) continue;
+    await endOrBrace();
+  }
+  const st = await S(page);
+  return { down: st.dlg === "sovereign-down/start", deaths, loads, strikes, rounds, notes, continuity, auditId, pinBtn };
+}
 const noCombat = async (label) => { const c = await S(page); step(!c.combat, `${label} no forced combat (combat ${c.combat}; ${c.log[0]})`); return !c.combat; };
 
 // —— Stack Road → Rust cut → Rust Districts (act1 signed by the talk-past) ——
@@ -392,6 +585,7 @@ await pick(page, /answer on the machine/);
 await closeTalk(page);
 await noCombat("C6c");
 
+await dumpAt("C7");
 // C7 Crucible: prefer Splice toward the Sinks (no fight), else Seize, else Sever
 r = await auditAt("crucible");
 step(r.ok, `C7 Audit Crucible core opens (${r.how})`);
@@ -399,14 +593,40 @@ await shot(page, `${tag}-08-crucible-audit`);
 const specials = await page.$$eval("button", (bs) => bs.map((b) => b.innerText.replace(/\s+/g, " ")).filter((x) => /Sever|Splice|Seize|rank answer/.test(x)));
 console.log("   crucible specials:", specials);
 let fate = null;
-for (const re of [/Splice toward the Sinks/i, /Seize the rank engine/i]) {
-  for (let tries = 0; tries < 3 && !fate; tries++) {
-    if ((await S(page)).panel !== "audit") { await auditAt("crucible"); }
-    await useSpecial(re);
-    fate = (await S(page)).flags.citadelFate ?? null;
-    if (!fate) console.log("   crucible:", (await S(page)).log[0]);
+if (CRUCIBLE === "sever") {
+  // Sever with shaftOpen unset: "The floor notices the dark." → Guard Senn + Guard Oll.
+  const shaft = (await S(page)).flags.shaftOpen;
+  // A player files the ledger before an answer that wakes the floor.
+  await key(page, "Escape");
+  await hud(page, "Menu"); await page.getByRole("button", { name: /Save slot 1/ }).click(); await page.waitForTimeout(200); await key(page, "Escape");
+  await auditAt("crucible");
+  await useSpecial(/Sever the siphon/i);
+  s = await S(page);
+  fate = s.flags.citadelFate ?? null;
+  const roster = await foes();
+  step(fate === "sever" && s.combat && roster.length === 2 && /floor notices the dark/.test(s.log.join(" | ")), `C7s Sever the siphon → guard fight (shaftOpen ${shaft}; fate ${fate}; combat ${s.combat}; foes ${roster.map((f) => f.id).join(",")})`);
+  await shot(page, `${tag}-08s-sever-fight`);
+  const g = await guardFight(async () => {
+    // The last ledger is mid-fight; slot 1 was filed at the crucible. Load it and answer again.
+    await hud(page, "Menu");
+    await page.getByRole("button", { name: /^slot1 ·/ }).first().click();
+    await page.waitForTimeout(400);
+    if ((await S(page)).panel !== "none") await key(page, "Escape");
+    await auditAt("crucible");
+    await useSpecial(/Sever the siphon/i);
+  });
+  s = await S(page);
+  step(g.won && !s.combat && s.phase === "play", `C7t guard fight resolved (${g.how}; rounds ${g.rounds}; deaths ${g.deaths}; slot loads ${g.loads}; strain ${s.flags.strain ?? "field"}; cuts ${g.cuts}; hp ${s.hp}; ${g.notes.slice(0, 4).join(" / ")})`);
+} else {
+  for (const re of [/Splice toward the Sinks/i, /Seize the rank engine/i]) {
+    for (let tries = 0; tries < 3 && !fate; tries++) {
+      if ((await S(page)).panel !== "audit") { await auditAt("crucible"); }
+      await useSpecial(re);
+      fate = (await S(page)).flags.citadelFate ?? null;
+      if (!fate) console.log("   crucible:", (await S(page)).log[0]);
+    }
+    if (fate) break;
   }
-  if (fate) break;
 }
 s = await S(page);
 step(Boolean(fate) && s.flags.spireOpen === true && !s.combat, `C7b crucible answered (citadelFate ${fate}; spireOpen ${s.flags.spireOpen}; combat ${s.combat}; log ${s.log.slice(0, 2).join(" / ")})`);
@@ -438,6 +658,17 @@ step(s.map === "road" && s.panel === "none", `C12 Tundra Stack mouth → Stack R
 
 await walk(page, 28, 14);
 s = await S(page);
+if (s.combat && CRUCIBLE === "sever") {
+  // Severing the siphon darkens the road lamps (roadDark): the Lamp shade at (30,12) watches the Spire mouth.
+  const roster = (await foes()).map((f) => f.id).join(",");
+  const g = await guardFight();
+  await closeTalk(page);
+  s = await S(page);
+  step(g.won && /shade/.test(roster), `V0s dark road: Lamp shade fight resolved (foes ${roster}; ${g.how}; rounds ${g.rounds}; deaths ${g.deaths}; hp ${s.hp}; shade hostile ${(await actorAt("shade")).hostile})`);
+  await walk(page, 28, 14);
+  s = await S(page);
+  step(!s.combat, `V0t walk on past the stood-down shade, no re-engagement (combat ${s.combat}; ${s.log[0]})`);
+}
 step(s.x === 28 && s.y === 14 && !s.combat, `V0 walk the road to beside Spire mouth (${s.x},${s.y}; combat ${s.combat}; dlg ${s.dlg})`);
 s = await mouthStep("road", "ArrowDown");
 const vArrive = /You arrive at The Void Spire/.test(s.log.join(" | "));
@@ -455,23 +686,41 @@ await noCombat("V2b decline");
 
 // V3 Save/Continue in the Spire
 await saveContinue("V3", ["citadelFate", "spireOpen", "seen:spire"]);
+await dumpAt("V3");
 
-// V4 Unissued baseline → Read what is holding → Leave the holes → epilogue
-r = await auditAt("spireheart");
-s = await S(page);
-step(r.ok && !s.combat, `V4 walk to Unissued baseline and Audit (${r.how}; at ${s.x},${s.y}; combat ${s.combat})`);
-await shot(page, `${tag}-11-heart-audit`);
-const readHeart = await useSpecial(/Read what is holding/i);
-s = await S(page);
-step(readHeart && /What is being held/.test(s.log[0] ?? ""), `V4b Read what is holding (${(s.log[0] ?? "").slice(0, 120)})`);
-if ((await S(page)).panel !== "audit") await auditAt("spireheart");
-await useSpecial(/Leave the holes/i);
-await page.waitForTimeout(400);
+let endingWant = SPIRE === "decline" ? "release" : "impose";
+if (SPIRE === "fight") {
+  // V5 Back to the Sovereign with the Talk key (bump after "I'll circle" is dismissed on this tile).
+  let sovFight = await sovereignFight();
+  s = await S(page);
+  step(sovFight.down && s.dlg === "sovereign-down/start", `V5 Sovereign + Echo fight → sovereign-down (rounds ${sovFight.rounds}; deaths ${sovFight.deaths}; slot loads ${sovFight.loads}; strikes ${sovFight.strikes}; strain ${s.flags.strain ?? "field"}; dlg ${s.dlg}; ${sovFight.notes.slice(-2).join(" / ")})`);
+  step(sovFight.continuity && sovFight.pinBtn, `V5b Continuity opened by the fight; Audit on the Sovereign offers Pin seam (continuity ${sovFight.continuity}; audit ${sovFight.auditId}; pin ${sovFight.pinBtn})`);
+  await shot(page, `${tag}-11f-sovereign-down`);
+  const downRs = await replies(page);
+  step(downRs.some((x) => /Write the shape/.test(x)) && downRs.some((x) => /Leave the holes/.test(x)), `V6 sovereign-down offers Write the shape / Leave the holes (${downRs.join(" / ")})`);
+  if (downRs.some((x) => /Write the shape/.test(x))) await pick(page, /Write the shape/);
+  await page.waitForTimeout(400);
+} else {
+  // V4 Unissued baseline → Read what is holding → Leave the holes / Issue a baseline → epilogue
+  r = await auditAt("spireheart");
+  s = await S(page);
+  step(r.ok && !s.combat, `V4 walk to Unissued baseline and Audit (${r.how}; at ${s.x},${s.y}; combat ${s.combat})`);
+  await shot(page, `${tag}-11-heart-audit`);
+  const readHeart = await useSpecial(/Read what is holding/i);
+  s = await S(page);
+  step(readHeart && /What is being held/.test(s.log[0] ?? ""), `V4b Read what is holding (${(s.log[0] ?? "").slice(0, 120)})`);
+  if ((await S(page)).panel !== "audit") await auditAt("spireheart");
+  await useSpecial(SPIRE === "impose" ? /Issue a baseline/i : /Leave the holes/i);
+  await page.waitForTimeout(400);
+}
 s = await S(page);
 const epiTxt = await page.evaluate(() => document.body.innerText);
-step(s.phase === "epilogue" && /The ledger closes/.test(epiTxt) && /Baseline refused/i.test(epiTxt), `E1 epilogue screen (phase ${s.phase}; ending ${s.flags.ending})`);
+const endLabel = endingWant === "impose" ? /Baseline imposed/i : /Baseline refused/i;
+step(s.phase === "epilogue" && s.flags.ending === endingWant && /The ledger closes/.test(epiTxt) && endLabel.test(epiTxt), `E1 epilogue screen (phase ${s.phase}; ending ${s.flags.ending}; want ${endingWant}; label ${endLabel.test(epiTxt)})`);
 await shot(page, `${tag}-12-epilogue`);
 const epiLines = await page.evaluate(() => window.__mend.getState().data.epilogue ?? []);
+if (endingWant === "impose") step(/You wrote the shape/.test(epiLines[0] ?? ""), `E1b impose epilogue opens with the written shape (${(epiLines[0] ?? "").slice(0, 80)})`);
+if (CRUCIBLE === "sever") step(epiLines.some((l) => /sever|siphon|dark/i.test(l)), `E1c epilogue remembers the severed siphon`);
 step(epiLines.length >= 3, `E2 epilogue carries the ledger (${epiLines.length} lines): ${epiLines.slice(0, 3).join(" | ").slice(0, 240)}`);
 await page.getByRole("button", { name: "Return to the title" }).click();
 await page.waitForTimeout(300);
