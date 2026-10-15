@@ -187,7 +187,7 @@ Non-blocking polish leftovers from this pass were addressed in **Polish pass 1**
 
 ## Polish pass 1 (2026-10-15)
 
-Small verified polish on tip after `6cfebab` / play build `c82cd73`. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
+Landed on tip **`1167c2f`** (play build still rooted in `c82cd73` first-act COMPLETE). First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
 
 | Finding | Root cause | Fix | Regression test |
 | --- | --- | --- | --- |
@@ -202,7 +202,7 @@ Small verified polish on tip after `6cfebab` / play build `c82cd73`. First-act *
 
 1. **Act plaque** — Stack Road → Ward stair → Oakhaven: header should say **Act I** under "Oakhaven Lower Ward" (correct).
 2. **Mouth label tap** — In the Sinks after Moll, tap the words **Stack mouth** (not only the diamond) and confirm you path onto the road; on the road, tap **Ward stair** text likewise.
-3. **Combat HUD names** — Enter any fight (e.g. force a hostile or use a known encounter); confirm Strike / Brace / End turn captions on the image keys.
+3. **Combat HUD names** — Optional Moll checkpoint fight: on the south plate choose **Move.** → **Read them.** (or any hostile). Confirm Strike / Brace / **End turn** captions on the image keys.
 4. **Menu quit wording** — Menu → **Return to the title** leaves to the title; Menu **X** only closes the panel and stays in play.
 
 ## Before COMPLETE — PLAYTEST VERIFIED: record (all done on c82cd73)
