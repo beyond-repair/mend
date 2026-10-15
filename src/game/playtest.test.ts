@@ -130,6 +130,42 @@ describe("playtest 2026-10-15", () => {
     assert.equal(D().dialogue, null);
   });
 
+  it("Esc takes Doss's sole leave line even though it notes a met-flag, and still refuses sole fights and travel", () => {
+    const doss = D().actors.doss;
+    assert.ok(doss?.alive && doss.mapId === "sinks", "Doss sleeps on the Sinks plate");
+    useGame.setState((s) => ({ data: { ...s.data, player: { ...s.data.player, x: doss.x - 1, y: doss.y } } }));
+    G().clickTile(doss.x, doss.y); // the tap/bump that opens his talk
+    walkOut();
+    assert.equal(D().dialogue?.convo, "doss", "tapping Doss from beside him opens his talk");
+    const replies = visibleReplies(D());
+    assert.equal(replies.length, 1, "on a fresh ledger his only line is the leave");
+    assert.match(replies[0].text, /Sleep\. I won't move your weather\./);
+    const leave = leaveIndex(D());
+    assert.equal(leave, 0, "Esc must take the only way out instead of soft-locking the walk keys");
+    G().choose(leave); // what Esc does in Game.tsx
+    assert.equal(D().dialogue, null);
+    assert.equal(D().flags.dossMet, true, "the leave still notes that Silas met him");
+    // Once a real choice joins it, the flagged leave is no longer Esc's to take.
+    useGame.setState((s) => ({ data: { ...s.data, flags: { ...s.data.flags, bellowsLive: false }, dialogue: { convo: "doss", node: "start" } } }));
+    assert.ok(visibleReplies(D()).length > 1);
+    assert.equal(leaveIndex(D()), -1, "with 'The lung stopped.' on the board Esc stays out of it");
+    // A sole line that fights or travels is a choice, not a leave.
+    useGame.setState((s) => ({ data: { ...s.data, dialogue: { convo: "guard-line", node: "fight" } } }));
+    assert.equal(leaveIndex(D()), -1, "'Read them.' starts a fight; Esc must not");
+    useGame.setState((s) => ({ data: { ...s.data, dialogue: { convo: "road-after", node: "start" } } }));
+    assert.equal(leaveIndex(D()), -1, "'Continue.' travels; Esc must not");
+  });
+
+  it("every follower talk on a fresh ledger has an Esc way out at its opening", () => {
+    for (const convo of ["tobin-after", "sera", "wren", "mara", "cinder"]) {
+      useGame.setState((s) => ({ data: { ...s.data, dialogue: { convo, node: "start" } } }));
+      const i = leaveIndex(D());
+      assert.ok(i >= 0, `${convo} opening needs an Esc leave so a corridor bump cannot soft-lock`);
+      const r = visibleReplies(D())[i];
+      assert.ok(r.end && !r.goto && !r.jump && !r.check, `${convo}: Esc only takes a plain leave`);
+    }
+  });
+
   it("after Moll's Engineering talk-past (and filing the level), a tap toward the Stack mouth walks onto the road", () => {
     useGame.setState((s) => ({ data: { ...s.data, player: { ...s.data.player, x: 14, y: 10 } } }));
     G().clickTile(14, 12);

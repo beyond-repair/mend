@@ -46,7 +46,7 @@ import {
   reconcileWorld,
 } from "./logic";
 import { LOCKED_DOORS, MAPS, REGIONS } from "./maps";
-import type { Actor, Attr, AuditTarget, Data, GNode, Machine, Panel, SkillId } from "./types";
+import type { Actor, Attr, AuditTarget, Data, GNode, Machine, Panel, Reply, SkillId } from "./types";
 
 const SAVE_PREFIX = "mend-save-v1-";
 
@@ -887,12 +887,20 @@ export function visibleReplies(d: Data) {
 
 export { comp, regionOpen };
 
+/** Bookkeeping a sole leave line may carry and still count as plain: it notes, it never moves, fights, or costs. */
+const QUIET_OPS = new Set(["flag", "log", "journal", "pin", "xp", "item", "scrip"]);
+
 /**
  * The reply Esc may take on the player's behalf: a plain leave line that ends the talk with no check,
- * no effects, and no jump. Real choices (checks, fights, forced lines) return -1 and stay on the board.
+ * no effects, and no jump. When that line is the only reply on the board (Doss's "Sleep. I won't move
+ * your weather."), quiet bookkeeping such as a met-flag does not stop Esc: it is the same line a click
+ * would take. Real choices (checks, fights, travel, recruits, forced lines) return -1 and stay on the board.
  */
 export function leaveIndex(d: Data) {
-  return visibleReplies(d).findIndex(
-    (r) => r.end && !r.goto && !r.jump && !r.check && !(r.effects && r.effects.length),
-  );
+  const replies = visibleReplies(d);
+  const plain = (r: Reply) => r.end && !r.goto && !r.jump && !r.check;
+  const i = replies.findIndex((r) => plain(r) && !(r.effects && r.effects.length));
+  if (i >= 0 || replies.length !== 1) return i;
+  const only = replies[0];
+  return plain(only) && (only.effects ?? []).every((e) => QUIET_OPS.has(e.op)) ? 0 : -1;
 }

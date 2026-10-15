@@ -1,6 +1,6 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** IN PROGRESS. Headless-browser loop PASS (21/21 with L9a/L9a'/L9b/L9c). Hand re-play on 51790a9 verified the Sinks camera/taps/Stack-mouth labels (bugs 6–8). Tip 2fc0d6f fixed the right-edge pin so the Ward stair is reachable by walking; a later hand pass on that tip still found three feel bugs (frozen east pan, Ward clipped at the rim, Brick stair distracting) — fixed on this tip and covered by tests, but **Stack Road → Ward → Oakhaven still needs hand re-play on this build**.
+**Status:** IN PROGRESS. Headless-browser loop PASS (21/21 with L9a/L9a'/L9b/L9c). Hand re-play on 51790a9 verified the Sinks camera/taps/Stack-mouth labels (bugs 6–8). Tip 2fc0d6f fixed the right-edge pin so the Ward stair is reachable by walking; a later hand pass on that tip still found three feel bugs (frozen east pan, Ward clipped at the rim, Brick stair distracting) — fixed on this tip and covered by tests, but **Stack Road → Ward → Oakhaven still needs hand re-play on this build**. Bug 17 (Esc on Doss-style single leave lines) is fixed and unit-tested on a later tip, not yet hand re-played.
 Do **not** mark COMPLETE — PLAYTEST VERIFIED until someone has re-played Stack Road → Ward stair → Oakhaven by hand (no Map jump) on this build.
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
@@ -122,7 +122,7 @@ A scripted fighter with the recommended build lost the three-guard fight on ever
 
 ## Automated checks
 
-- `npm test`: 196 (scripts) + 55 (app-data/auth) + **40** (game: 28 `pass3` + 12 `playtest`), all passing (Node 22.12)
+- `npm test`: 196 (scripts) + 55 (app-data/auth) + **42** (game: 28 `pass3` + 14 `playtest`), all passing (Node 22.12) — as of the bug-17 Esc fix
 - After hand playtest 1, 5 `playtest` tests were added. The camera tests fail on 6387550's `stage.ts` (`440x250 at 14,12: feet 225,362 must stay on the canvas`). The talk-past→tap test passes on 6387550 too: the store's `clickTile` was never the problem, the canvas hit test and camera were.
 - After hand re-play 2, 1 more `playtest` test: Ward stair on deck walking the Stack Road east/north. It fails on 51790a9 (`Silas is not pinned to the right edge (361)`).
 - After hand re-play 3, 1 more `playtest` test: look-ahead feet drift left while walking east on a clamped road, and Ward is on deck from 14,5 without rim-clip. Loop L9a' now requires `feet.fx < 0.5` and Ward `sx < 0.88w`.
@@ -143,6 +143,17 @@ Hand notes on 2fc0d6f: Sinks still good; walking east on The Stack Road felt fro
 | 15 | **Ward stair clipped at the right edge until close.** Diamond + label hard to read until near. | Hard-centre put the Ward at ~0.93w from 16,5; actor-sized `presence` margins faded it. | Look-ahead #14 pulls the Ward inward (on deck from 14,5). `mouthPresence` uses wider edge margins than actor `presence` for diamond + brass label fade. | Ward-on-deck check now also asserts `sx < 0.88w` and `mouthPresence ≥ 0.5`; loop L9a' asserts not rim-clipped |
 | 16 | **Brick stair is misleading.** Lower-gantry Kiln mouth (16,11) looks like the way to Oakhaven. | Every usable mouth got a distant brass diamond + label (bug 8). Correct data, wrong first-act prominence. | `nearOnly` on the Brick stair Mouth: near chevron only (no distant brass). Map note names the upper-gantry Ward path and says the Brick stair goes to the Kiln. Mouth is not removed. | "Brick stair is near-only…"; Ward stair stays a landmark |
 
+## Hand play friction 4 (2026-10-15, ~3:45 AM ET on 5b4c48b) — Esc on single-option leave talks
+
+Hand notes: talking to Doss (Sinks, 24,5), or bumping a follower in a 1–3 tile corridor, opened a talk whose only reply was a leave line; Esc did nothing and the arrow keys stay locked while talking (by design), so the only way out was clicking the line.
+
+| # | Found by hand | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 17 | **Esc did nothing on Doss's "Sleep. I won't move your weather."** (his only reply on a fresh ledger). | `leaveIndex` (bug 4) refused any leave line with effects, and this one notes `dossMet`. | `leaveIndex`: when the board holds exactly **one** visible reply and it is `end` with no check/goto/jump, Esc takes it if its effects are quiet bookkeeping only (`flag`, `log`, `journal`, `pin`, `xp`, `item`, `scrip`) — the same line a click would take. Sole lines that fight, travel (`arrive`/`goto`), spawn, recruit, or teach a discipline still return -1. With more than one reply the old plain-leave rule is unchanged (Moll's lines, bug 9, unchanged). Companion blocking and pathing untouched. | "Esc takes Doss's sole leave line…" (fails on 5b4c48b: `expected 0, actual -1`); "every follower talk on a fresh ledger has an Esc way out at its opening" |
+
+A static sweep over every convo node at fresh-ledger flags: 79 sole leave lines with quiet effects are now Esc-able; the only sole end lines Esc still refuses are fights (`guard-line/fight`, `tobin-down/fight`, `kael-pre/fight`, `sentry/fight`, `shaft-door/force`, `vane/fail`, `enc-*/fight`), travel (`road-after/start`, `enc-trader/start`, `guard-line/back`), and Vane's discipline lines.
+Not yet re-played by hand in the browser.
+
 ## Remaining before COMPLETE — PLAYTEST VERIFIED
 
 1. **Human hand re-playtest** of the same loop on this build, with real canvas taps and visual feel: `npm run dev`, then open `http://localhost:8080/`.
@@ -150,7 +161,7 @@ Hand notes on 2fc0d6f: Sinks still good; walking east on The Stack Road felt fro
    Check by hand:
    - (Verified on 51790a9) South of the plate, Silas stays in the frame and every tap moves him; arrows/WASD move him too; Stack mouth diamond + label come into view.
    - (Verified headless on this tip; **must re-verify by hand**) on The Stack Road, walking east does **not** feel frozen: Silas drifts toward the trailing edge (look-ahead) while the board scrolls; he is **not** pinned to the right edge; the **Ward stair** diamond + label are readable well before you are on top of them (not rim-clipped); Brick stair does not shout from across the plate; ArrowUp / tap onto the Ward stair lands in Oakhaven.
-   - Esc: leaves Tobin's after-talk and Moll's "I'm already walking."; deliberately does nothing on Moll's opening and "No" lines.
+   - Esc: leaves Tobin's after-talk, Moll's "I'm already walking.", and Doss's single "Sleep. I won't move your weather." (bug 17); deliberately does nothing on Moll's opening and "No" lines.
    - The arrival toast ("You arrive at The Stack Road.") does not pop again mid-road.
 2. **Death reload design call:** the autosave is written on every combat commit. After a lost fight, "Open the last ledger" can drop you back into the same fight at 1–8 HP and 0–1 AP. You can quit to the title, or load a manual slot if you made one. Not changed: deciding whether to keep a pre-fight checkpoint is a design question.
 3. **Beyond Oakhaven** (Quarry, Rust, Kiln, Switch, Pane, Tundra, Citadel, Spire, epilogue): covered only by the `pass3` logic tests. These areas have not been played in a browser in this pass.
