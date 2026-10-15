@@ -320,6 +320,17 @@ function openTalk(d: Data, a: Actor) {
   play("talk");
 }
 
+/**
+ * True when walking this path would step onto the south plate (y >= 12 in the Sinks) before the
+ * checkpoint has been dealt with. That step stops Silas at the guard line on purpose, so an Audit
+ * errand must never pick a machine whose route crosses it.
+ */
+export function crossesCheckpoint(d: Data, path: { x: number; y: number }[] | null | undefined) {
+  if (!path || d.mapId !== "sinks" || d.player.y >= 12) return false;
+  if (d.flags.checkpointSpoke || d.flags.act1 || d.flags.usedCrawl) return false;
+  return path.some((p) => p.y >= 12);
+}
+
 function myTurn(d: Data) {
   if (!d.combat) return true;
   return d.combat.order[d.combat.index] === "player";
@@ -533,7 +544,7 @@ export const useGame = create<Store>((set, get) => ({
           }
           return;
         }
-        if (isExit(d.mapId, x, y) && dist(d.player, { x, y }) <= 1 && !d.combat) {
+        if (isExit(d.mapId, x, y) && d.player.x === x && d.player.y === y && !d.combat) {
           depart(d);
           return;
         }
@@ -763,8 +774,18 @@ export const useGame = create<Store>((set, get) => ({
     commit(set, (d) => {
       if (d.dialogue || !myTurn(d)) return;
       const machines = Object.values(d.machines).filter((m) => m.mapId === d.mapId);
-      const broken = machines.filter((m) => m.nodes.some((n) => n.integrity < 50 || n.severed));
-      const machine = (broken.length ? broken : machines).sort((a, b) => dist(d.player, a) - dist(d.player, b))[0];
+      // Rank by the walk, not the straight line, and never past the unspoken checkpoint:
+      // that walk would end at the guard line instead of at the machine.
+      const routes = new Map(machines.map((m) => [m.id, pathNear(d, m.x, m.y)] as const));
+      const reachable = machines.filter((m) => {
+        const route = routes.get(m.id);
+        return route !== null && route !== undefined && !crossesCheckpoint(d, route);
+      });
+      const steps = (m: Machine) => routes.get(m.id)?.length ?? 999;
+      const beside = machines.filter((m) => dist(d.player, m) <= 1);
+      const pool = reachable.length ? reachable : beside;
+      const broken = pool.filter((m) => m.nodes.some((n) => n.integrity < 50 || n.severed));
+      const machine = (broken.length ? broken : pool).sort((a, b) => steps(a) - steps(b))[0];
       const person = Object.values(d.actors)
         .filter((a) => a.alive && a.mapId === d.mapId && (d.combat ? a.hostile : true))
         .sort((a, b) => dist(d.player, a) - dist(d.player, b))[0];
@@ -774,7 +795,7 @@ export const useGame = create<Store>((set, get) => ({
         d.path = pathNear(d, person.x, person.y) ?? [];
         d.intent = { type: "audit", id: person.id, kind: "actor" };
       } else if (machine) {
-        d.path = pathNear(d, machine.x, machine.y) ?? [];
+        d.path = routes.get(machine.id) ?? [];
         d.intent = { type: "audit", id: machine.id, kind: "machine" };
         if (!d.path.length) addLog(d, "No clear path to a machine.");
       } else if (person && dist(d.player, person) <= 1) openAudit(d, { kind: "actor", id: person.id });
@@ -865,3 +886,13 @@ export function visibleReplies(d: Data) {
 }
 
 export { comp, regionOpen };
+
+/**
+ * The reply Esc may take on the player's behalf: a plain leave line that ends the talk with no check,
+ * no effects, and no jump. Real choices (checks, fights, forced lines) return -1 and stay on the board.
+ */
+export function leaveIndex(d: Data) {
+  return visibleReplies(d).findIndex(
+    (r) => r.end && !r.goto && !r.jump && !r.check && !(r.effects && r.effects.length),
+  );
+}

@@ -703,6 +703,7 @@ function journal(d, id, title, text, status) {
     hit.status = status;
   } else d.journal.unshift({ id, title, text, status });
   if (status === "open") d.pinned = title;
+  else if (d.pinned === title) d.pinned = "";
 }
 function rememberGraph(d, nodes) {
   const owner = graphOwner(d, nodes);
@@ -3768,7 +3769,7 @@ function mendNode(d, target, nodeId) {
   const rolled = rollD100();
   if (rolled > clamp(chance, 8, 95)) {
     n.integrity = Math.max(n.integrity, 20);
-    addLog(d, `Misreconstruction. ${n.name} returns wrong. (${rolled})`);
+    addLog(d, `Misreconstruction. ${n.name} returns wrong. (${rolled} vs ${clamp(chance, 8, 95)})`);
     if (target.kind === "machine" && target.id === "pump") {
       d.flags.pumpFate = "flood";
       d.flags.actReady = true;

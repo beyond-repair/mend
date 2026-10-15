@@ -3,7 +3,7 @@ import { unlockAudio, setAtmosphere, startBed } from "@/game/audio";
 import { ATTR_LIST, allSkills, comprehension, maxHp, SKILL_LIST } from "@/game/formulas";
 import { MAPS } from "@/game/maps";
 import { nodeLive, weaponOf, boardIntents, weaponsDark } from "@/game/logic";
-import { comp, useGame } from "@/game/store";
+import { comp, leaveIndex, useGame } from "@/game/store";
 import type { Actor, Attr, Data, SkillId } from "@/game/types";
 import {
   AuditPanel,
@@ -175,7 +175,8 @@ function CreateScreen() {
 }
 
 function focusLine(d: Data) {
-  if (d.pinned) return d.pinned;
+  // A pin names an open job. Once that job is closed in the ledger, fall back to the room's own line.
+  if (d.pinned && !d.journal.some((j) => j.title === d.pinned && j.status !== "open")) return d.pinned;
   const pump = String(d.flags.pumpFate ?? "");
   if (d.mapId === "sinks") {
     if (pump === "mend" || pump === "wren" || pump === "speech") return "The pump holds";
@@ -221,6 +222,7 @@ function PlayScreen() {
   const brace = useGame((s) => s.brace);
   const zoom = useGame((s) => s.setZoom);
   const close = useGame((s) => s.closePanel);
+  const choose = useGame((s) => s.choose);
 
   useEffect(() => {
     const pump = String(d.flags.pumpFate ?? "");
@@ -290,7 +292,11 @@ function PlayScreen() {
     const onKey = (e: KeyboardEvent) => {
       const s = useGame.getState().data;
       if (e.key === "Escape") {
-        close();
+        if (s.panel !== "none") close();
+        else if (s.dialogue) {
+          const leave = leaveIndex(s);
+          if (leave >= 0) choose(leave);
+        }
         return;
       }
       if (s.dialogue || (s.panel !== "none" && s.panel !== "audit")) return;
@@ -316,7 +322,7 @@ function PlayScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [audit, click, close, endTurn, open, strike, talk]);
+  }, [audit, choose, click, close, endTurn, open, strike, talk]);
 
   const talking = Boolean(d.dialogue);
   const fighting = Boolean(d.combat);
