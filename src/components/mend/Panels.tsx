@@ -655,9 +655,23 @@ const PLATES: Record<string, string> = {
 export function MapPanel() {
   const d = useGame((s) => s.data);
   const travel = useGame((s) => s.travel);
+  // Same brass notes mendthegame added after its hand playtest 7/11: say where the labeled mouth is until you have used it.
+  const passed = Boolean(d.flags.checkpointSpoke || d.flags.usedCrawl || d.flags.act1);
+  const stackAhead = d.mapId === "sinks" && passed && !d.flags["seen:road"];
+  const wardAhead = d.mapId === "road" && !d.flags.seenWard && !d.flags["seen:haven"];
   return (
     <Shell title="Stack roads">
       <p className="mb-3 text-sm text-mist">You are in {MAPS[d.mapId]?.name}. The ledger can jump a throat you already know. The campaign is the walk between mouths.</p>
+      {stackAhead && (
+        <p className="mb-3 border border-brass-dim px-3 py-2 text-sm leading-relaxed text-brass">
+          Stack mouth is the labeled brass diamond at the far south-east of the Sinks, past the checkpoint plate. Step onto it for The Stack Road.
+        </p>
+      )}
+      {wardAhead && (
+        <p className="mb-3 border border-brass-dim px-3 py-2 text-sm leading-relaxed text-brass">
+          Ward stair is the labeled brass diamond east along this road, then north on the spur (far from the Sinks mouth). Stepping on it opens Oakhaven Lower Ward; you can also jump there below.
+        </p>
+      )}
       <p className="mb-3 border border-brass-dim px-3 py-2 text-sm leading-relaxed">{districtYield(d)}</p>
       <ul className="space-y-2">
         {REGIONS.map((r) => {
@@ -823,7 +837,8 @@ export function ToolsPanel() {
 export function LevelModal() {
   const d = useGame((s) => s.data);
   const ack = useGame((s) => s.ackLevel);
-  if (!d.pendingLevel) return null;
+  // Held while a talk is open: the level lands on a check, and the modal used to sit over the replies until filed.
+  if (!d.pendingLevel || d.dialogue) return null;
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-soot/70 p-4">
       <div className="ledger w-full max-w-md p-5">

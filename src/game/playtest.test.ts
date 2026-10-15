@@ -14,6 +14,20 @@ const mem = new Map<string, string>();
 } as Storage;
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex } = await import("./store.ts");
+const { MOUTHS, mouthAt, usableMouths } = await import("./maps.ts");
+const { regionOpen } = await import("./logic.ts");
+// The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
+const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
+(globalThis as unknown as { Image: unknown }).Image = class {
+  complete = true;
+  naturalWidth = 1408;
+  naturalHeight = 1408;
+  set src(v: string) {
+    const hit = Object.entries(PLATE_SIZE).find(([k]) => v.includes(k === "sinks" ? "sinks" : k));
+    if (hit) [this.naturalWidth, this.naturalHeight] = hit[1];
+  }
+};
+const stage = await import("../components/mend/stage.ts");
 
 const G = () => useGame.getState();
 const D = () => G().data;
@@ -114,5 +128,90 @@ describe("playtest 2026-10-15", () => {
     assert.ok(i >= 0, "Tobin's after-talk can be left");
     G().choose(i);
     assert.equal(D().dialogue, null);
+  });
+
+  it("after Moll's Engineering talk-past (and filing the level), a tap toward the Stack mouth walks onto the road", () => {
+    useGame.setState((s) => ({ data: { ...s.data, player: { ...s.data.player, x: 14, y: 10 } } }));
+    G().clickTile(14, 12);
+    walkOut();
+    assert.equal(D().dialogue?.convo, "guard-line");
+    const real = Math.random;
+    Math.random = () => 0.01; // the regulator line lands
+    try {
+      pick(/pressure regulator/);
+    } finally {
+      Math.random = real;
+    }
+    assert.equal(D().dialogue?.node, "pass");
+    assert.ok(D().flags.checkpointSpoke);
+    const leave = leaveIndex(D());
+    assert.ok(leave >= 0, "Moll's 'I'm already walking.' is a plain leave line Esc can take");
+    G().choose(leave);
+    assert.equal(D().dialogue, null);
+    if (D().pendingLevel) G().ackLevel();
+    assert.equal(D().panel, "none");
+    G().clickTile(25, 18);
+    assert.ok(D().path.length > 0, "the tap after the talk-past must move Silas");
+    walkOut();
+    assert.equal(D().mapId, "road");
+  });
+
+  it("Moll's opening checkpoint line has no Esc leave on purpose: every way off it is a choice", () => {
+    useGame.setState((s) => ({ data: { ...s.data, dialogue: { convo: "guard-line", node: "start" } } }));
+    assert.equal(leaveIndex(D()), -1, "'Fine.' walks you back north, so Esc does not pick it for you");
+    useGame.setState((s) => ({ data: { ...s.data, dialogue: { convo: "guard-line", node: "no" } } }));
+    assert.equal(leaveIndex(D()), -1);
+    useGame.setState((s) => ({ data: { ...s.data, dialogue: { convo: "guard-line", node: "pass" } } }));
+    assert.ok(leaveIndex(D()) >= 0, "after the talk-past, Esc leaves");
+  });
+
+  it("every mouth carries a board label; the Sinks shows its Stack mouth and the road its Ward stair", () => {
+    assert.ok(MOUTHS.every((m) => typeof m.label === "string" && m.label.length > 0), "every mouth has a label");
+    assert.equal(mouthAt("sinks", 25, 18)?.label, "Stack mouth");
+    assert.equal(mouthAt("road", 20, 1)?.label, "Ward stair");
+    assert.equal(mouthAt("road", 16, 11)?.label, "Brick stair");
+    assert.equal(mouthAt("road", 22, 14)?.label, "Yard stair");
+    assert.equal(mouthAt("road", 27, 1)?.label, "Glass stair");
+    // A labeled stair names the same thing its shut line does.
+    for (const m of MOUTHS) {
+      const word = m.label.toLowerCase().split(" ").pop()!;
+      if (/stair|mouth/.test(word)) assert.ok(m.deny.toLowerCase().includes(word) || m.deny.toLowerCase().includes("mouth"), `${m.map} ${m.label} vs "${m.deny}"`);
+    }
+    const sinks = usableMouths("sinks", (need) => regionOpen(D(), need)).map((m) => m.label);
+    assert.deepEqual(sinks, ["Stack mouth"]);
+    const road = usableMouths("road", (need) => regionOpen(D(), need)).map((m) => m.label);
+    for (const want of ["Sinks mouth", "Ward stair", "Brick stair", "Yard stair", "Glass stair"]) assert.ok(road.includes(want), `road shows ${want}: ${road}`);
+    for (const sealed of ["Quarry road", "Rust cut", "Tundra walk", "Spire mouth"]) assert.ok(!road.includes(sealed), `${sealed} stays sealed on a fresh ledger`);
+  });
+
+  it("the plate camera keeps Silas on the canvas south of the checkpoint, and the Stack mouth comes into view", () => {
+    const ctx = { drawImage() {} } as unknown as CanvasRenderingContext2D;
+    // 440x250 is the world frame in a 1024x640 window; 440x323 in 1280x713; 440x510 in 440x900.
+    for (const [w, h] of [[440, 250], [440, 323], [440, 510]]) {
+      const route = [[14, 12], [18, 12], [18, 16], [22, 16], [22, 18], [24, 18]];
+      for (const [x, y] of route) {
+        stage.layoutStage(ctx, w, h, x, y, "sinks");
+        const s = stage.stageNow();
+        assert.ok(s.plate, "the plate is drawn");
+        assert.ok(s.feet.sx >= 0 && s.feet.sx <= w && s.feet.sy >= 0 && s.feet.sy <= h * 0.78, `${w}x${h} at ${x},${y}: feet ${Math.round(s.feet.sx)},${Math.round(s.feet.sy)} must stay on the canvas`);
+        assert.equal(stage.presence(s.feet.sx, s.feet.sy), 1, `${w}x${h} at ${x},${y}: Silas is fully drawn`);
+      }
+      const mouth = stage.projectTile(w, h, 24, 18, 25, 18, 1, 64, 32);
+      assert.ok(stage.onDeck(mouth.sx, mouth.sy), `${w}x${h}: the Stack mouth beside Silas is on deck (${Math.round(mouth.sx)},${Math.round(mouth.sy)})`);
+    }
+  });
+
+  it("the plate camera is unchanged where the backdrop still has picture: the band only catches feet leaving the canvas", () => {
+    const { keepOnDeck, DECK } = stage;
+    const w = 440;
+    const h = 510;
+    const inside = { sx: w * 0.46, sy: h * 0.58 };
+    assert.deepEqual(keepOnDeck(inside.sx, inside.sy, w, h), inside, "feet inside the band are left alone");
+    assert.deepEqual(keepOnDeck(w * 0.5, h * 1.4, w, h), { sx: w * 0.5, sy: h * DECK.bottom }, "feet pushed off the bottom are held at the band");
+    assert.deepEqual(keepOnDeck(-40, h * 0.5, w, h), { sx: w * DECK.left, sy: h * 0.5 });
+    const ctx = { drawImage() {} } as unknown as CanvasRenderingContext2D;
+    stage.layoutStage(ctx, w, h, 3, 3, "sinks");
+    const s = stage.stageNow();
+    assert.ok(s.feet.sy > h * DECK.top && s.feet.sy < h * DECK.bottom && s.feet.sx > w * DECK.left && s.feet.sx < w * DECK.right, "the shop entry is inside the band, so it frames as before");
   });
 });

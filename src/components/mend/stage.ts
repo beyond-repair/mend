@@ -77,7 +77,7 @@ export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number,
   const y = Math.max(minY, Math.min(0, rawY));
   current = {
     plate: true,
-    feet: { sx: ax + (x - rawX), sy: ay + (y - rawY) },
+    feet: keepOnDeck(ax + (x - rawX), ay + (y - rawY), w, h),
     step,
     w,
     h,
@@ -85,6 +85,23 @@ export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number,
   ctx.drawImage(image, x, y, dw, dh);
   return current;
 }
+
+/**
+ * Where Silas stands on screen once the plate has run out of picture.
+ * The plate pans with him until it hits its own edge; past that (the south plate, the Stack mouth,
+ * the far east of a road) his feet used to keep sliding with the walk until they left the canvas,
+ * which took every tap target and the mouth with them. Hold the feet inside a safe band instead:
+ * the backdrop rests at its edge and the board keeps scrolling under him.
+ */
+export function keepOnDeck(sx: number, sy: number, w: number, h: number): Point {
+  return {
+    sx: Math.max(w * DECK.left, Math.min(w * DECK.right, sx)),
+    sy: Math.max(h * DECK.top, Math.min(h * DECK.bottom, sy)),
+  };
+}
+
+/** The band Silas's feet stay inside on a plate, as fractions of the canvas. */
+export const DECK = { left: 0.18, right: 0.82, top: 0.3, bottom: 0.62 };
 
 export function projectTile(
   w: number,

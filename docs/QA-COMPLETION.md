@@ -1,10 +1,10 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** IN PROGRESS. Headless-browser loop PASS. A human hand playtest has not been done yet.
-Do **not** mark COMPLETE — PLAYTEST VERIFIED until someone has played the loop by hand.
+**Status:** IN PROGRESS. Headless-browser loop PASS (18/18). The first human hand playtest found three HIGH bugs after Moll's talk-past (below); they are fixed on this branch and covered by tests, but **not yet re-verified by hand**.
+Do **not** mark COMPLETE — PLAYTEST VERIFIED until someone has re-played the loop by hand on this build.
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
-**Date:** 2026-10-15, about 1:30–2:00 AM ET
+**Date:** 2026-10-15, about 1:30–2:00 AM ET (first pass); hand playtest 1 and its fixes about 2:20–2:45 AM ET
 **Runtime:** Node 22.12.0 (`.nvmrc`), Chromium (system Google Chrome) through Playwright 1.63, `npm run dev` on `:8080`, plus a production `npm run build` and `npm run preview` on `:4180`
 
 ## Scope
@@ -39,6 +39,20 @@ SEED=4 CHROME_PATH=/usr/bin/google-chrome SHOTS=/tmp/mend-shots node scripts/pla
 | 4 | **Esc** did nothing in a conversation. For example, Tobin's after-talk could only be left by clicking "Back to the iron." | Esc takes a reply only when it is a plain leave line: `end`, with no check, no effects, no goto, and no jump (`leaveIndex`). Real choices stay on the board. Moll's checkpoint choice is not dismissed. | "Esc leaves a talk only through a plain leave line…" |
 | 5 | A failed mend logged a bare roll, "(63)", while other checks log "(41 vs 59)". | The log now reads "(rolled vs chance)". | covered by play |
 
+## Hand playtest 1 (2026-10-15, real browser, real taps) — found and fixed
+
+Played by hand on 6387550 in a desktop Chrome window (the game column is 440 px wide by design; the world frame was a short strip under the header with the HUD below).
+The first act went fine through Moll's Engineering talk-past. Then Silas was stuck south of the checkpoint in The Sinks.
+Evidence: `/tmp/mend-hand-shots/07-south-of-plate-no-mouth-visible.png`, `08-stuck-bottom-edge-final.png`.
+
+| # | Found by hand | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 6 | **HIGH — camera stuck.** South of the plate the view stopped scrolling; Silas sat on the bottom edge over the foreground pipes, and the south of the map never came into view. | `layoutStage` (stage.ts) pans the painted plate with Silas but clamps it to the picture's own edge. Past that edge it moved Silas's *feet* instead, by the whole overshoot. The Sinks plate runs out just south of the checkpoint, so at (14,12) the feet were already at y≈362 in a 250 px world frame (1024×640 window), y≈454 in 323 px (1280×713): off the canvas. Reproduced in headless Chrome at both sizes. | `keepOnDeck`: feet are held inside a safe band (18–82% across, 30–62% down). The backdrop rests at its edge and the board (actors, mouths, path dots) keeps scrolling under Silas. Where the plate still has picture (the shop, the pump) nothing changes. | "the plate camera keeps Silas on the canvas…" (fails on 6387550: `feet 225,362`), "…the band only catches feet leaving the canvas"; loop step L8b checks the feet every tap |
+| 7 | **HIGH — taps stopped moving Silas** (about 10 taps did nothing; no overlay). Arrow keys/WASD "did nothing" too. | Same cause. The canvas tap test only considers tiles within 9 of Silas that are on deck (`presence ≥ 0.25`, i.e. above 78% of the frame). With his feet below the frame, almost no reachable tile was on deck, so taps hit nothing; a tap that did land on a figure could send him back north. Arrow/WASD steps did move him in the store, but off-screen with a frozen backdrop, so nothing visible changed. The store's `clickTile` itself was fine after the talk-past (unit-tested). | Fixed by #6: real taps 2 tiles ahead along the route walk the plate to the mouth in 6 taps at 1024×640, 1280×713 and 440×900. On 6387550 the same script misses every tap. Arrows and `d` verified moving in the browser after the fix. WASD/arrows are intentional (Game.tsx keymap), not click-only. | "after Moll's Engineering talk-past (and filing the level), a tap toward the Stack mouth walks onto the road"; loop L8b (real canvas taps) |
+| 8 | **HIGH — Stack mouth unfindable.** On the plate the mouths were a small white chevron drawn only within 4 tiles, with no name. | Plate mode skipped the brass diamond and every label. | Ported the proven `mendthegame` fix (playtest 7/7b, 34f2975): `label` on every `Mouth` in maps.ts, `usableMouths(mapId, open)`, and WorldCanvas tags each usable mouth with its name in the machine-label brass (`#d4b483`). On a plate a usable mouth is now drawn as the brass diamond at any distance, faded at the frame edge; shut doors and sealed mouths keep the near-only chevron. Labels for public mend's extra mouths follow their shut lines: Brick stair (Kiln), Yard stair (Switch), Glass stair (Pane), plus Stack mouth / Sinks mouth / Ward stair / Quarry road / Rust cut / Tundra walk / Ranking stair / Tundra stair / Spire mouth as in mendthegame. Map panel: the two brass notes mendthegame added (playtest 7 and 11) — on the Sinks once the checkpoint is answered and the road unseen, "Stack mouth is the labeled brass diamond at the far south-east…"; on the road until the ward is seen, "Ward stair is … east along this road, then north on the spur". Public mend has no Ledger `nextStep`, so that copy was not ported. | "every mouth carries a board label…" |
+| 9 | Medium — **Esc did not leave Moll's checkpoint dialogue.** | Intentional on the opening line and on "No. And now I have written the attempt down": every way off them is a real choice ("Fine." and "I'll take the north streets." walk you back north; the others are checks or the fight). `leaveIndex` (bug 4) never makes a choice for the player. After the talk-past, "I'm already walking." is a plain leave line and Esc takes it. | No change to `leaveIndex`; documented. | "Moll's opening checkpoint line has no Esc leave on purpose…" |
+| 10 | Low — the **level-up modal** ("Comprehension deepens") opened over the talk-past dialogue and blocked its buttons until "File it". | The XP from the check set `pendingLevel` mid-talk, and `LevelModal` rendered at once over the dialogue. | `LevelModal` waits until no talk is open. Esc files it (it is the top layer), and walk keys are held while it is up, the same as taps. | browser check (modal hidden while talking; Esc files it; arrows move after) |
+
 ## Headless browser playtest results (dev build, final code)
 
 Loop: **New ledger → Recommended file → Enter the Sinks → Tobin → Audit → pump → Moll → Stack mouth → Stack Road → Ward stair → Oakhaven Lower Ward → Talk → Save → reload → Continue → Load**
@@ -53,6 +67,7 @@ Loop: **New ledger → Recommended file → Enter the Sinks → Tobin → Audit 
 | L6 Esc closes the Audit panel | PASS |
 | L7 Stepping onto the south plate raises Moll's guard line | PASS |
 | L8 Moll Engineering talk-past ("Go. If Varr asks, you were steam.") | PASS (59%). A failed roll gives "North, then.", and walking back re-raises the line so you can try again. Seen up to 7 attempts. |
+| L8b **Real canvas taps** walk from the plate to beside the Stack mouth; Silas's feet stay on the canvas every tap; the Stack mouth comes on deck | PASS (added after hand playtest 1; the same taps all miss on 6387550) |
 | L9 ArrowRight onto the adjacent Stack mouth → The Stack Road (Act II) | PASS (FAIL on `main`, bug 2) |
 | L10 ArrowUp onto the Ward stair at road (20,1) → Oakhaven Lower Ward | PASS |
 | L11 Talk in the ward (Sela, or Pip after a clean mend) | PASS |
@@ -65,11 +80,14 @@ Loop: **New ledger → Recommended file → Enter the Sinks → Tobin → Audit 
 
 The full 17/17 loop passed on seeds 4, 7, 11, 12, and 13, and on unseeded runs (including a clean-mend run).
 On seeds 1, 3, and 9 it passed once the retry budget for Moll's roll was raised.
+After the hand-playtest-1 fixes the 18-step loop (with L8b) passed on seeds 4, 7, 11 at 440×900 and seeds 4, 12 at 1280×713 (`VW=1280 VH=713`).
+`SEED` is only a partial replay: the canvas also draws from `Math.random` every frame, so one seed-4 run met twelve failed Moll rolls in a row (L8 FAIL, the rest cascading). The next seed-4 run passed on attempt 1.
 Esc in the browser: E1 left Tobin's after-talk (PASS). E2 kept Moll's checkpoint choice open (PASS).
 
 ### Production build smoke (`npm run build` + `npm run preview`, :4180)
 
 P1 title renders · P2 `window.__mend` is not exposed · P3 Tobin intro · P4 Audit walks to the pump, not the guard line · P5 Esc closes the audit · P6 Map opens · P7 no page or console errors. **All PASS.**
+Re-run after the hand-playtest-1 fixes (1280×713): P1, P2, P3, an arrow-key step, and P7 **PASS**.
 
 ### Combat (checkpoint fight, "Move." → "Read them.")
 
@@ -85,7 +103,9 @@ A scripted fighter with the recommended build lost the three-guard fight on ever
 
 ## Automated checks
 
-- `npm test`: 196 (scripts) + 55 (app-data/auth) + **33** (game: 28 `pass3` + 5 new `playtest`), all passing
+- `npm test`: 196 (scripts) + 55 (app-data/auth) + **38** (game: 28 `pass3` + 10 `playtest`), all passing (Node 22.12)
+- After hand playtest 1, 5 `playtest` tests were added. The camera tests fail on 6387550's `stage.ts` (`440x250 at 14,12: feet 225,362 must stay on the canvas`). The talk-past→tap test passes on 6387550 too: the store's `clickTile` was never the problem, the canvas hit test and camera were.
+- `scripts/ts-resolve-hook.mjs` now also maps the `@/` alias, so a test can load `src/components/mend/stage.ts`.
 - `npm run typecheck`: clean
 - `npm run lint`: 4 errors and 7 warnings, the same as `main`. These are the pre-existing ones named in the README. No new problems.
 - `npm run build`: OK. The migrate step is skipped because `DATABASE_URL` is not set.
@@ -93,10 +113,13 @@ A scripted fighter with the recommended build lost the three-guard fight on ever
 
 ## Remaining before COMPLETE — PLAYTEST VERIFIED
 
-1. **Human hand playtest** of the same loop in a real browser, with real canvas taps and visual feel: `npm run dev`, then open `http://localhost:8080/`.
-   Steps: New ledger → Recommended file → Enter the Sinks → "Then show me the pump." → "I'll audit it." → **Audit** (it must walk to the pump, not the checkpoint) → Mend → Esc → walk south through the gap at (14,11) → Moll → Engineering → walk to the SE Stack mouth → step on it → on The Stack Road, walk east, then north onto the Ward stair → Oakhaven → talk to someone → Menu → Save slot 1 → reload → Continue.
-   Also check:
-   - Can a first-time player **find** the Stack mouth and the Ward stair? Mouths are unlabeled brass diamonds, drawn only when near. `mendthegame` needed labels after its playtest 7. This was not changed here without hand evidence.
-   - Does Esc feel right in talk?
+1. **Human hand re-playtest** of the same loop on this build, with real canvas taps and visual feel: `npm run dev`, then open `http://localhost:8080/`.
+   Steps: New ledger → Recommended file → Enter the Sinks → "Then show me the pump." → "I'll audit it." → **Audit** (it must walk to the pump, not the checkpoint) → Mend → Esc → walk south through the gap at (14,11) → Moll → Engineering → (File the level once the talk closes) → walk to the SE Stack mouth by tapping → step on it → on The Stack Road, walk east, then north onto the Ward stair → Oakhaven → talk to someone → Menu → Save slot 1 → reload → Continue.
+   Check by hand, specifically for hand playtest 1:
+   - South of the plate, Silas stays in the frame and every tap moves him; arrows/WASD move him too.
+   - The **Stack mouth** label and brass diamond come into view as you walk south-east, and the **Ward stair** label shows on the road. Map shows the brass notes.
+   - Feel: past the plate's edge the painted backdrop rests while the board scrolls under Silas, so the mouth diamond can sit over painted cloud rather than painted deck. Is that acceptable, or does it read as floating?
+   - Esc: leaves Tobin's after-talk and Moll's "I'm already walking."; deliberately does nothing on Moll's opening and "No" lines.
+   - The level modal appears after the talk closes, not over it.
 2. **Death reload design call:** the autosave is written on every combat commit. After a lost fight, "Open the last ledger" can drop you back into the same fight at 1–8 HP and 0–1 AP. You can quit to the title, or load a manual slot if you made one. Not changed: deciding whether to keep a pre-fight checkpoint is a design question.
 3. **Beyond Oakhaven** (Quarry, Rust, Kiln, Switch, Pane, Tundra, Citadel, Spire, epilogue): covered only by the `pass3` logic tests. These areas have not been played in a browser in this pass.

@@ -223,6 +223,7 @@ function PlayScreen() {
   const zoom = useGame((s) => s.setZoom);
   const close = useGame((s) => s.closePanel);
   const choose = useGame((s) => s.choose);
+  const ackLevel = useGame((s) => s.ackLevel);
 
   useEffect(() => {
     const pump = String(d.flags.pumpFate ?? "");
@@ -291,15 +292,18 @@ function PlayScreen() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useGame.getState().data;
+      // The level modal (shown once no talk is open) is the top layer: Esc files it, and it holds the walk keys like it holds taps.
+      const levelUp = s.pendingLevel && !s.dialogue;
       if (e.key === "Escape") {
-        if (s.panel !== "none") close();
+        if (levelUp) ackLevel();
+        else if (s.panel !== "none") close();
         else if (s.dialogue) {
           const leave = leaveIndex(s);
           if (leave >= 0) choose(leave);
         }
         return;
       }
-      if (s.dialogue || (s.panel !== "none" && s.panel !== "audit")) return;
+      if (levelUp || s.dialogue || (s.panel !== "none" && s.panel !== "audit")) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       const x = s.player.x;
@@ -322,7 +326,7 @@ function PlayScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [audit, choose, click, close, endTurn, open, strike, talk]);
+  }, [ackLevel, audit, choose, click, close, endTurn, open, strike, talk]);
 
   const talking = Boolean(d.dialogue);
   const fighting = Boolean(d.combat);

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { bursts, decayFx, floaters, shake } from "@/game/fx";
-import { gait, nodeLive, seamMark, walkable } from "@/game/logic";
-import { LOCKED_DOORS, MAPS, MOUTHS, tileAt } from "@/game/maps";
+import { gait, nodeLive, regionOpen, seamMark, walkable } from "@/game/logic";
+import { LOCKED_DOORS, MAPS, MOUTHS, tileAt, usableMouths } from "@/game/maps";
 import { useGame } from "@/game/store";
 import { layoutStage, presence, projectTile, stageNow } from "@/components/mend/stage";
 import type { Actor, Data } from "@/game/types";
@@ -1181,6 +1181,8 @@ export function WorldCanvas() {
       const playerH = stageNow().plate ? Math.max(30, Math.min(40, h * 0.12)) : Math.max(84, Math.min(118, TH * 2.7 * zoom));
       const jobs: { z: number; run: () => void }[] = [];
       const tags: { z: number; run: () => void }[] = [];
+      const mouths = usableMouths(d.mapId, (need) => regionOpen(d, need));
+      const open = new Set(mouths.map((m) => `${m.x},${m.y}`));
       for (let y = 0; y < map.height; y++) {
         for (let x = 0; x < map.width; x++) {
           const p = project(x, y);
@@ -1191,7 +1193,10 @@ export function WorldCanvas() {
           const mouth = MOUTHS.some((m) => m.map === d.mapId && m.x === x && m.y === y);
           if (stageNow().plate) {
             const near = Math.abs(x - d.player.x) + Math.abs(y - d.player.y) <= 4;
-            if (near && (mouth || shut)) {
+            // A mouth you can use is drawn at any distance (brass diamond + label below); only shut ways wait until you are close.
+            if (mouth && open.has(`${x},${y}`)) {
+              jobs.push({ z: (x + y) * 10 + 1, run: () => drawMouth(ctx, p.sx, p.sy - 8, now) });
+            } else if (near && (mouth || shut)) {
               jobs.push({
                 z: (x + y) * 10,
                 run: () => drawChevron(ctx, p.sx, p.sy, shut),
@@ -1249,6 +1254,20 @@ export function WorldCanvas() {
                 run: () => label(ctx, p.sx, p.sy + 26, m.name, down ? "#c45c26" : "#d4b483"),
               });
             }
+          },
+        });
+      }
+      // Usable mouths get the same brass name tags as machines, so the Stack mouth and the Ward stair are not only diamonds.
+      for (const mouth of mouths) {
+        const p = project(mouth.x, mouth.y);
+        if (stageNow().plate && presence(p.sx, p.sy) <= 0.04) continue;
+        tags.push({
+          z: (mouth.x + mouth.y) * 10 + 8,
+          run: () => {
+            ctx.save();
+            if (stageNow().plate) ctx.globalAlpha = presence(p.sx, p.sy);
+            label(ctx, p.sx, p.sy + (stageNow().plate ? 16 : 26), mouth.label, "#d4b483");
+            ctx.restore();
           },
         });
       }

@@ -5,6 +5,7 @@
 // the same call a canvas tap makes. Run against `npm run dev`:
 //   node scripts/playtest-loop.mjs            # URL defaults to http://127.0.0.1:8080/
 //   SEED=4 CHROME_PATH=/usr/bin/google-chrome SHOTS=/tmp/mend-shots node scripts/playtest-loop.mjs
+//   VW=1280 VH=713 SEED=4 ... node scripts/playtest-loop.mjs   # short desktop window (hand-playtest size); default 440x900
 // SEED pins Math.random in the page so a run can be replayed. Exit code 1 if any step FAILs.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
@@ -14,7 +15,7 @@ mkdirSync(SHOTS, { recursive: true });
 const URL = process.env.URL ?? "http://127.0.0.1:8080/";
 async function open({ fresh = true } = {}) {
   const browser = await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}), headless: true, args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required"] });
-  const ctx = await browser.newContext({ viewport: { width: 440, height: 900 } });
+  const ctx = await browser.newContext({ viewport: { width: Number(process.env.VW ?? 440), height: Number(process.env.VH ?? 900) } });
   if (process.env.SEED) await ctx.addInitScript((seed) => { let x = seed; Math.random = () => { x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; }; }, Number(process.env.SEED));
   const page = await ctx.newPage();
   const errors = [];
@@ -46,6 +47,41 @@ async function walk(page, x, y, max = 15000) {
   const t0 = Date.now();
   while (Date.now() - t0 < max) { const s = await S(page); if (!s.path || s.dlg) break; await page.waitForTimeout(120); }
   return S(page);
+}
+/** Screen point of a tile and of Silas's feet, read from the live stage module (dev build). */
+async function stageAt(page, tx, ty) {
+  return page.evaluate(async ([tx, ty]) => {
+    const url = performance.getEntriesByType("resource").map((e) => e.name).find((n) => n.includes("/src/components/mend/stage.ts"));
+    const st = await import(url);
+    const d = window.__mend.getState().data;
+    const c = document.querySelector("canvas").getBoundingClientRect();
+    const t = st.projectTile(c.width, c.height, d.player.x, d.player.y, tx, ty, 1, 64, 32);
+    const f = st.stageNow().feet;
+    return { l: c.left, t: c.top, w: c.width, h: c.height, sx: t.sx, sy: t.sy, on: st.presence(t.sx, t.sy), feetIn: f.sx > 0 && f.sx < c.width && f.sy > 0 && f.sy < c.height * 0.9 };
+  }, [tx, ty]);
+}
+async function tapWalk(page, x, y) {
+  const route = await page.evaluate(([x, y]) => {
+    const G = window.__mend;
+    G.getState().clickTile(x, y);
+    const r = G.getState().data.path.map((p) => [p.x, p.y]);
+    G.setState((s) => ({ data: { ...s.data, path: [], intent: null } }));
+    return r;
+  }, [x, y]);
+  let i = 0, taps = 0, onCanvas = true, mouthSeen = false;
+  while (i < route.length && taps < route.length + 4) {
+    const j = Math.min(route.length - 1, i + 2);
+    const q = await stageAt(page, ...route[j]);
+    await page.mouse.click(q.l + q.sx, q.t + q.sy);
+    taps++;
+    for (let k = 0; k < 60; k++) { if (!(await S(page)).path) break; await page.waitForTimeout(100); }
+    const m = await stageAt(page, 25, 18);
+    onCanvas &&= m.feetIn;
+    mouthSeen ||= m.on > 0.5;
+    const now = await S(page);
+    if (now.x === route[j][0] && now.y === route[j][1]) i = j + 1;
+  }
+  return { ok: i >= route.length, taps, onCanvas, mouthSeen };
 }
 async function key(page, k, n = 1) { for (let i = 0; i < n; i++) { await page.keyboard.press(k); await page.waitForTimeout(200); } }
 async function hud(page, label) { await page.getByRole("button", { name: label, exact: true }).first().click(); await page.waitForTimeout(200); }
@@ -101,8 +137,14 @@ for (let attempt = 0; attempt < 12 && !passed; attempt++) {
 }
 if (!passed) step(false, "L8 Moll talk-past not achieved in 12 attempts");
 s = await S(page);
-// walk to beside the stack mouth, then ARROW KEY onto it (real keyboard)
-await walk(page, 24, 18);
+// walk to beside the stack mouth by REAL canvas taps (2 tiles ahead on the planned route), checking that Silas
+// stays on the canvas and the labeled Stack mouth comes into view; then ARROW KEY onto it (real keyboard).
+// Hand playtest 2026-10-15: on 6387550 the plate camera clamped and pushed Silas off the bottom of the canvas,
+// so taps south of the checkpoint landed on nothing and the mouth never came into view.
+await fileLevel(page);
+const tap = await tapWalk(page, 24, 18);
+s = await S(page);
+step(tap.ok && s.x === 24 && s.y === 18, `L8b real canvas taps walk the plate to beside the Stack mouth (${tap.taps} taps, at ${s.x},${s.y}; Silas on canvas every step: ${tap.onCanvas}; mouth on deck: ${tap.mouthSeen})`);
 await shot(page, `${tag}-04-by-stack-mouth`);
 await page.keyboard.press("ArrowRight");
 for (let i = 0; i < 20; i++) { s = await S(page); if (s.map !== "sinks" || s.panel === "map") break; await page.waitForTimeout(150); }
