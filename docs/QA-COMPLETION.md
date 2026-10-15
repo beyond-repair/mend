@@ -463,3 +463,58 @@ Also on this tip: `npm test` **196 + 55 + 74 PASS** (playtest +6), `npm run type
 - Cinder companion dark-mouth and Spire refusals (needs scrap feed + recruit earlier).
 - A design call on the mid-fight auto ledger, and on the Sovereign / Sever balance for a level-3 critical-path character.
 - A full hand pass of Acts IV–VI without the harness.
+
+## Beyond Oakhaven — Act V: Vane's ceremony (horns, history, failed), Sarn toll, Varr network attempt (IN PROGRESS) (2026-10-15, ~2:00–2:50 PM ET)
+
+**Status:** **IN PROGRESS.** Vane's three ceremony outcomes were played end-to-end in headless Chromium from New ledger to the epilogue. `scripts/playtest-act4.mjs` now takes `VANE=machine|horns|history|fail` and `NETWORK=talk|varr`. One game bug was found (32) and fixed. These are harness plays, not hand plays.
+
+**How the branches are reached (legitimate character only, no state edits):**
+- **horns / history:** the Recommended file reaches the Citadel with **12–16 unspent skill points** (12 at New ledger, +4 a level). The harness opens **Self**, clicks **Improve Speech** (51→95, 11 points) or **Improve History** (36→84, 12 points), files slot 1, and then asks Vane → look → "ceremony, with your pins" → the check. The odds shown are speech 87% and history 74%. Both held on the first roll.
+- **fail:** no points are spent. Silas takes **History** (36%, chance 26). The first roll held (≤26), so the harness loaded slot 1 and asked again, as a player would; the second roll failed (27 vs 26) → **"Then the floor will be cleaned."** → **No.** → Guard Senn + Guard Oll. The fight was resolved with cut rifles → **Stand down**. Afterwards Vane still talks, and Silas answers on the machine (Splice) → Spire → epilogue.
+- **Sarn toll:** `guardToll` depends on whether Sinks food is live after Act I, and the outcome of the Act I pump varies by run. On this tip the default and Vane runs reached Sarn with **guardToll true** ("The plate is unfed." was offered). The combo run reached her with guardToll false (played-unavailable). The earlier note said toll was "never on this network"; that is corrected here.
+
+### Results (tip of this note)
+
+| Run | Path | Result |
+| --- | --- | --- |
+| `SEED=4 VANE=horns` | Speech 95 → **horns holds** (3 vs 87) → `citadelFate=expose`, `spireOpen`, Causality → crucible refuses a second answer → Vane: no second ceremony → Spire → decline → epilogue ("The ceremony heard the diagram") | **64/64 PASS** |
+| `SEED=4 VANE=history` | History 84 → **history holds** → expose → same as above | **64/64 PASS** |
+| `SEED=4 VANE=fail` | History 36 → **fails** → "Then the floor will be cleaned." → **No.** → guard fight → stood down (8 rounds; 25 deaths, 12 slot loads, won on Strain story) → Vane talks → answer on the machine → Splice → Spire → epilogue | **65/65 PASS** (64/65 before bug 32) |
+| `SEED=4 NETWORK=varr SARN=toll` | "Move." → "Read them." → **checkpoint fight** (Varr + Moll + Hess, level 1). Slot 1 is filed first. | **STOPPED at A0w:** fight not won. 31 deaths and slot reloads, including Strain story; cut-rifle + Stand down never landed, and the last ledger came back at 1–23 HP. `checkpointLead` was never set, so the quarry detour, `stoneMoving`, and Sarn's stores beat were not reached. |
+| `SEED=4 SARN=toll` | Sarn with `guardToll` → **"The plate is unfed."** → toll line → "A missing meal, not a new law." (`sarnMet`) → no combat → Splice → decline → epilogue | **61/61 PASS** |
+| `SEED=4` default | regression (now +C8b/C8c) | **59/59 PASS** |
+| `SEED=4 CRUCIBLE=sever SPIRE=impose` | regression | **65/65 PASS** |
+| `SEED=4 SPIRE=fight-leave` | regression | **61/61 PASS** |
+| `SEED=4 TUNDRA=cut LAMP=break SARN=toll SHAFT=1 CRUCIBLE=sever` | regression; Sarn had guardToll false this run (played-unavailable) | **74/74 PASS** |
+| Act II / Act III | regression | **106/106** / **47/47** |
+| Act I loop `SEED=4` | regression | **23 PASS / 0 FAIL**. The first run, made while 9 browsers were running at once, failed L8 because the Moll talk-past did not land in 12 attempts. This is the known timing-sensitive harness step; the clean re-run passed on attempt 1. |
+
+Also on this tip: `npm test` **196 + 55 + 75 PASS** (playtest +1: bug 32), `npm run typecheck` clean.
+
+New act4 steps:
+- C6v–C6z2: ceremony prep, the check, the fail node, the guard fight, and Vane after it.
+- C7e: the crucible refuses a second answer after expose.
+- C8b: no second ceremony check once `citadelFate` is set.
+- C8c: `citadelFate` is unchanged after Vane.
+- E1f: the expose epilogue line.
+- A0v–A0x and Q1v–Q4v: the `NETWORK=varr` checkpoint fight and quarry detour.
+
+Z0 page/console errors: 0 in all runs that finished.
+
+### Bugs found / fixed this pass
+
+| # | Found by play | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 32 | **MED — Vane offered the ceremony again after the crucible was answered.** `VANE=fail` → guards stood down → Splice (`redirect`) → Vane → look → the choice still listed **horns** and **history**. After a horns pass (`expose`) the same two checks came back. A pass would overwrite `citadelFate` (for example sever → expose, plus another +80 XP and rep). A fail would set the guards on a floor that was already settled. | The `vane/choice` check replies had no condition; `look` is always reachable from `vane/start`. | Both check replies now require `{ missing: "citadelFate" }`. "I'll answer on the machine itself." stays. No new lines. | `playtest`: "Vane's ceremony checks are not offered again once the crucible is answered (bug 32)" (fails on 2610970); act4 C8b on every run |
+
+**Not a bug (harness):** two runs landed on the title partway through because files were edited while they were running, which made Vite do a full reload. The first `VANE=horns`/`history` runs were hit by the `dialogue.ts` edit, and the first `SARN=toll` run by the doc edit. All three were re-run clean.
+
+**Evidence kept (design calls, unchanged):** the mid-fight auto ledger again returned 1–23 HP over and over, in the Act I checkpoint fight and in the ceremony guard fight. The level-1 checkpoint fight and the level-3 ceremony guard fight are both punishing for the harness's cut-and-stand-down line.
+
+### Still unplayed (browser)
+
+- **Sarn stores** (`citadelSupplied` via `stoneMoving`): needs Varr to keep the plate stair (`checkpointLead=varr`). The `NETWORK=varr` harness reaches the checkpoint fight but has not won it, so the quarry detour (already scripted: Hask → Cut the brake) and the Citadel stores line are untested. A Kael duel / RelSec fight is also unplayed.
+- **Seize**: needs comprehension 8 or Continuity. Not attempted. Comprehension = 1 + ⌊mind/3⌋ + ⌊audit/40⌋ + (level − 1). For the Recommended file that is 1 + 2 + ⌊audit/40⌋ + (level − 1). Even with every point in Audit (⌊95/40⌋ = 2), it is 8 only at level 4. Silas reaches the crucible at level ≤ 3 (level 3 comes with the crucible/Spire XP), so the most he can have there is 7. It is not legitimately reachable on the critical path.
+- Cinder companion dark-mouth and Spire refusals.
+- A design call on the mid-fight auto ledger, and on the balance of the Sovereign, Sever, ceremony, and checkpoint fights for a critical-path character.
+- A full hand pass of Acts IV–VI without the harness.
