@@ -7,6 +7,16 @@
 //   TUNDRA=seat (default) | cut         — Seat the span, or Cut the span (iceCut) + Kel cleats after hollowRead
 //   LAMP=audit (default) | break        — audit Road lamp glass only, or Break the glass (roadDark without Sever)
 //   SARN=skip (default) | toll          — close Sarn, or take "The plate is unfed." when guardToll
+//   VANE=machine (default) | horns | history | fail
+//     horns / history: spend the file's unspent skill points on Speech / History (Self → Improve), then take
+//       Vane's ceremony check (speech 58 / history 60). A failed roll is reloaded from slot 1, as a player would.
+//     fail: no points spent; take the History check (26%) and keep the failure → "Then the floor will be cleaned."
+//       → Guard Senn + Guard Oll; fight to resolution, then answer on the machine (CRUCIBLE).
+//   NETWORK=talk (default) | varr
+//     varr: at Moll's line take "Move." → "Read them." (checkpoint fight, Varr + Moll + Hess) instead of the
+//       Engineering talk-past; resolve it (cut rifles → Stand down) so Varr keeps the plate stair
+//       (checkpointLead=varr → plateStair). Then detour to the Quarry: Hask clears the riggers, Cut the brake
+//       (quarryStone clear) → stoneMoving → citadelSupplied, so Sarn has the "Stone reached the stores." beat.
 //   SPIRE=decline | impose | fight | fight-leave
 //     fight: Sovereign + Echo → sovereign-down → Write the shape (impose)
 //     fight-leave: same fight → Leave the holes (release)
@@ -110,7 +120,11 @@ const TUNDRA = process.env.TUNDRA ?? "seat";
 const LAMP = process.env.LAMP ?? "audit";
 const SARN = process.env.SARN ?? "skip";
 const SHAFT = process.env.SHAFT === "1" || process.env.SHAFT === "open";
+const VANE = process.env.VANE ?? "machine";
+const NETWORK = process.env.NETWORK ?? "talk";
 const tagBits = [];
+if (NETWORK !== "talk") tagBits.push(`net-${NETWORK}`);
+if (VANE !== "machine") tagBits.push(`vane-${VANE}`);
 if (CRUCIBLE !== "splice") tagBits.push(CRUCIBLE);
 if (SHAFT) tagBits.push("shaft");
 if (TUNDRA !== "seat") tagBits.push(`tundra-${TUNDRA}`);
@@ -118,12 +132,13 @@ if (LAMP !== "audit") tagBits.push(`lamp-${LAMP}`);
 if (SARN !== "skip") tagBits.push(`sarn-${SARN}`);
 if (SPIRE !== "decline") tagBits.push(SPIRE);
 const tag = process.env.TAG ?? (tagBits.length ? `act4-${tagBits.join("-")}` : "act4");
-console.log(`act4 env CRUCIBLE=${CRUCIBLE} SHAFT=${SHAFT} TUNDRA=${TUNDRA} LAMP=${LAMP} SARN=${SARN} SPIRE=${SPIRE} tag=${tag}`);
+console.log(`act4 env NETWORK=${NETWORK} VANE=${VANE} CRUCIBLE=${CRUCIBLE} SHAFT=${SHAFT} TUNDRA=${TUNDRA} LAMP=${LAMP} SARN=${SARN} SPIRE=${SPIRE} tag=${tag}`);
 const out = [];
 const step = (ok, msg) => { out.push(`${ok ? "PASS" : "FAIL"} ${msg}`); console.log(`${ok ? "PASS" : "FAIL"} ${msg}`); };
 const { browser, page, errors } = await open();
 let s;
 
+const regionOk = (st) => Boolean(st.flags.act1 || (st.flags.pumpFate && (st.flags.checkpointSpoke || st.flags.usedCrawl)));
 const actorAt = (id) => page.evaluate((id) => { const a = window.__mend.getState().data.actors[id]; return a && { x: a.x, y: a.y, map: a.mapId, alive: a.alive, hostile: a.hostile }; }, id);
 const inv = (id) => page.evaluate((id) => window.__mend.getState().data.inventory.find((r) => r.id === id)?.qty ?? 0, id);
 async function tapAt(tx, ty) {
@@ -196,99 +211,6 @@ async function special(re) {
   return true;
 }
 
-// —— Act I to Oakhaven (Moll Engineering talk-past sets act1) ——
-await page.getByRole("button", { name: "New ledger" }).click();
-await page.getByRole("button", { name: "Recommended file" }).click();
-await page.getByRole("button", { name: "Enter the Sinks" }).click();
-await page.waitForTimeout(300);
-await pick(page, /show me the pump/); await pick(page, /audit it/);
-await hud(page, "Audit");
-for (let i = 0; i < 60; i++) { const s = await S(page); if (!s.path || s.dlg) break; await page.waitForTimeout(120); }
-await page.getByRole("button", { name: "Mend", exact: true }).click();
-await page.waitForTimeout(200);
-await key(page, "Escape");
-await walk(page, 14, 10); await walk(page, 14, 12);
-s = await S(page); step(s.dlg === "guard-line/start", `A0a Moll guard line (${s.dlg})`);
-let passed = false;
-for (let attempt = 0; attempt < 12 && !passed; attempt++) {
-  await fileLevel(page);
-  const rs = await replies(page);
-  if (!rs.length) {
-    await walk(page, 14, 10); await walk(page, 14, 12);
-    s = await S(page);
-    if (!s.dlg) {
-      await hud(page, "Talk");
-      for (let i = 0; i < 40; i++) { s = await S(page); if (s.dlg || !s.path) break; await page.waitForTimeout(150); }
-    }
-    console.log("   re-engage →", (await S(page)).dlg, await replies(page));
-    continue;
-  }
-  if (rs.some((r) => /pressure regulator/.test(r))) {
-    await pick(page, /pressure regulator/);
-    const txt = await dlgText(page);
-    if (/already walking/.test(txt)) {
-      await pick(page, /already walking/);
-      passed = true;
-      step(true, `A0 Moll Engineering talk-past (attempt ${attempt + 1})`);
-    } else {
-      console.log("   eng failed:", txt.slice(0, 160));
-      await pick(page, /north streets|Fine|Leave/).catch(async () => { await page.locator(".ledger li button").last().click(); });
-    }
-  } else {
-    console.log("   replies now", rs);
-    await page.locator(".ledger li button").last().click();
-    await page.waitForTimeout(200);
-  }
-}
-if (!passed) {
-  step(false, "A0 Moll talk-past not achieved in 12 attempts");
-  writeFileSync(`${SHOTS}/${tag}.txt`, out.join("\n") + "\n");
-  await browser.close();
-  process.exit(1);
-}
-await fileLevel(page);
-await walk(page, 24, 18);
-await page.keyboard.press("ArrowRight");
-s = await S(page);
-for (let i = 0; i < 20; i++) { s = await S(page); if (s.map !== "sinks") break; await page.waitForTimeout(120); }
-step(s.map === "road", `A1 Stack mouth → Stack Road (${s.map} ${s.x},${s.y})`);
-
-// —— helpers for long legs ——
-async function mouthStep(fromMap, arrow) {
-  await page.keyboard.press(arrow);
-  for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== fromMap || s.dlg) break; await page.waitForTimeout(120); }
-  return s;
-}
-async function saveContinue(label, keep) {
-  await hud(page, "Menu");
-  await page.getByRole("button", { name: /slot ?1/i }).first().click();
-  await page.waitForTimeout(200);
-  await key(page, "Escape");
-  const before = await S(page);
-  await page.reload({ waitUntil: "networkidle" });
-  await page.waitForFunction(() => window.__mend);
-  await page.waitForTimeout(300);
-  const cont = page.getByRole("button", { name: "Continue" });
-  const enabled = !(await cont.isDisabled());
-  await cont.click(); await page.waitForTimeout(400);
-  const after = await S(page);
-  const lost = keep.filter((k) => after.flags[k] !== before.flags[k]);
-  step(enabled && after.phase === "play" && after.map === before.map && after.x === before.x && after.y === before.y && lost.length === 0 && !after.combat,
-    `${label} Save → reload → Continue (${after.map} ${after.x},${after.y}; was ${before.map} ${before.x},${before.y}; lost [${lost.join(",")}]; combat ${after.combat})`);
-  return after;
-}
-async function useSpecial(re) {
-  const b = page.getByRole("button", { name: re });
-  if (!(await b.count())) return false;
-  await b.first().click(); await page.waitForTimeout(300); await fileLevel(page);
-  return true;
-}
-// DUMP=/tmp/x DUMP_AT=C7|V3 writes localStorage (slot 1 + auto) for scratch probes of side branches.
-async function dumpAt(label) {
-  if (!process.env.DUMP || (process.env.DUMP_AT ?? "V3") !== label) return;
-  if (label !== "V3") { await hud(page, "Menu"); await page.getByRole("button", { name: /slot ?1/i }).first().click(); await page.waitForTimeout(200); await key(page, "Escape"); }
-  writeFileSync(process.env.DUMP, JSON.stringify(await page.evaluate(() => ({ ...localStorage }))));
-}
 // —— real-UI combat (the player's verbs: canvas tap strikes a hostile, HUD Audit reads the foe in reach,
 // seam button + Unmend/Confirm cuts, Pack → Use a bandage, Brace / End turn / Stand down) ——
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -473,6 +395,154 @@ async function sovereignFight() {
 }
 const noCombat = async (label) => { const c = await S(page); step(!c.combat, `${label} no forced combat (combat ${c.combat}; ${c.log[0]})`); return !c.combat; };
 
+// —— Act I to Oakhaven (Moll Engineering talk-past sets act1) ——
+await page.getByRole("button", { name: "New ledger" }).click();
+await page.getByRole("button", { name: "Recommended file" }).click();
+await page.getByRole("button", { name: "Enter the Sinks" }).click();
+await page.waitForTimeout(300);
+await pick(page, /show me the pump/); await pick(page, /audit it/);
+await hud(page, "Audit");
+for (let i = 0; i < 60; i++) { const s = await S(page); if (!s.path || s.dlg) break; await page.waitForTimeout(120); }
+await page.getByRole("button", { name: "Mend", exact: true }).click();
+await page.waitForTimeout(200);
+await key(page, "Escape");
+await walk(page, 14, 10); await walk(page, 14, 12);
+s = await S(page); step(s.dlg === "guard-line/start", `A0a Moll guard line (${s.dlg})`);
+let passed = false;
+if (NETWORK === "varr") {
+  // A player who means to fight files the ledger first: step back ("Fine." → "North, then."), file slot 1, come back.
+  await fileLevel(page);
+  await pick(page, /^Fine\./);
+  await pick(page, /North, then/);
+  if (process.env.NET_STRAIN === "story") await strainStory();
+  await hud(page, "Menu"); await page.getByRole("button", { name: /Save slot 1/ }).click(); await page.waitForTimeout(200); await key(page, "Escape");
+  const toPlate = async () => {
+    await walk(page, 14, 10); await walk(page, 14, 12);
+    let st = await S(page);
+    if (!st.dlg) { await hud(page, "Talk"); for (let i = 0; i < 40; i++) { st = await S(page); if (st.dlg || !st.path) break; await page.waitForTimeout(150); } }
+    await pick(page, /^Move\./);
+    await pick(page, /Read them/);
+  };
+  await toPlate();
+  s = await S(page);
+  const roster = (await foes()).map((f) => f.id).sort().join(",");
+  step(s.combat && /varr/.test(roster), `A0v "Move." → "Read them." starts the checkpoint fight (combat ${s.combat}; foes ${roster})`);
+  const g = await guardFight(async () => {
+    await hud(page, "Menu");
+    await page.getByRole("button", { name: /^slot1 ·/ }).first().click();
+    await page.waitForTimeout(400);
+    if ((await S(page)).panel !== "none") await key(page, "Escape");
+    await toPlate();
+  });
+  await closeTalk(page);
+  s = await S(page);
+  const v = await actorAt("varr");
+  step(g.won && !s.combat && s.phase === "play", `A0w checkpoint fight resolved (${g.how}; rounds ${g.rounds}; deaths ${g.deaths}; cuts ${g.cuts}; hp ${s.hp}; varr alive ${v?.alive} hostile ${v?.hostile}; ${g.notes.slice(0, 3).join(" / ")})`);
+  step(s.flags.checkpointLead === "varr" && s.flags.plateStair === true && regionOk(s), `A0x Varr keeps the plate stair (checkpointLead ${s.flags.checkpointLead}; plateStair ${s.flags.plateStair}; act1 ${s.flags.act1}; checkpointSpoke ${s.flags.checkpointSpoke}; log ${s.log.slice(0, 2).join(" / ")})`);
+  passed = g.won;
+}
+for (let attempt = 0; attempt < 12 && !passed; attempt++) {
+  await fileLevel(page);
+  const rs = await replies(page);
+  if (!rs.length) {
+    await walk(page, 14, 10); await walk(page, 14, 12);
+    s = await S(page);
+    if (!s.dlg) {
+      await hud(page, "Talk");
+      for (let i = 0; i < 40; i++) { s = await S(page); if (s.dlg || !s.path) break; await page.waitForTimeout(150); }
+    }
+    console.log("   re-engage →", (await S(page)).dlg, await replies(page));
+    continue;
+  }
+  if (rs.some((r) => /pressure regulator/.test(r))) {
+    await pick(page, /pressure regulator/);
+    const txt = await dlgText(page);
+    if (/already walking/.test(txt)) {
+      await pick(page, /already walking/);
+      passed = true;
+      step(true, `A0 Moll Engineering talk-past (attempt ${attempt + 1})`);
+    } else {
+      console.log("   eng failed:", txt.slice(0, 160));
+      await pick(page, /north streets|Fine|Leave/).catch(async () => { await page.locator(".ledger li button").last().click(); });
+    }
+  } else {
+    console.log("   replies now", rs);
+    await page.locator(".ledger li button").last().click();
+    await page.waitForTimeout(200);
+  }
+}
+if (!passed) {
+  step(false, "A0 Moll talk-past not achieved in 12 attempts");
+  writeFileSync(`${SHOTS}/${tag}.txt`, out.join("\n") + "\n");
+  await browser.close();
+  process.exit(1);
+}
+await fileLevel(page);
+await walk(page, 24, 18);
+await page.keyboard.press("ArrowRight");
+s = await S(page);
+for (let i = 0; i < 20; i++) { s = await S(page); if (s.map !== "sinks") break; await page.waitForTimeout(120); }
+step(s.map === "road", `A1 Stack mouth → Stack Road (${s.map} ${s.x},${s.y})`);
+
+// —— helpers for long legs ——
+async function mouthStep(fromMap, arrow) {
+  await page.keyboard.press(arrow);
+  for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== fromMap || s.dlg) break; await page.waitForTimeout(120); }
+  return s;
+}
+async function saveContinue(label, keep) {
+  await hud(page, "Menu");
+  await page.getByRole("button", { name: /slot ?1/i }).first().click();
+  await page.waitForTimeout(200);
+  await key(page, "Escape");
+  const before = await S(page);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => window.__mend);
+  await page.waitForTimeout(300);
+  const cont = page.getByRole("button", { name: "Continue" });
+  const enabled = !(await cont.isDisabled());
+  await cont.click(); await page.waitForTimeout(400);
+  const after = await S(page);
+  const lost = keep.filter((k) => after.flags[k] !== before.flags[k]);
+  step(enabled && after.phase === "play" && after.map === before.map && after.x === before.x && after.y === before.y && lost.length === 0 && !after.combat,
+    `${label} Save → reload → Continue (${after.map} ${after.x},${after.y}; was ${before.map} ${before.x},${before.y}; lost [${lost.join(",")}]; combat ${after.combat})`);
+  return after;
+}
+async function useSpecial(re) {
+  const b = page.getByRole("button", { name: re });
+  if (!(await b.count())) return false;
+  await b.first().click(); await page.waitForTimeout(300); await fileLevel(page);
+  return true;
+}
+// DUMP=/tmp/x DUMP_AT=C7|V3 writes localStorage (slot 1 + auto) for scratch probes of side branches.
+async function dumpAt(label) {
+  if (!process.env.DUMP || (process.env.DUMP_AT ?? "V3") !== label) return;
+  if (label !== "V3") { await hud(page, "Menu"); await page.getByRole("button", { name: /slot ?1/i }).first().click(); await page.waitForTimeout(200); await key(page, "Escape"); }
+  writeFileSync(process.env.DUMP, JSON.stringify(await page.evaluate(() => ({ ...localStorage }))));
+}
+
+// —— NETWORK=varr: Quarry detour so stone can move (Hask clears the riggers → Cut the brake) ——
+if (NETWORK === "varr") {
+  await fileLevel(page);
+  const qTap = await tapWalk(page, 33, 4, [34, 4]);
+  s = await mouthStep("road", "ArrowRight");
+  step(s.map === "quarry", `Q1v Quarry road → The Clockwork Canyon (${qTap.taps} taps; ${s.map} ${s.x},${s.y})`);
+  const th = await talkTo("hask");
+  const hr = await replies(page);
+  if (hr.some((x) => /Get your people off the stone/.test(x))) await pick(page, /Get your people off the stone/);
+  await closeTalk(page);
+  s = await S(page);
+  step(Boolean(s.flags.workersClear) && !s.combat, `Q2v Hask clears the riggers (workersClear ${s.flags.workersClear}; ${th.how}; ${hr.join(" / ")})`);
+  await walk(page, 11, 4);
+  const rc = await auditAt("crane");
+  const cut = await useSpecial(/Cut the brake/i);
+  if ((await S(page)).panel === "audit") await key(page, "Escape");
+  s = await S(page);
+  step(rc.ok && cut && s.flags.quarryStone === "clear" && s.flags.stoneMoving === true && !s.combat, `Q3v Cut the brake → stone moves on the Varr-held stair (quarryStone ${s.flags.quarryStone}; stoneMoving ${s.flags.stoneMoving}; citadelSupplied ${s.flags.citadelSupplied}; log ${s.log[0]})`);
+  await walk(page, 32, 8);
+  s = await mouthStep("quarry", "ArrowRight");
+  step(s.map === "road", `Q4v Quarry Stack mouth → Stack Road (${s.map} ${s.x},${s.y})`);
+}
 // —— Stack Road → Rust cut → Rust Districts (act1 signed by the talk-past) ——
 await fileLevel(page);
 const rustTap = await tapWalk(page, 33, 6, [34, 6]);
@@ -662,9 +732,103 @@ await pick(page, /look at the engine|show me the engine/i);
 await pick(page, /ceremony, with your pins/);
 const choiceRs = await replies(page);
 step(choiceRs.some((x) => /answer on the machine/.test(x)), `C6b Vane choice offers horns / history / machine (${choiceRs.join(" / ")})`);
-await pick(page, /answer on the machine/);
-await closeTalk(page);
-await noCombat("C6c");
+let exposed = false;
+if (VANE === "machine") {
+  await pick(page, /answer on the machine/);
+  await closeTalk(page);
+  await noCombat("C6c");
+} else {
+  // Vane's ceremony. Leave the talk, spend points on the character sheet if the branch needs a skill, file slot 1, then ask.
+  await closeTalk(page);
+  const want = VANE === "horns" ? "Speech" : "History";
+  const skillId = want.toLowerCase();
+  const sk0 = await page.evaluate((id) => { const d = window.__mend.getState().data; return { v: d.player.skills[id], pts: d.skillPoints }; }, skillId);
+  let spent = 0;
+  if (VANE !== "fail") {
+    await hud(page, "Self");
+    const plus = page.getByRole("button", { name: `Improve ${want}` });
+    for (let i = 0; i < 30 && (await plus.isEnabled().catch(() => false)); i++) { await plus.click(); spent++; await page.waitForTimeout(40); }
+    await key(page, "Escape");
+  }
+  const sk1 = await page.evaluate((id) => { const d = window.__mend.getState().data; return { v: d.player.skills[id], pts: d.skillPoints }; }, skillId);
+  step(VANE === "fail" ? sk1.v === sk0.v : sk1.v > sk0.v && sk1.pts < sk0.pts,
+    `C6v ${want} on the sheet before the ceremony (${sk0.v}→${sk1.v}; points ${sk0.pts}→${sk1.pts}; clicks ${spent})`);
+  await hud(page, "Menu"); await page.getByRole("button", { name: /Save slot 1/ }).click(); await page.waitForTimeout(200); await key(page, "Escape");
+  const checkRe = VANE === "history" || VANE === "fail" ? /History, then/ : /Put it on the horns/;
+  const askCeremony = async () => {
+    const tv = await talkTo("vane");
+    if (!/vane/.test(tv.s.dlg || "")) return { ok: false, why: `talk ${tv.how} ${tv.s.dlg}` };
+    await pick(page, /look at the engine|show me the engine/i);
+    await pick(page, /ceremony, with your pins/);
+    const rs = await replies(page);
+    const shown = rs.find((x) => checkRe.test(x)) ?? "";
+    await pick(page, checkRe);
+    const st = await S(page);
+    return { ok: true, shown, st, roll: st.log.find((l) => /(speech|history) (holds|fails)/.test(l)) ?? "" };
+  };
+  let res = null, tries = 0, reloads = 0;
+  for (; tries < 8; tries++) {
+    res = await askCeremony();
+    if (!res.ok) break;
+    const passedCheck = res.st.flags.citadelFate === "expose";
+    if (VANE === "fail" ? !passedCheck : passedCheck) break;
+    console.log(`   ceremony try ${tries + 1}: ${res.roll} — not this branch; Menu → slot 1`);
+    if (res.st.dlg === "vane/fail") await shot(page, `${tag}-07f-vane-fail-node`);
+    await closeTalk(page);
+    // A pass on VANE=fail, or a failed roll (→ guard fight) on horns/history: load the file filed at Vane.
+    await hud(page, "Menu");
+    await page.getByRole("button", { name: /^slot1 ·/ }).first().click();
+    await page.waitForTimeout(400);
+    if ((await S(page)).panel !== "none") await key(page, "Escape");
+    reloads++;
+  }
+  step(res?.ok, `C6w ceremony check offered with its odds (${res?.shown}; tries ${tries + 1}; slot reloads ${reloads}; ${res?.roll})`);
+  s = await S(page);
+  if (VANE === "fail") {
+    step(s.dlg === "vane/fail" && /floor will be cleaned/.test(await dlgText(page)) && !s.flags.citadelFate && !s.flags.spireOpen,
+      `C6x failed ceremony → "Then the floor will be cleaned." (dlg ${s.dlg}; fate ${s.flags.citadelFate}; spireOpen ${s.flags.spireOpen}; ${res?.roll})`);
+    await shot(page, `${tag}-07f-vane-fail`);
+    await pick(page, /^No\./);
+    s = await S(page);
+    const roster = (await foes()).map((f) => f.id).sort().join(",");
+    step(s.combat && roster === "guard1,guard2", `C6y "No." starts the ceremony guard fight (combat ${s.combat}; foes ${roster})`);
+    const g = await guardFight(async () => {
+      await hud(page, "Menu");
+      await page.getByRole("button", { name: /^slot1 ·/ }).first().click();
+      await page.waitForTimeout(400);
+      if ((await S(page)).panel !== "none") await key(page, "Escape");
+      for (let k = 0; k < 8; k++) {
+        const again = await askCeremony();
+        if ((await S(page)).dlg === "vane/fail") { await pick(page, /^No\./); return; }
+        await closeTalk(page);
+        if (again.st?.flags?.citadelFate) {
+          await hud(page, "Menu"); await page.getByRole("button", { name: /^slot1 ·/ }).first().click(); await page.waitForTimeout(400);
+          if ((await S(page)).panel !== "none") await key(page, "Escape");
+        }
+      }
+    });
+    await closeTalk(page);
+    s = await S(page);
+    step(g.won && !s.combat && s.phase === "play", `C6z ceremony guard fight resolved, no soft-lock (${g.how}; rounds ${g.rounds}; deaths ${g.deaths}; slot loads ${g.loads}; strain ${s.flags.strain ?? "field"}; cuts ${g.cuts}; hp ${s.hp}; ${g.notes.slice(0, 3).join(" / ")})`);
+    // The story goes on: Vane still talks, and the machine answer is still there.
+    const tv = await talkTo("vane");
+    const rsAfter = await replies(page);
+    step(/vane/.test(tv.s.dlg || "") && !tv.s.combat, `C6z2 Vane talks after the failed ceremony (${tv.how}; ${tv.s.dlg}; ${rsAfter.join(" / ")})`);
+    await pick(page, /look at the engine|show me the engine/i);
+    await pick(page, /ceremony, with your pins/);
+    await pick(page, /answer on the machine/);
+    await closeTalk(page);
+    await noCombat("C6c");
+  } else {
+    exposed = s.flags.citadelFate === "expose";
+    const causal = (await page.evaluate(() => window.__mend.getState().data.disciplines)).includes("causal");
+    step(exposed && s.flags.spireOpen === true && !s.combat && !s.dlg && causal,
+      `C6x ${VANE} check holds → citadelFate expose, spireOpen, Causality (fate ${s.flags.citadelFate}; spireOpen ${s.flags.spireOpen}; causal ${causal}; combat ${s.combat}; ${res?.roll}; log ${s.log.slice(0, 2).join(" / ")})`);
+    await shot(page, `${tag}-07x-vane-${VANE}`);
+    await closeTalk(page);
+    await noCombat("C6c");
+  }
+}
 
 await dumpAt("C7");
 // C6d Shaft door (citadel 6,8) — SHAFT=1 opens it before Sever so the floor does not notice the dark
@@ -739,12 +903,23 @@ if (SHAFT) {
   await noCombat("C6f");
 }
 // C7 Crucible: prefer Splice toward the Sinks (no fight), else Seize, else Sever
+let fate = null;
+if (exposed) {
+  // The ceremony already answered the crucible; the machine refuses a second answer.
+  r = await auditAt("crucible");
+  step(r.ok, `C7 Audit Crucible core opens after the ceremony (${r.how})`);
+  await useSpecial(/Splice toward the Sinks/i);
+  s = await S(page);
+  step(s.flags.citadelFate === "expose" && /already been answered/.test(s.log[0] ?? ""), `C7e crucible refuses a second answer after the ceremony (fate ${s.flags.citadelFate}; log ${s.log[0]})`);
+  fate = s.flags.citadelFate;
+  if ((await S(page)).panel === "audit") await key(page, "Escape");
+}
+if (!exposed) {
 r = await auditAt("crucible");
 step(r.ok, `C7 Audit Crucible core opens (${r.how})`);
 await shot(page, `${tag}-08-crucible-audit`);
 const specials = await page.$$eval("button", (bs) => bs.map((b) => b.innerText.replace(/\s+/g, " ")).filter((x) => /Sever|Splice|Seize|rank answer/.test(x)));
 console.log("   crucible specials:", specials);
-let fate = null;
 if (CRUCIBLE === "sever") {
   // Sever with shaftOpen unset: "The floor notices the dark." → Guard Senn + Guard Oll.
   // Sever with shaftOpen: no guard fight; Spire opens quietly.
@@ -786,6 +961,7 @@ if (CRUCIBLE === "sever") {
     if (fate) break;
   }
 }
+}
 s = await S(page);
 step(Boolean(fate) && s.flags.spireOpen === true && !s.combat, `C7b crucible answered (citadelFate ${fate}; spireOpen ${s.flags.spireOpen}; combat ${s.combat}; log ${s.log.slice(0, 2).join(" / ")})`);
 if ((await S(page)).panel === "audit") await key(page, "Escape");
@@ -794,9 +970,26 @@ await fileLevel(page);
 // C8 Vane after the answer
 t = await talkTo("vane");
 const vaneAfter = await replies(page);
-step(/vane/.test(t.s.dlg || "") && vaneAfter.some((x) => /already touched it/.test(x)), `C8 Vane after the crucible (${vaneAfter.join(" / ")})`);
-if (vaneAfter.some((x) => /already touched it/.test(x))) { await pick(page, /already touched it/); await page.locator(".ledger li button").first().click().catch(() => {}); }
+if (exposed) {
+  step(/vane/.test(t.s.dlg || ""), `C8 Vane after the ceremony (${vaneAfter.join(" / ")})`);
+} else {
+  step(/vane/.test(t.s.dlg || "") && vaneAfter.some((x) => /already touched it/.test(x)), `C8 Vane after the crucible (${vaneAfter.join(" / ")})`);
+}
+// C8b Once the crucible is answered (machine or ceremony), the ceremony must not be offered again:
+// a second horns/history roll would overwrite citadelFate, or a failed one would set the guards on a settled floor.
+if (vaneAfter.some((x) => /look at the engine/.test(x))) {
+  await pick(page, /look at the engine/);
+  await pick(page, /ceremony, with your pins/);
+  const again = await replies(page);
+  step(!again.some((x) => /horns|History, then/.test(x)), `C8b no second ceremony check after citadelFate ${(await S(page)).flags.citadelFate} (${again.join(" / ")})`);
+  await closeTalk(page);
+  t = await talkTo("vane");
+}
+const vaneAfter2 = await replies(page);
+if (vaneAfter2.some((x) => /already touched it/.test(x))) { await pick(page, /already touched it/); await page.locator(".ledger li button").first().click().catch(() => {}); }
 await closeTalk(page);
+s = await S(page);
+step(s.flags.spireOpen === true && s.flags.citadelFate === fate, `C8c citadelFate unchanged after Vane (${s.flags.citadelFate}; was ${fate}; spireOpen ${s.flags.spireOpen})`);
 
 // C9 Map lists the late regions; Save/Continue in the Citadel
 await hud(page, "Map");
@@ -888,6 +1081,7 @@ const epiLines = await page.evaluate(() => window.__mend.getState().data.epilogu
 if (endingWant === "impose") step(/You wrote the shape/.test(epiLines[0] ?? ""), `E1b impose epilogue opens with the written shape (${(epiLines[0] ?? "").slice(0, 80)})`);
 if (SPIRE === "fight-leave") step(/holes|refused|left|baseline/i.test(epiLines.join(" ")), `E1b-leave fight→Leave the holes epilogue (${(epiLines[0] ?? "").slice(0, 100)})`);
 if (CRUCIBLE === "sever") step(epiLines.some((l) => /sever|siphon|dark/i.test(l)), `E1c epilogue remembers the severed siphon`);
+if (exposed) step(epiLines.some((l) => /ceremony heard the diagram/.test(l)), `E1f epilogue remembers the ceremony (expose)`);
 if (TUNDRA === "cut") step(epiLines.some((l) => /glaze was cut|hollow went cold|harder bill/i.test(l)), `E1d epilogue remembers iceCut`);
 if (LAMP === "break") step(true, `E1e lamp-break path reached epilogue`);
 step(epiLines.length >= 3, `E2 epilogue carries the ledger (${epiLines.length} lines): ${epiLines.slice(0, 3).join(" | ").slice(0, 240)}`);
