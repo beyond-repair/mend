@@ -15,7 +15,7 @@ const mem = new Map<string, string>();
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex, hasStoredLedger } = await import("./store.ts");
 const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS, LOCKED_DOORS, tileAt, WALKABLE } = await import("./maps.ts");
-const { regionOpen, openAudit, reconcileWorld, depart } = await import("./logic.ts");
+const { regionOpen, openAudit, reconcileWorld, depart, pathTo, checkVision, dist } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
 const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
 (globalThis as unknown as { Image: unknown }).Image = class {
@@ -676,5 +676,79 @@ describe("playtest 2026-10-15", () => {
     assert.notDeepEqual([d.player.x, d.player.y], [27, 2], "Silas is not stacked on Sol");
     assert.ok(Math.max(Math.abs(d.player.x - 27), Math.abs(d.player.y - 2)) <= 1, "Silas lands beside the stair");
     assert.ok(!MOUTHS.some((m) => m.map === "road" && m.x === d.player.x && m.y === d.player.y), "not on a mouth");
+  });
+
+  it("Audit beside the Quarry crane opens the crane, not the distant severed chute (bug 24)", () => {
+    const d = D();
+    d.flags.act1 = true;
+    d.flags.checkpointSpoke = true;
+    d.mapId = "quarry";
+    d.player.mapId = "quarry";
+    d.player.x = 11;
+    d.player.y = 4;
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    d.path = [];
+    d.intent = null;
+    reconcileWorld(d);
+    assert.ok(dist(d.player, d.machines.crane) <= 1, "fixture stands beside the crane");
+    assert.ok(dist(d.player, d.machines.chute) > 1, "chute is not beside Silas");
+    assert.ok(d.machines.chute.nodes.some((n) => n.severed || n.integrity < 50), "chute still reads as broken bait");
+    G().auditNearest();
+    assert.equal(D().panel, "audit");
+    assert.equal(D().audit?.id, "crane", `Audit must not walk off to the chute (got ${D().audit?.id})`);
+  });
+
+  it("Act III primary paths (Quarry mouth→Hask→Rill, Rust mouth→Nell) stay outside hostile vision", () => {
+    // Bug 23: rubble on the east corridor and mill beside Rill / cutter beside Nell forced combat
+    // before the primary talks. Same class as Nim/Ske/Sol clearance — optional fights stay, off-path.
+    const d = D();
+    d.flags.act1 = true;
+    d.flags.checkpointSpoke = true;
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.combat = null;
+    reconcileWorld(d);
+
+    const rubble = d.actors.rubble;
+    const mill = d.actors.mill1;
+    const cutter = d.actors.cutter1;
+    assert.ok(rubble?.alive && mill?.alive && cutter?.alive);
+    assert.ok(rubble.hostile && rubble.aggro && rubble.vision > 0);
+    assert.ok(mill.hostile && mill.aggro && mill.vision > 0);
+    assert.ok(cutter.hostile && cutter.aggro && cutter.vision > 0);
+
+    function assertRouteClear(mapId: string, sx: number, sy: number, tx: number, ty: number, hostiles: typeof rubble[]) {
+      d.mapId = mapId;
+      d.player.mapId = mapId;
+      d.player.x = sx;
+      d.player.y = sy;
+      d.combat = null;
+      const route = pathTo(d, tx, ty);
+      assert.ok(route && route.length > 0, `${mapId} ${sx},${sy} → ${tx},${ty} must path`);
+      for (const p of [{ x: sx, y: sy }, ...route]) {
+        for (const a of hostiles) {
+          if (a.mapId !== mapId || !a.alive) continue;
+          assert.ok(dist(a, p) > a.vision, `${a.id}@${a.x},${a.y} vision ${a.vision} must not cover ${mapId} ${p.x},${p.y} on ${sx},${sy}→${tx},${ty}`);
+        }
+      }
+      // And a live step along the route must not start combat.
+      d.player.x = sx;
+      d.player.y = sy;
+      d.combat = null;
+      checkVision(d);
+      assert.equal(d.combat, null, `${mapId} spawn ${sx},${sy} is not already in vision`);
+    }
+
+    // pathTo refuses occupied tiles — walk beside NPCs / machines (where Talk/Audit stand).
+    assertRouteClear("quarry", 32, 8, 6, 10, [rubble, mill]); // beside Hask
+    assertRouteClear("quarry", 6, 10, 21, 16, [rubble, mill]); // beside Rill
+    assertRouteClear("quarry", 6, 10, 11, 4, [rubble, mill]); // beside crane
+    assertRouteClear("quarry", 21, 16, 17, 16, [rubble, mill]); // Rill → beside Pim
+    assertRouteClear("rust", 33, 8, 12, 16, [cutter]); // beside Nell
+    assertRouteClear("rust", 33, 8, 4, 4, [cutter]); // beside Ives
+    assertRouteClear("rust", 33, 8, 8, 8, [cutter]); // beside hearth
   });
 });

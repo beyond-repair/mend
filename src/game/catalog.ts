@@ -1453,11 +1453,15 @@ export const SPAWNS: Spawn[] = [
   { id: "kel", template: "lark", map: "tundra", x: 14, y: 6, name: "Kel", convo: "kel" },
   { id: "pip", template: "pell", map: "haven", x: 14, y: 11, name: "Pip", convo: "pip" },
   { id: "shade", template: "lurker", map: "road", x: 30, y: 12, name: "Lamp shade", convo: "shade", hostile: false, aggro: false },
-  { id: "rubble", template: "bruiser", map: "quarry", x: 28, y: 8 },
-  { id: "mill1", template: "mill", map: "quarry", x: 22, y: 18, name: "Unlicensed mill" },
+  // Off the east mouth corridor and the Rill/Pim south grade so Act III primary
+  // loop (Quarry road → Hask → clear → crane drop → Rill/Pim) is not forced into
+  // combat. Same class as Nim/Ske/Sol landing/door clearance. Optional fights stay.
+  { id: "rubble", template: "bruiser", map: "quarry", x: 20, y: 3 },
+  { id: "mill1", template: "mill", map: "quarry", x: 10, y: 20, name: "Unlicensed mill" },
   { id: "warden1", template: "warden", map: "citadel", x: 28, y: 19, name: "Plate warden" },
   { id: "caller1", template: "chanter", map: "citadel", x: 3, y: 4, name: "Line caller" },
-  { id: "cutter1", template: "lurker", map: "rust", x: 10, y: 17, name: "Ash cutter" },
+  // Off Nell's tenement tile so Rust primary talk is not forced into combat.
+  { id: "cutter1", template: "lurker", map: "rust", x: 4, y: 19, name: "Ash cutter" },
   { id: "doss", template: "pell", map: "sinks", x: 24, y: 5, name: "Doss", convo: "doss" },
   { id: "ada", template: "pell", map: "haven", x: 27, y: 7, name: "Ada", convo: "ada" },
   { id: "pim", template: "hask", map: "quarry", x: 18, y: 16, name: "Pim", convo: "pim" },

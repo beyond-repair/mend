@@ -812,8 +812,17 @@ export const useGame = create<Store>((set, get) => ({
       const steps = (m: Machine) => routes.get(m.id)?.length ?? 999;
       const beside = machines.filter((m) => dist(d.player, m) <= 1);
       const pool = reachable.length ? reachable : beside;
-      const broken = pool.filter((m) => m.nodes.some((n) => n.integrity < 50 || n.severed));
-      const machine = (broken.length ? broken : pool).sort((a, b) => steps(a) - steps(b))[0];
+      const isBroken = (m: Machine) => m.nodes.some((n) => n.integrity < 50 || n.severed);
+      // Prefer a machine Silas is already beside (Act III crane vs distant severed chute).
+      // Only then prefer broken over intact among the remaining pool. Same class as audit flue (bug 20).
+      const besideBroken = beside.filter(isBroken);
+      const remoteBroken = pool.filter((m) => isBroken(m) && dist(d.player, m) > 1);
+      const ranked =
+        besideBroken.length ? besideBroken :
+        beside.length ? beside :
+        remoteBroken.length ? remoteBroken :
+        pool;
+      const machine = ranked.sort((a, b) => steps(a) - steps(b))[0];
       const person = Object.values(d.actors)
         .filter((a) => a.alive && a.mapId === d.mapId && (d.combat ? a.hostile : true))
         .sort((a, b) => dist(d.player, a) - dist(d.player, b))[0];
