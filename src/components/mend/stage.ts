@@ -48,6 +48,14 @@ export function stageNow() {
   return current;
 }
 
+/**
+ * When the painted plate has run out of picture, shift Silas toward the *trailing* edge of the
+ * frame (look-ahead) instead of pinning him dead-centre or carrying him to the leading edge.
+ * That keeps walk motion visible and leaves room on the leading side for the next mouth
+ * (Ward stair east/north, Stack mouth south-east). Cap the drift so he never parks on DECK.
+ */
+export const LOOK = { carry: 0.22, cap: 0.14 };
+
 export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number, px: number, py: number, mapId: string) {
   const shot = PLATES[mapId] ?? PLATES.sinks;
   const image = imageOf(shot.src);
@@ -75,14 +83,15 @@ export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number,
   const minY = Math.min(0, h - dh);
   const x = Math.max(minX, Math.min(0, rawX));
   const y = Math.max(minY, Math.min(0, rawY));
-  // Once the backdrop has run out of picture on either axis it rests at its edge and Silas stays on the
-  // home aim: the board scrolls under a centred Silas. Letting his feet carry the clamp (the old
-  // `ax + (x - rawX)`) slid him to the deck edge, and in this projection walking north (toward the Ward
-  // stair) or east pushes everything ahead of him further off that same edge.
-  // (Unclamped, x - rawX and y - rawY are zero, so the feet sit on the aim either way.)
+  // overshoot is zero while the plate still pans; past the edge it grows as Silas keeps walking.
+  // Negate it so feet drift toward the trailing side (look-ahead), not the leading DECK edge.
+  const overX = x - rawX;
+  const overY = y - rawY;
+  const driftX = Math.max(-w * LOOK.cap, Math.min(w * LOOK.cap, -overX * LOOK.carry));
+  const driftY = Math.max(-h * LOOK.cap, Math.min(h * LOOK.cap, -overY * LOOK.carry));
   current = {
     plate: true,
-    feet: keepOnDeck(ax, ay, w, h),
+    feet: keepOnDeck(ax + driftX, ay + driftY, w, h),
     step,
     w,
     h,
@@ -93,10 +102,9 @@ export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number,
 
 /**
  * Safety net for where Silas stands on screen on a plate.
- * The plate pans with him until it hits its own edge; past that (the south plate, the Stack mouth,
- * the far east of a road) his feet used to keep sliding with the walk until they left the canvas,
- * which took every tap target and the mouth with them. `layoutStage` now holds him on the home aim
- * once the backdrop clamps; this band only guarantees the feet can never leave the canvas.
+ * The plate pans with him until it hits its own edge; past that, `layoutStage` look-ahead drifts
+ * his feet inside a capped band so the board still scrolls and the way ahead stays in frame.
+ * This clamp only guarantees the feet can never leave the canvas.
  */
 export function keepOnDeck(sx: number, sy: number, w: number, h: number): Point {
   return {
@@ -140,6 +148,20 @@ export function presence(sx: number, sy: number) {
   const right = (w - sx) / (w * 0.07);
   const top = (sy - h * 0.02) / (h * 0.08);
   const bottom = (h * 0.9 - sy) / (h * 0.12);
+  return Math.max(0, Math.min(1, left, right, top, bottom));
+}
+
+/**
+ * Softer edge fade for mouth diamonds and brass labels so a stair near the frame edge
+ * stays readable further out than an actor tag would.
+ */
+export function mouthPresence(sx: number, sy: number) {
+  if (!current.plate) return 1;
+  const { w, h } = current;
+  const left = sx / (w * 0.12);
+  const right = (w - sx) / (w * 0.12);
+  const top = (sy - h * 0.01) / (h * 0.1);
+  const bottom = (h * 0.92 - sy) / (h * 0.14);
   return Math.max(0, Math.min(1, left, right, top, bottom));
 }
 

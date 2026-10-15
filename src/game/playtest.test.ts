@@ -170,6 +170,8 @@ describe("playtest 2026-10-15", () => {
     assert.equal(mouthAt("sinks", 25, 18)?.label, "Stack mouth");
     assert.equal(mouthAt("road", 20, 1)?.label, "Ward stair");
     assert.equal(mouthAt("road", 16, 11)?.label, "Brick stair");
+    assert.equal(mouthAt("road", 16, 11)?.nearOnly, true, "Brick stair is near-only so it does not pull the eye off the Ward path");
+    assert.equal(mouthAt("road", 20, 1)?.nearOnly, undefined, "Ward stair stays a landmark brass diamond");
     assert.equal(mouthAt("road", 22, 14)?.label, "Yard stair");
     assert.equal(mouthAt("road", 27, 1)?.label, "Glass stair");
     // A labeled stair names the same thing its shut line does.
@@ -223,6 +225,9 @@ describe("playtest 2026-10-15", () => {
         if (y <= 5 && x >= 16) {
           const p = stage.projectTile(w, h, x, y, ward.x, ward.y, 1, 64, 32);
           assert.ok(stage.onDeck(p.sx, p.sy), `${w}x${h} at ${x},${y}: the Ward stair is on deck (${Math.round(p.sx)},${Math.round(p.sy)})`);
+          // Hand re-play on 2fc0d6f: hard-centred feet put the Ward diamond at the right rim (~0.93w) until close.
+          assert.ok(p.sx < w * 0.88, `${w}x${h} at ${x},${y}: Ward stair is not clipped at the right edge (${Math.round(p.sx)} / ${w})`);
+          assert.ok(stage.mouthPresence(p.sx, p.sy) >= 0.5, `${w}x${h} at ${x},${y}: Ward mouth fade stays readable (${stage.mouthPresence(p.sx, p.sy).toFixed(2)})`);
         }
       }
       // The old feet (carrying the clamp, held at DECK.right) put the Ward stair off the canvas from 20,5.
@@ -231,6 +236,28 @@ describe("playtest 2026-10-15", () => {
       const oldSx = w * stage.DECK.right + (ward.x - 20 - (ward.y - 5)) * s.step.x;
       assert.ok(stage.presence(oldSx, s.feet.sy + (ward.x - 20 + ward.y - 5) * s.step.y) < 0.25, `${w}x${h}: sanity, the edge-pinned camera loses the Ward stair`);
     }
+  });
+
+  it("the plate camera look-ahead drifts feet while walking east on a clamped Stack Road (hand re-play on 2fc0d6f felt frozen)", () => {
+    const ctx = { drawImage() {} } as unknown as CanvasRenderingContext2D;
+    const w = 440;
+    const h = 250;
+    // Hard-centre (2fc0d6f) pinned feet at ax every east step once the square road plate clamped on X.
+    // Look-ahead drifts Silas toward the trailing edge so motion stays visible and the Ward side opens up.
+    const feetX: number[] = [];
+    for (const x of [5, 8, 10, 12, 14]) {
+      stage.layoutStage(ctx, w, h, x, 5, "road");
+      feetX.push(stage.stageNow().feet.sx);
+    }
+    for (let i = 1; i < feetX.length; i++) {
+      assert.ok(feetX[i]! < feetX[i - 1]! - 2, `east step ${i}: feet drift left for look-ahead (${feetX[i - 1]!.toFixed(1)} → ${feetX[i]!.toFixed(1)})`);
+    }
+    // Still inside the deck, never the leading (right) edge.
+    assert.ok(feetX.every((sx) => sx > w * stage.DECK.left && sx < w * 0.5), `look-ahead feet stay left of centre: ${feetX.map((v) => v.toFixed(0)).join(",")}`);
+    // Ward is readable earlier than the hard-centre camera (which first cleared onDeck around 16,5 at the rim).
+    stage.layoutStage(ctx, w, h, 14, 5, "road");
+    const ward = stage.projectTile(w, h, 14, 5, 20, 1, 1, 64, 32);
+    assert.ok(stage.onDeck(ward.sx, ward.sy), `from 14,5 look-ahead already has the Ward on deck (${Math.round(ward.sx)},${Math.round(ward.sy)})`);
   });
 
   it("the plate camera is unchanged where the backdrop still has picture: the band only catches feet leaving the canvas", () => {

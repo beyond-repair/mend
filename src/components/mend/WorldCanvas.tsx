@@ -3,7 +3,7 @@ import { bursts, decayFx, floaters, shake } from "@/game/fx";
 import { gait, nodeLive, regionOpen, seamMark, walkable } from "@/game/logic";
 import { LOCKED_DOORS, MAPS, MOUTHS, tileAt, usableMouths } from "@/game/maps";
 import { useGame } from "@/game/store";
-import { layoutStage, presence, projectTile, stageNow } from "@/components/mend/stage";
+import { layoutStage, mouthPresence, presence, projectTile, stageNow } from "@/components/mend/stage";
 import type { Actor, Data } from "@/game/types";
 
 const TW = 78;
@@ -1193,10 +1193,13 @@ export function WorldCanvas() {
           const mouth = MOUTHS.some((m) => m.map === d.mapId && m.x === x && m.y === y);
           if (stageNow().plate) {
             const near = Math.abs(x - d.player.x) + Math.abs(y - d.player.y) <= 4;
-            // A mouth you can use is drawn at any distance (brass diamond + label below); only shut ways wait until you are close.
-            if (mouth && open.has(`${x},${y}`)) {
-              // Same cull and fade as its name tag below, so a diamond is never drawn without its label.
-              const seen = presence(p.sx, p.sy);
+            const rec = mouths.find((m) => m.x === x && m.y === y);
+            // Landmark usable mouths (Stack mouth, Ward stair, …) get a brass diamond at any distance.
+            // nearOnly side stairs (Brick stair → Kiln) stay a quiet near chevron so they do not pull
+            // the eye off the first-act path. Shut doors keep the near-only chevron too.
+            if (mouth && open.has(`${x},${y}`) && !rec?.nearOnly) {
+              // Softer edge fade than actors so a stair clipped at the frame stays readable.
+              const seen = mouthPresence(p.sx, p.sy);
               if (seen > 0.04)
                 jobs.push({
                   z: (x + y) * 10 + 1,
@@ -1269,14 +1272,18 @@ export function WorldCanvas() {
         });
       }
       // Usable mouths get the same brass name tags as machines, so the Stack mouth and the Ward stair are not only diamonds.
+      // nearOnly side stairs skip the distant tag (chevron only until close).
       for (const mouth of mouths) {
+        const dist = Math.abs(mouth.x - d.player.x) + Math.abs(mouth.y - d.player.y);
+        if (mouth.nearOnly && dist > 2) continue;
         const p = project(mouth.x, mouth.y);
-        if (stageNow().plate && presence(p.sx, p.sy) <= 0.04) continue;
+        const seen = stageNow().plate ? mouthPresence(p.sx, p.sy) : 1;
+        if (stageNow().plate && seen <= 0.04) continue;
         tags.push({
           z: (mouth.x + mouth.y) * 10 + 8,
           run: () => {
             ctx.save();
-            if (stageNow().plate) ctx.globalAlpha = presence(p.sx, p.sy);
+            if (stageNow().plate) ctx.globalAlpha = seen;
             label(ctx, p.sx, p.sy + (stageNow().plate ? 16 : 26), mouth.label, "#d4b483");
             ctx.restore();
           },

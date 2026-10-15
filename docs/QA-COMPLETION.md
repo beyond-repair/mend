@@ -1,10 +1,10 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** IN PROGRESS. Headless-browser loop PASS (21/21 with L9a/L9a'/L9b/L9c). Hand re-play on 51790a9 verified the Sinks camera/taps/Stack-mouth labels (bugs 6–8). The Stack Road east camera and walk-to-Ward were still broken on that build; they are fixed on this tip and covered by tests, but **not yet re-verified by hand**.
+**Status:** IN PROGRESS. Headless-browser loop PASS (21/21 with L9a/L9a'/L9b/L9c). Hand re-play on 51790a9 verified the Sinks camera/taps/Stack-mouth labels (bugs 6–8). Tip 2fc0d6f fixed the right-edge pin so the Ward stair is reachable by walking; a later hand pass on that tip still found three feel bugs (frozen east pan, Ward clipped at the rim, Brick stair distracting) — fixed on this tip and covered by tests, but **Stack Road → Ward → Oakhaven still needs hand re-play on this build**.
 Do **not** mark COMPLETE — PLAYTEST VERIFIED until someone has re-played Stack Road → Ward stair → Oakhaven by hand (no Map jump) on this build.
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
-**Date:** 2026-10-15, about 1:30–2:00 AM ET (first pass); hand playtest 1 and its fixes about 2:20–2:45 AM ET; hand re-play + Stack Road camera about 2:50–3:10 AM ET
+**Date:** 2026-10-15, about 1:30–2:00 AM ET (first pass); hand playtest 1 and its fixes about 2:20–2:45 AM ET; hand re-play + Stack Road camera about 2:50–3:10 AM ET; look-ahead / Ward fade / Brick soft about 3:30–3:50 AM ET
 **Runtime:** Node 22.12.0 (`.nvmrc`), Chromium (system Google Chrome) through Playwright 1.63, `npm run dev` on `:8080`, plus a production `npm run build` and `npm run preview` on `:4180`
 
 ## Scope
@@ -99,6 +99,7 @@ The full 17/17 loop passed on seeds 4, 7, 11, 12, and 13, and on unseeded runs (
 On seeds 1, 3, and 9 it passed once the retry budget for Moll's roll was raised.
 After the hand-playtest-1 fixes the 18-step loop (with L8b) passed on seeds 4, 7, 11 at 440×900 and seeds 4, 12 at 1280×713 (`VW=1280 VH=713`).
 After the Stack Road camera fix the 21-step loop (L9a/L9a'/L9b/L9c) passed on seeds 4 and 7 at both 440×900 and 1280×713.
+After the look-ahead / Ward-fade / Brick-soft fix the same 21-step loop passed on seed 4 (feet at 0.32w on L9a'; Ward at 345/440, not rim-clipped).
 `SEED` is only a partial replay: the canvas also draws from `Math.random` every frame, so one seed-4 run met twelve failed Moll rolls in a row (L8 FAIL, the rest cascading). The next seed-4 run passed on attempt 1.
 Esc in the browser: E1 left Tobin's after-talk (PASS). E2 kept Moll's checkpoint choice open (PASS).
 
@@ -121,23 +122,34 @@ A scripted fighter with the recommended build lost the three-guard fight on ever
 
 ## Automated checks
 
-- `npm test`: 196 (scripts) + 55 (app-data/auth) + **39** (game: 28 `pass3` + 11 `playtest`), all passing (Node 22.12)
+- `npm test`: 196 (scripts) + 55 (app-data/auth) + **40** (game: 28 `pass3` + 12 `playtest`), all passing (Node 22.12)
 - After hand playtest 1, 5 `playtest` tests were added. The camera tests fail on 6387550's `stage.ts` (`440x250 at 14,12: feet 225,362 must stay on the canvas`). The talk-past→tap test passes on 6387550 too: the store's `clickTile` was never the problem, the canvas hit test and camera were.
 - After hand re-play 2, 1 more `playtest` test: Ward stair on deck walking the Stack Road east/north. It fails on 51790a9 (`Silas is not pinned to the right edge (361)`).
+- After hand re-play 3, 1 more `playtest` test: look-ahead feet drift left while walking east on a clamped road, and Ward is on deck from 14,5 without rim-clip. Loop L9a' now requires `feet.fx < 0.5` and Ward `sx < 0.88w`.
 - `scripts/ts-resolve-hook.mjs` now also maps the `@/` alias, so a test can load `src/components/mend/stage.ts`.
 - `npm run typecheck`: clean
 - `npm run lint`: 4 errors and 7 warnings, the same as `main`. These are the pre-existing ones named in the README. No new problems.
 - `npm run build`: OK. The migrate step is skipped because `DATABASE_URL` is not set.
 - The new `playtest.test.ts` tests were run against `main`'s game code: 3 of the 4 behaviour tests fail there and pass on this branch.
 
+
+## Hand re-playtest 3 (2026-10-15, ~3:10 AM ET on 2fc0d6f) — Stack Road feel still broken, fixed next
+
+Hand notes on 2fc0d6f: Sinks still good; walking east on The Stack Road felt frozen (feet hard-pinned to the home aim once the square road plate clamped on X, so little/no visual motion); the Ward stair diamond sat on the right rim until close; the Brick stair on the lower gantry (16,11 → Kiln) pulled the eye off the Ward path.
+
+| # | Found by hand | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 14 | **HIGH — Stack Road east walk feels frozen.** After 2fc0d6f pinned feet to `(ax, ay)` whenever the plate clamped, the painted backdrop rested and Silas did not drift, so walking east looked like standing still. | Hard-centre was the right fix for the DECK.right pin (bug 11) but removed the only remaining motion cue on a sparse road plate. Carrying the overshoot *onto* the leading edge (51790a9) loses the Ward stair. | `layoutStage` look-ahead: when clamped, drift feet toward the *trailing* edge by `LOOK.carry` of the overshoot, capped at `LOOK.cap` of the frame. Silas slides, the board scrolls, and the leading side (Ward / Stack mouth) opens up. `keepOnDeck` stays the safety net. | "the plate camera look-ahead drifts feet while walking east…"; loop L9a' requires `feet.fx < 0.5` |
+| 15 | **Ward stair clipped at the right edge until close.** Diamond + label hard to read until near. | Hard-centre put the Ward at ~0.93w from 16,5; actor-sized `presence` margins faded it. | Look-ahead #14 pulls the Ward inward (on deck from 14,5). `mouthPresence` uses wider edge margins than actor `presence` for diamond + brass label fade. | Ward-on-deck check now also asserts `sx < 0.88w` and `mouthPresence ≥ 0.5`; loop L9a' asserts not rim-clipped |
+| 16 | **Brick stair is misleading.** Lower-gantry Kiln mouth (16,11) looks like the way to Oakhaven. | Every usable mouth got a distant brass diamond + label (bug 8). Correct data, wrong first-act prominence. | `nearOnly` on the Brick stair Mouth: near chevron only (no distant brass). Map note names the upper-gantry Ward path and says the Brick stair goes to the Kiln. Mouth is not removed. | "Brick stair is near-only…"; Ward stair stays a landmark |
+
 ## Remaining before COMPLETE — PLAYTEST VERIFIED
 
 1. **Human hand re-playtest** of the same loop on this build, with real canvas taps and visual feel: `npm run dev`, then open `http://localhost:8080/`.
-   Steps: New ledger → Recommended file → Enter the Sinks → "Then show me the pump." → "I'll audit it." → **Audit** (it must walk to the pump, not the checkpoint) → Mend → Esc → walk south through the gap at (14,11) → Moll → Engineering → (File the level once the talk closes) → walk to the SE Stack mouth by tapping → step on it → on The Stack Road, walk east (Brick stair is on the *lower* gantry at 16,11 — correct but wrong direction for Oakhaven), go back up the x=6 stair, walk east along the upper gantry, then north onto the **Ward stair** at (20,1) — **no Map jump** → Oakhaven → talk to someone → Menu → Save slot 1 → reload → Continue.
+   Steps: New ledger → Recommended file → Enter the Sinks → "Then show me the pump." → "I'll audit it." → **Audit** (it must walk to the pump, not the checkpoint) → Mend → Esc → walk south through the gap at (14,11) → Moll → Engineering → (File the level once the talk closes) → walk to the SE Stack mouth by tapping → step on it → on The Stack Road, walk east (Brick stair is on the *lower* gantry at 16,11 — near-only chevron now, not a distant brass; it still goes to the Kiln), go back up the x=6 stair, walk east along the upper gantry, then north onto the **Ward stair** at (20,1) — **no Map jump** → Oakhaven → talk to someone → Menu → Save slot 1 → reload → Continue.
    Check by hand:
    - (Verified on 51790a9) South of the plate, Silas stays in the frame and every tap moves him; arrows/WASD move him too; Stack mouth diamond + label come into view.
-   - **Must re-verify on this tip:** on The Stack Road, walking east does **not** pin Silas to the right edge; taps and WASD/arrows keep moving him; the **Ward stair** diamond + label come into view without a Map jump; ArrowUp / tap onto it lands in Oakhaven.
-   - Feel: past the plate's edge the painted backdrop rests while the board scrolls under a centred Silas.
+   - (Verified headless on this tip; **must re-verify by hand**) on The Stack Road, walking east does **not** feel frozen: Silas drifts toward the trailing edge (look-ahead) while the board scrolls; he is **not** pinned to the right edge; the **Ward stair** diamond + label are readable well before you are on top of them (not rim-clipped); Brick stair does not shout from across the plate; ArrowUp / tap onto the Ward stair lands in Oakhaven.
    - Esc: leaves Tobin's after-talk and Moll's "I'm already walking."; deliberately does nothing on Moll's opening and "No" lines.
    - The arrival toast ("You arrive at The Stack Road.") does not pop again mid-road.
 2. **Death reload design call:** the autosave is written on every combat commit. After a lost fight, "Open the last ledger" can drop you back into the same fight at 1–8 HP and 0–1 AP. You can quit to the title, or load a manual slot if you made one. Not changed: deciding whether to keep a pre-fight checkpoint is a design question.

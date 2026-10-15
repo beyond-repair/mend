@@ -165,7 +165,8 @@ for (let i = 0; i < 4; i++) { await page.keyboard.press("ArrowRight"); for (let 
 s = await S(page);
 const wardFromGantry = await stageAt(page, 20, 1);
 const feet = await page.evaluate(async () => { const url = performance.getEntriesByType("resource").map((e) => e.name).find((n) => n.includes("/src/components/mend/stage.ts")); const st = await import(url); const c = document.querySelector("canvas").getBoundingClientRect(); const f = st.stageNow().feet; return { fx: f.sx / c.width, fy: f.sy / c.height }; });
-step(upTap.ok && s.map === "road" && s.x === 16 && s.y === 5 && wardFromGantry.on > 0.5 && feet.fx < 0.8, `L9a' taps back up to the upper gantry (${upTap.taps} taps), then ArrowRight x4 walks east to ${s.x},${s.y}; feet at ${feet.fx.toFixed(2)}w,${feet.fy.toFixed(2)}h; Ward stair on deck ${wardFromGantry.on.toFixed(2)} at ${Math.round(wardFromGantry.sx)},${Math.round(wardFromGantry.sy)}`);
+// Look-ahead (post-2fc0d6f): feet drift left of centre on a clamped road, and the Ward diamond is not clipped at the right rim.
+step(upTap.ok && s.map === "road" && s.x === 16 && s.y === 5 && wardFromGantry.on > 0.5 && feet.fx < 0.5 && wardFromGantry.sx < wardFromGantry.w * 0.88, `L9a' taps back up to the upper gantry (${upTap.taps} taps), then ArrowRight x4 walks east to ${s.x},${s.y}; feet at ${feet.fx.toFixed(2)}w,${feet.fy.toFixed(2)}h (look-ahead left of centre); Ward stair on deck ${wardFromGantry.on.toFixed(2)} at ${Math.round(wardFromGantry.sx)},${Math.round(wardFromGantry.sy)} (not rim-clipped)`);
 const roadTap = await tapWalk(page, 20, 2, [20, 1]);
 s = await S(page);
 const wardOn = await stageAt(page, 20, 1);

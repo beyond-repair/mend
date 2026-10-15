@@ -669,7 +669,7 @@ export function MapPanel() {
       )}
       {wardAhead && (
         <p className="mb-3 border border-brass-dim px-3 py-2 text-sm leading-relaxed text-brass">
-          Ward stair is the labeled brass diamond east along this road, then north on the spur (far from the Sinks mouth). Stepping on it opens Oakhaven Lower Ward; you can also jump there below.
+          Ward stair is the labeled brass diamond east along the upper gantry, then north on the spur — not the Brick stair on the lower gantry (that mouth goes to the Kiln). Stepping on the Ward stair opens Oakhaven Lower Ward; you can also jump there below.
         </p>
       )}
       <p className="mb-3 border border-brass-dim px-3 py-2 text-sm leading-relaxed">{districtYield(d)}</p>

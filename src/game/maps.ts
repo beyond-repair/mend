@@ -387,12 +387,17 @@ export interface Mouth {
   deny: string;
   /** Board name for the mouth, drawn under its brass diamond so a first-time player can find the way out. */
   label: string;
+  /**
+   * Soften findability: no distant brass diamond/label — only a near chevron until Silas is close.
+   * Used for side stairs that distract from the first-act path (Brick stair → Kiln on the lower gantry).
+   */
+  nearOnly?: boolean;
 }
 
 export const MOUTHS: Mouth[] = [
   { map: "sinks", x: 25, y: 18, to: "road", tx: 5, ty: 5, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
   { map: "road", x: 2, y: 7, to: "sinks", tx: 24, ty: 18, need: null, deny: "The Sinks mouth is shut.", label: "Sinks mouth" },
-  { map: "road", x: 16, y: 11, to: "kiln", tx: 16, ty: 3, need: null, deny: "The brick stair is shut.", label: "Brick stair" },
+  { map: "road", x: 16, y: 11, to: "kiln", tx: 16, ty: 3, need: null, deny: "The brick stair is shut.", label: "Brick stair", nearOnly: true },
   { map: "kiln", x: 16, y: 1, to: "road", tx: 16, ty: 11, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
   { map: "road", x: 22, y: 14, to: "switch", tx: 14, ty: 3, need: null, deny: "The yard stair is shut.", label: "Yard stair" },
   { map: "switch", x: 14, y: 1, to: "road", tx: 22, ty: 13, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
