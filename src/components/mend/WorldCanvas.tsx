@@ -1195,7 +1195,18 @@ export function WorldCanvas() {
             const near = Math.abs(x - d.player.x) + Math.abs(y - d.player.y) <= 4;
             // A mouth you can use is drawn at any distance (brass diamond + label below); only shut ways wait until you are close.
             if (mouth && open.has(`${x},${y}`)) {
-              jobs.push({ z: (x + y) * 10 + 1, run: () => drawMouth(ctx, p.sx, p.sy - 8, now) });
+              // Same cull and fade as its name tag below, so a diamond is never drawn without its label.
+              const seen = presence(p.sx, p.sy);
+              if (seen > 0.04)
+                jobs.push({
+                  z: (x + y) * 10 + 1,
+                  run: () => {
+                    ctx.save();
+                    ctx.globalAlpha = seen;
+                    drawMouth(ctx, p.sx, p.sy - 8, now);
+                    ctx.restore();
+                  },
+                });
             } else if (near && (mouth || shut)) {
               jobs.push({
                 z: (x + y) * 10,
@@ -1438,6 +1449,7 @@ export function WorldCanvas() {
       if (!map) return;
       const zoom = Math.max(1, d.zoom ?? 1);
       const plate = stageNow().plate;
+      const open = new Set(usableMouths(d.mapId, (need) => regionOpen(d, need)).map((m) => `${m.x},${m.y}`));
       const hitX = plate ? Math.max(12, stageNow().step.x) : (TW / 2) * zoom;
       const hitY = plate ? Math.max(7, stageNow().step.y) : (TH / 2) * zoom;
       if (plate) {
@@ -1469,7 +1481,9 @@ export function WorldCanvas() {
         for (let x = 0; x < map.width; x++) {
           const p = projectTile(rect.width, rect.height, d.player.x, d.player.y, x, y, zoom, TW, TH);
           const near = Math.max(Math.abs(x - d.player.x), Math.abs(y - d.player.y));
-          if (plate && (near > 9 || presence(p.sx, p.sy) < 0.25)) continue;
+          // A drawn, labelled mouth answers a tap at any distance; other far tiles stay out of reach.
+          const far = near > 9 && !open.has(`${x},${y}`);
+          if (plate && (far || presence(p.sx, p.sy) < 0.25)) continue;
           const stand = walkable(d, x, y, "player");
           if (plate && !stand) continue;
           const nx = Math.abs(mx - p.sx) / hitX;

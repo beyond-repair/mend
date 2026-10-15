@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { unlockAudio, setAtmosphere, startBed } from "@/game/audio";
 import { ATTR_LIST, allSkills, comprehension, maxHp, SKILL_LIST } from "@/game/formulas";
 import { MAPS } from "@/game/maps";
@@ -195,12 +195,21 @@ function LogChip() {
   const log = useGame((s) => s.data.log);
   const line = log[0] ?? "";
   const [on, setOn] = useState(false);
+  // Every store commit clones `data`, so `log` is a new array on each step even when nothing was written.
+  // Only a real new entry (contents changed) re-raises the chip; otherwise the last line, e.g.
+  // "You arrive at The Stack Road.", popped up again mid-walk.
+  const seen = useRef<string[]>([]);
+  const timer = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (!line) return;
+    const prev = seen.current;
+    seen.current = log;
+    const fresh = log.length !== prev.length || log.some((l, i) => l !== prev[i]);
+    if (!line || !fresh) return;
     setOn(true);
-    const t = window.setTimeout(() => setOn(false), 3800);
-    return () => window.clearTimeout(t);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setOn(false), 3800);
   }, [log, line]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
   if (!on || !line) return null;
   return (
     <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(72%,18rem)]">

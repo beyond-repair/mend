@@ -75,9 +75,14 @@ export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number,
   const minY = Math.min(0, h - dh);
   const x = Math.max(minX, Math.min(0, rawX));
   const y = Math.max(minY, Math.min(0, rawY));
+  // Once the backdrop has run out of picture on either axis it rests at its edge and Silas stays on the
+  // home aim: the board scrolls under a centred Silas. Letting his feet carry the clamp (the old
+  // `ax + (x - rawX)`) slid him to the deck edge, and in this projection walking north (toward the Ward
+  // stair) or east pushes everything ahead of him further off that same edge.
+  // (Unclamped, x - rawX and y - rawY are zero, so the feet sit on the aim either way.)
   current = {
     plate: true,
-    feet: keepOnDeck(ax + (x - rawX), ay + (y - rawY), w, h),
+    feet: keepOnDeck(ax, ay, w, h),
     step,
     w,
     h,
@@ -87,11 +92,11 @@ export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number,
 }
 
 /**
- * Where Silas stands on screen once the plate has run out of picture.
+ * Safety net for where Silas stands on screen on a plate.
  * The plate pans with him until it hits its own edge; past that (the south plate, the Stack mouth,
  * the far east of a road) his feet used to keep sliding with the walk until they left the canvas,
- * which took every tap target and the mouth with them. Hold the feet inside a safe band instead:
- * the backdrop rests at its edge and the board keeps scrolling under him.
+ * which took every tap target and the mouth with them. `layoutStage` now holds him on the home aim
+ * once the backdrop clamps; this band only guarantees the feet can never leave the canvas.
  */
 export function keepOnDeck(sx: number, sy: number, w: number, h: number): Point {
   return {

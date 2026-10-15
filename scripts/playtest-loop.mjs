@@ -60,7 +60,7 @@ async function stageAt(page, tx, ty) {
     return { l: c.left, t: c.top, w: c.width, h: c.height, sx: t.sx, sy: t.sy, on: st.presence(t.sx, t.sy), feetIn: f.sx > 0 && f.sx < c.width && f.sy > 0 && f.sy < c.height * 0.9 };
   }, [tx, ty]);
 }
-async function tapWalk(page, x, y) {
+async function tapWalk(page, x, y, mouth = [25, 18]) {
   const route = await page.evaluate(([x, y]) => {
     const G = window.__mend;
     G.getState().clickTile(x, y);
@@ -75,7 +75,7 @@ async function tapWalk(page, x, y) {
     await page.mouse.click(q.l + q.sx, q.t + q.sy);
     taps++;
     for (let k = 0; k < 60; k++) { if (!(await S(page)).path) break; await page.waitForTimeout(100); }
-    const m = await stageAt(page, 25, 18);
+    const m = await stageAt(page, ...mouth);
     onCanvas &&= m.feetIn;
     mouthSeen ||= m.on > 0.5;
     const now = await S(page);
@@ -150,8 +150,30 @@ await page.keyboard.press("ArrowRight");
 for (let i = 0; i < 20; i++) { s = await S(page); if (s.map !== "sinks" || s.panel === "map") break; await page.waitForTimeout(150); }
 step(s.map === "road" && s.panel === "none", `L9 ArrowRight onto the adjacent Stack mouth departs to The Stack Road (map ${s.map}, panel ${s.panel}, at ${s.x},${s.y})`);
 await shot(page, `${tag}-05-road`);
-// to the ward stair: walk to 20,2 and press ArrowUp
-await walk(page, 20, 2);
+// to the ward stair WITHOUT the Map: real canvas taps east along the gantry and north to beside the Ward stair,
+// with Silas on the canvas and the labelled Ward stair on deck; then ARROW KEY up onto it.
+// Hand re-playtest on 51790a9: the clamped plate pinned Silas to the right edge, the north half of the road
+// projected off the canvas, taps there were culled and the Ward stair never appeared.
+// The hand path: down the x=6 stair to the lower gantry and east to beside the Brick stair (16,11) first (the
+// lower gantry has no way north; the Ward stair is on the upper one), then back up by taps, then east by ARROW
+// KEYS along the upper gantry until the Ward stair is on deck, then taps to beside it.
+const brickTap = await tapWalk(page, 16, 10, [16, 11]);
+s = await S(page);
+step(brickTap.ok && s.map === "road" && s.x === 16 && s.y === 10 && brickTap.onCanvas && brickTap.mouthSeen, `L9a real canvas taps walk the Stack Road to beside the Brick stair (${brickTap.taps} taps, at ${s.x},${s.y}; Silas on canvas every step: ${brickTap.onCanvas}; Brick stair on deck: ${brickTap.mouthSeen})`);
+const upTap = await tapWalk(page, 12, 5, [20, 1]);
+for (let i = 0; i < 4; i++) { await page.keyboard.press("ArrowRight"); for (let k = 0; k < 20; k++) { if (!(await S(page)).path) break; await page.waitForTimeout(80); } await page.waitForTimeout(160); }
+s = await S(page);
+const wardFromGantry = await stageAt(page, 20, 1);
+const feet = await page.evaluate(async () => { const url = performance.getEntriesByType("resource").map((e) => e.name).find((n) => n.includes("/src/components/mend/stage.ts")); const st = await import(url); const c = document.querySelector("canvas").getBoundingClientRect(); const f = st.stageNow().feet; return { fx: f.sx / c.width, fy: f.sy / c.height }; });
+step(upTap.ok && s.map === "road" && s.x === 16 && s.y === 5 && wardFromGantry.on > 0.5 && feet.fx < 0.8, `L9a' taps back up to the upper gantry (${upTap.taps} taps), then ArrowRight x4 walks east to ${s.x},${s.y}; feet at ${feet.fx.toFixed(2)}w,${feet.fy.toFixed(2)}h; Ward stair on deck ${wardFromGantry.on.toFixed(2)} at ${Math.round(wardFromGantry.sx)},${Math.round(wardFromGantry.sy)}`);
+const roadTap = await tapWalk(page, 20, 2, [20, 1]);
+s = await S(page);
+const wardOn = await stageAt(page, 20, 1);
+step(roadTap.ok && s.map === "road" && s.x === 20 && s.y === 2 && roadTap.onCanvas && wardOn.on > 0.5, `L9b real canvas taps walk the Stack Road east and north to beside the Ward stair (${roadTap.taps} taps, at ${s.x},${s.y}; Silas on canvas every step: ${roadTap.onCanvas}; Ward stair on deck: ${roadTap.mouthSeen}, now ${wardOn.on.toFixed(2)} at ${Math.round(wardOn.sx)},${Math.round(wardOn.sy)})`);
+await shot(page, `${tag}-05b-by-ward-stair`);
+// Hand re-playtest: "You arrive at The Stack Road." toasted a second time mid-road (every commit re-raised the chip).
+const chip = await page.locator(".scrap").allInnerTexts();
+step(!chip.some((t) => /You arrive at The Stack Road/.test(t)), `L9c the arrival toast does not come back mid-road (log[0] "${s.log[0]}"; chip now ${JSON.stringify(chip)})`);
 await page.keyboard.press("ArrowUp");
 for (let i = 0; i < 20; i++) { s = await S(page); if (s.map !== "road" || s.panel === "map") break; await page.waitForTimeout(150); }
 step(s.map === "haven" && s.panel === "none", `L10 ArrowUp onto the Ward stair arrives in Oakhaven Lower Ward (map ${s.map}, at ${s.x},${s.y}); log: ${s.log[0]}`);

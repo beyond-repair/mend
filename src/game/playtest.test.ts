@@ -201,6 +201,38 @@ describe("playtest 2026-10-15", () => {
     }
   });
 
+  it("the plate camera keeps the Ward stair on deck when Silas walks the Stack Road east and north (hand re-playtest on 51790a9)", () => {
+    const ctx = { drawImage() {} } as unknown as CanvasRenderingContext2D;
+    const ward = MOUTHS.find((m) => m.map === "road" && m.label === "Ward stair")!;
+    assert.deepEqual([ward.x, ward.y], [20, 1]);
+    for (const [w, h] of [[440, 250], [440, 323], [440, 510]]) {
+      // Arrive from the Sinks at 5,5; detour down the x=6 stair to beside the Brick stair (16,11) on the lower
+      // gantry, back up, then east along the upper gantry and north to beside the Ward stair.
+      const route = [[5, 5], [6, 8], [10, 10], [16, 10], [6, 9], [6, 6], [8, 5], [12, 5], [16, 5], [18, 5], [20, 5], [20, 4], [20, 3], [20, 2]];
+      for (const [x, y] of route) {
+        stage.layoutStage(ctx, w, h, x, y, "road");
+        const s = stage.stageNow();
+        assert.ok(s.plate, "the plate is drawn");
+        const { DECK } = stage;
+        assert.ok(s.feet.sx >= w * DECK.left && s.feet.sx <= w * DECK.right && s.feet.sy >= h * DECK.top && s.feet.sy <= h * DECK.bottom, `${w}x${h} at ${x},${y}: feet ${Math.round(s.feet.sx)},${Math.round(s.feet.sy)} stay inside the deck band`);
+        assert.ok(s.feet.sx < w * DECK.right - 1, `${w}x${h} at ${x},${y}: Silas is not pinned to the right edge (${Math.round(s.feet.sx)})`);
+        for (const [nx, ny, what] of [[x, y - 1, "step north"], [x + 1, y, "step east"], [x, y - 2, "two north"], [x + 2, y, "two east"]] as const) {
+          const p = stage.projectTile(w, h, x, y, nx, ny, 1, 64, 32);
+          assert.ok(stage.presence(p.sx, p.sy) > 0.25, `${w}x${h} at ${x},${y}: the ${what} tile ${nx},${ny} is tappable (${Math.round(p.sx)},${Math.round(p.sy)})`);
+        }
+        if (y <= 5 && x >= 16) {
+          const p = stage.projectTile(w, h, x, y, ward.x, ward.y, 1, 64, 32);
+          assert.ok(stage.onDeck(p.sx, p.sy), `${w}x${h} at ${x},${y}: the Ward stair is on deck (${Math.round(p.sx)},${Math.round(p.sy)})`);
+        }
+      }
+      // The old feet (carrying the clamp, held at DECK.right) put the Ward stair off the canvas from 20,5.
+      stage.layoutStage(ctx, w, h, 20, 5, "road");
+      const s = stage.stageNow();
+      const oldSx = w * stage.DECK.right + (ward.x - 20 - (ward.y - 5)) * s.step.x;
+      assert.ok(stage.presence(oldSx, s.feet.sy + (ward.x - 20 + ward.y - 5) * s.step.y) < 0.25, `${w}x${h}: sanity, the edge-pinned camera loses the Ward stair`);
+    }
+  });
+
   it("the plate camera is unchanged where the backdrop still has picture: the band only catches feet leaving the canvas", () => {
     const { keepOnDeck, DECK } = stage;
     const w = 440;
