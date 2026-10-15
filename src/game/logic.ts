@@ -3673,8 +3673,17 @@ function openAudit(d, target) {
   }
   d.audit = target;
   const revealed = nodes.filter((n) => n.revealed);
+  // Prefer a seam that is actually holding the graph up. A severed leaf with no dependents
+  // (Kiln "Borrowed heat", Pane borrow, etc.) is an unused optional parent — selecting it first
+  // makes Mend the wrong verb and hides Seat/Borrow specials behind a Misreconstruction.
   const worst = [...revealed].sort((a, b) => {
-    const score = (n) => (n.severed ? -1e3 : !nodeLive(nodes, n) ? -500 : n.integrity);
+    const score = (n) => {
+      const feeds = nodes.some((c) => c.dependsOn.includes(n.id));
+      if (n.severed && !feeds) return 50;
+      if (n.severed) return -1e3;
+      if (!nodeLive(nodes, n)) return -500;
+      return n.integrity;
+    };
     return score(a) - score(b);
   })[0];
   d.uiNode = worst?.id ?? nodes[0]?.id ?? null;

@@ -15,7 +15,7 @@ const mem = new Map<string, string>();
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex, hasStoredLedger } = await import("./store.ts");
 const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS } = await import("./maps.ts");
-const { regionOpen } = await import("./logic.ts");
+const { regionOpen, openAudit } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
 const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
 (globalThis as unknown as { Image: unknown }).Image = class {
@@ -517,5 +517,49 @@ describe("playtest 2026-10-15", () => {
     assert.equal(D().phase, "title");
     assert.equal(D().hasSave, true);
     assert.equal(D().hasSave, hasStoredLedger());
+  });
+
+  it("Kiln flue audit selects the dark flue, not the unused Borrowed heat leaf", () => {
+    // Browser act2: Audit · Kiln flue opened on severed optional Borrowed heat, so Mend misreconstructed
+    // and Seat the flue sat below the fold unread. Unused severed leaves must not outrank a dark required seam.
+    useGame.setState((s) => ({
+      data: {
+        ...s.data,
+        mapId: "kiln",
+        player: { ...s.data.player, mapId: "kiln", x: 6, y: 7 },
+        flags: { ...s.data.flags, "seen:kiln": true, checkpointSpoke: true },
+        panel: "none",
+        dialogue: null,
+        path: [],
+        audit: null,
+        uiNode: null,
+      },
+    }));
+    const fire = D().machines.kilnfire;
+    assert.ok(fire, "kilnfire machine exists");
+    assert.equal(fire.nodes.find((n) => n.id === "borrow")?.severed, true, "Borrowed heat starts severed");
+    assert.equal(
+      fire.nodes.some((c) => c.dependsOn.includes("borrow")),
+      false,
+      "Borrowed heat feeds nobody until spliced",
+    );
+    openAudit(D(), { kind: "machine", id: "kilnfire" });
+    assert.equal(D().panel, "audit");
+    assert.equal(D().audit?.id, "kilnfire");
+    assert.equal(D().uiNode, "flue", `expected flue, got ${D().uiNode}`);
+    assert.notEqual(D().uiNode, "borrow");
+    // Pump still prefers the failing valve (severed-or-live main seam).
+    useGame.setState((s) => ({
+      data: {
+        ...s.data,
+        mapId: "sinks",
+        player: { ...s.data.player, mapId: "sinks", x: 13, y: 6 },
+        panel: "none",
+        audit: null,
+        uiNode: null,
+      },
+    }));
+    openAudit(D(), { kind: "machine", id: "pump" });
+    assert.equal(D().uiNode, "valve");
   });
 });

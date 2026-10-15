@@ -241,3 +241,45 @@ Rough key budget from spawn if you go east around Wren then south onto the east 
    - Esc behaviour (Tobin's after-talk, Moll's "I'm already walking.", Doss's sole leave line from bug 17, and Moll's opening/"No" lines kept open) is covered by the unit tests and browser checks E1/E2. It was not called out separately in hand re-playtest 6.
 2. **Death reload design call (unchanged, non-blocking):** the autosave is written on every combat commit. After a lost fight, "Open the last ledger" can drop you back into the same fight at 1–8 HP and 0–1 AP. You can quit to the title, or load a manual slot if you made one. Not changed: deciding whether to keep a pre-fight checkpoint is a design question.
 3. **Beyond Oakhaven (out of scope for this verdict):** Quarry, Rust, Kiln, Switch, Pane, Tundra, Citadel, Spire, and the epilogue are covered only by the `pass3` logic tests. These areas have not been played in a browser in this pass.
+
+## Beyond Oakhaven — The Kiln (IN PROGRESS) (2026-10-15, ~10:26–10:36 AM ET on tip before push)
+
+**Status:** **IN PROGRESS** for the beyond-Oakhaven scope. First region after Oakhaven Lower Ward was played in a real headless browser (Playwright / Chromium against `npm run dev`). Quarry, Rust, Switch, Pane, Tundra, Citadel, Spire, and the epilogue remain unplayed in a browser (logic-only via `pass3`).
+
+**How the next region is reached (from data, not guesswork):**
+- Oakhaven (`haven`) has one mouth: **Stack mouth** at (34,6) → Stack Road (20,3).
+- Campaign Lark line `"The brick yard."` (`seen:road`, missing `seen:kiln`) points south of the walk to the kiln before Rust.
+- Stack Road **Brick stair** at (16,11) → **The Kiln** (`need: null`, `nearOnly: true`). Yard/Glass stairs and Quarry/Rust cuts are other exits; Kiln is the campaign's first named Act II district after the road.
+
+**Harness:** `scripts/playtest-act2.mjs` (SEED=4). Continues the verified first-act path through Oakhaven, leaves via Stack mouth, walks to the Brick stair with real canvas taps, ArrowDown into The Kiln.
+
+### Results (act2)
+
+| Step | Result |
+| --- | --- |
+| A0–A2 Moll → Stack Road → Ward stair → Oakhaven | PASS |
+| K0 Oakhaven Stack mouth → Stack Road | PASS |
+| K1 real taps beside Brick stair (Silas on canvas) | PASS |
+| K2 Brick stair → The Kiln; arrive toast + clay line; `seen:kiln` | PASS |
+| K3–K4 plate camera keeps feet on canvas after arrive + short walk | PASS |
+| K5–K7 Stack mouth labeled/on deck; walk out to road and re-enter | PASS |
+| K8–K10 Talk Harl → parents line → journal `kiln-parents` / pin; Esc closes | PASS |
+| K11 Audit Kiln flue | PASS |
+| K11b audit selects **flue** not Borrowed heat | PASS (after fix) |
+| K11c–K12 Seat the flue special; set takes (`brickLive`) | PASS |
+| K13–K15 Esc closes Audit/Menu | PASS |
+| K16–K18 Save slot 1 → reload → Continue resumes Kiln | PASS |
+| K19 no page/console errors | PASS |
+
+Baseline `SEED=4 scripts/playtest-loop.mjs` still **PASS**. `npm test` **196 + 55 + 55 PASS** (playtest +1). `npm run typecheck` clean.
+
+### Bugs found / fixed
+
+| # | Found by play | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 20 | **HIGH — Kiln Audit opens on unused Borrowed heat.** First Audit · Kiln flue selected severed optional **Borrowed heat**, so **Mend** misreconstructed and the real verb (**Seat the flue**) sat below the fold unread. | `openAudit` ranks any severed node as worst (`-1e3`), including optional leaves with no dependents (Kiln/Pane borrow starts severed by design). | Prefer required seams: a severed node that feeds nobody scores as a non-urgent leaf (`50`); severed parents that still feed children, dark seams, and low integrity keep priority. Pump valve selection unchanged. | `playtest`: "Kiln flue audit selects the dark flue, not the unused Borrowed heat leaf"; act2 K11b |
+
+### Still unplayed (browser)
+
+Quarry (Clockwork Canyon), Rust Districts, The Switch, The Pane, Brass Tundra, High Citadel, Void Spire, epilogue. Also unplayed in Kiln: stamp desk / Cress full path, nest/cellar, refuse-yard branch, and a full hand pass without the harness.
+
