@@ -13,7 +13,7 @@ const mem = new Map<string, string>();
   length: 0,
 } as Storage;
 
-const { useGame, visibleReplies, crossesCheckpoint, leaveIndex } = await import("./store.ts");
+const { useGame, visibleReplies, crossesCheckpoint, leaveIndex, hasStoredLedger } = await import("./store.ts");
 const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS } = await import("./maps.ts");
 const { regionOpen } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
@@ -390,5 +390,34 @@ describe("playtest 2026-10-15", () => {
     assert.equal(D().phase, "play");
     G().quit();
     assert.equal(D().phase, "title");
+  });
+
+  it("title Continue reads disk before paint (hasStoredLedger / boot, not a stale false)", () => {
+    // Hand check: first page load showed Continue greyed even with auto+slot1; click still worked
+    // after a late boot. Store side: initialData().hasSave was hard-false until boot. SSR side:
+    // disabled={!hasSave} on the server HTML is not patched on hydrate when the client has a save
+    // (TitleScreen now gates disabled until mount).
+    mem.clear();
+    assert.equal(hasStoredLedger(), false);
+    G().boot();
+    assert.equal(D().hasSave, false);
+
+    freshLedger();
+    G().save("slot1");
+    assert.equal(hasStoredLedger(), true, "auto from play commits plus slot1");
+
+    // Cold title the old way: phase title, hasSave left false while storage is full.
+    useGame.setState((s) => ({ data: { ...s.data, phase: "title", hasSave: false } }));
+    assert.equal(D().hasSave, false);
+    // boot (and store seed / useLayoutEffect) re-reads disk before paint.
+    G().boot();
+    assert.equal(D().hasSave, true);
+    assert.equal(D().hasSave, hasStoredLedger());
+
+    // quit() must also seed from the same scan so a menu return looks enabled immediately.
+    G().quit();
+    assert.equal(D().phase, "title");
+    assert.equal(D().hasSave, true);
+    assert.equal(D().hasSave, hasStoredLedger());
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { unlockAudio, setAtmosphere, startBed } from "@/game/audio";
 import { ATTR_LIST, allSkills, comprehension, maxHp, SKILL_LIST } from "@/game/formulas";
 import { MAPS } from "@/game/maps";
@@ -24,8 +24,11 @@ export function Game() {
   const phase = useGame((s) => s.data.phase);
   const uiText = useGame((s) => s.data.flags.uiText);
   const boot = useGame((s) => s.boot);
-  useEffect(() => {
+  // Before paint: seed hasSave from localStorage so Continue is not grey on first load.
+  useLayoutEffect(() => {
     boot();
+  }, [boot]);
+  useEffect(() => {
     if (import.meta.env.DEV) {
       (window as unknown as { __mend?: typeof useGame }).__mend = useGame;
     }
@@ -52,11 +55,20 @@ export function Game() {
 function TitleScreen() {
   const ironman = useGame((s) => s.data.ironman);
   const hasSave = useGame((s) => s.data.hasSave);
+  const boot = useGame((s) => s.boot);
   const setIronman = useGame((s) => s.setIronman);
   const openCreate = useGame((s) => s.openCreate);
   const load = useGame((s) => s.load);
   const openPanel = useGame((s) => s.openPanel);
   const panel = useGame((s) => s.data.panel);
+  // SSR has no localStorage, so hasSave is false on the server HTML. If we render
+  // disabled={!hasSave} there, React hydration will not patch the attribute when the
+  // client has a real save — Continue stays grey forever. Gate disabled until mount.
+  const [titleReady, setTitleReady] = useState(false);
+  useLayoutEffect(() => {
+    boot();
+    setTitleReady(true);
+  }, [boot]);
   return (
     <main className="relative mx-auto flex h-dvh w-full max-w-[440px] flex-col overflow-y-auto">
       <img src="/game/plates/sinks.jpg?v=5" alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
@@ -75,7 +87,12 @@ function TitleScreen() {
         <button type="button" className="min-h-11 bg-brass px-4 font-display text-lg text-soot" onClick={openCreate}>
           New ledger
         </button>
-        <button type="button" className="min-h-11 border border-brass px-4 text-brass" disabled={!hasSave} onClick={() => load("auto")}>
+        <button
+          type="button"
+          className="min-h-11 border border-brass px-4 text-brass"
+          disabled={titleReady && !hasSave}
+          onClick={() => load("auto")}
+        >
           Continue
         </button>
         <label className="mt-2 flex min-h-11 items-center gap-3 text-sm text-mist">

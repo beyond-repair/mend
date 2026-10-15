@@ -246,6 +246,11 @@ function readSlot(id: string): { label: string; when: number; data: Data } | nul
   }
 }
 
+/** True when any ledger slot is on disk. Seeds title Continue before React effects run. */
+export function hasStoredLedger(): boolean {
+  return Boolean(readSlot("auto") || readSlot("slot1") || readSlot("slot2"));
+}
+
 function writeSlot(id: string, data: Data) {
   if (typeof localStorage === "undefined") return;
   const label = `${data.name} · ${MAPS[data.mapId]?.name ?? "road"} · L${data.level}${data.combat ? ` · round ${data.combat.round}` : ""}`;
@@ -337,10 +342,10 @@ function myTurn(d: Data) {
 }
 
 export const useGame = create<Store>((set, get) => ({
-  data: initialData(),
+  data: { ...initialData(), hasSave: hasStoredLedger() },
   boot: () => {
-    const has = Boolean(readSlot("auto") || readSlot("slot1") || readSlot("slot2"));
-    set((s) => ({ data: { ...s.data, hasSave: has } }));
+    const has = hasStoredLedger();
+    set((s) => (s.data.hasSave === has ? {} : { data: { ...s.data, hasSave: has } }));
   },
   setIronman: (v) => set((s) => ({ data: { ...s.data, ironman: v } })),
   openCreate: () => set((s) => ({ data: { ...s.data, phase: "create" } })),
@@ -474,7 +479,7 @@ export const useGame = create<Store>((set, get) => ({
   },
   quit: () =>
     set((s) => ({
-      data: { ...initialData(), ironman: false, hasSave: Boolean(readSlot("auto") || readSlot("slot1")) },
+      data: { ...initialData(), ironman: false, hasSave: hasStoredLedger() },
     })),
   closePanel: () => set((s) => ({ data: { ...s.data, panel: "none" } })),
   openPanel: (p) =>
