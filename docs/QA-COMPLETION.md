@@ -187,7 +187,7 @@ Non-blocking polish leftovers from this pass were addressed in **Polish pass 1**
 
 ## Polish pass 1 (2026-10-15)
 
-Play tip for this hand-check round: **`eb7b0f9`** (~5:17–5:21 AM ET Continue PASS). Fixes below land on the next tip of `fix/mend-playtest-rc`. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
+Play tip for this hand-check round: **`eb7b0f9`** (~5:17–5:21 AM ET Continue PASS). Fixes below on **`2c9d817`** (`fix/mend-playtest-rc`). First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
 
 | Finding | Root cause | Fix | Regression test |
 | --- | --- | --- | --- |
