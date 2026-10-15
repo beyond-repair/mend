@@ -310,7 +310,20 @@ function convoFor(d: Data, a: Actor) {
   return memoryConvo(d, a.id) ?? a.convo;
 }
 
-function openTalk(d: Data, a: Actor) {
+/** Same tile + same convo after Leave: bump/door must not re-open until Silas steps away. */
+function dismissKey(d: Data, convo: string) {
+  return `${convo}@${d.player.x},${d.player.y}`;
+}
+
+function isDismissed(d: Data, convo: string) {
+  return d.flags.dismissAt === dismissKey(d, convo);
+}
+
+function markDismiss(d: Data, convo: string | undefined) {
+  if (convo) d.flags.dismissAt = dismissKey(d, convo);
+}
+
+function openTalk(d: Data, a: Actor, opts?: { force?: boolean }) {
   if (!a.alive) return;
   if (d.combat) {
     if (a.hostile) strike(d, d.player, a);
@@ -320,7 +333,10 @@ function openTalk(d: Data, a: Actor) {
     startCombat(d, [a.id]);
     return;
   }
-  d.dialogue = { convo: convoFor(d, a), node: "start" };
+  const convo = convoFor(d, a);
+  // Bump into Wren (or any NPC) right after Leave must not re-open; Talk HUD uses force.
+  if (!opts?.force && isDismissed(d, convo)) return;
+  d.dialogue = { convo, node: "start" };
   d.panel = "none";
   play("talk");
 }
@@ -536,6 +552,8 @@ export const useGame = create<Store>((set, get) => ({
         }
         if (door) {
           if (dist(d.player, door) <= 1) {
+            // Plate-stair / locked door: Leave it. then arrow into the same tile must not loop the sign.
+            if (isDismissed(d, door.convo)) return;
             d.dialogue = { convo: door.convo, node: "start" };
             d.panel = "none";
           } else if (!refuseWalk(d)) {
@@ -599,7 +617,9 @@ export const useGame = create<Store>((set, get) => ({
               else if (dist(d.player, a) <= (weaponOf(d.player).range ?? 1)) strike(d, d.player, a);
             }
           } else if (intent.type === "door" && dist(d.player, intent) <= 1) {
-            d.dialogue = { convo: intent.convo, node: "start" };
+            if (!isDismissed(d, intent.convo)) {
+              d.dialogue = { convo: intent.convo, node: "start" };
+            }
           }
         }
         if (d.phase === "play" && !d.combat && isExit(d.mapId, d.player.x, d.player.y)) depart(d);
@@ -654,7 +674,10 @@ export const useGame = create<Store>((set, get) => ({
         return;
       }
       if (goto && d.dialogue) d.dialogue.node = goto;
-      else if (reply.end || !goto) d.dialogue = null;
+      else if (reply.end || !goto) {
+        markDismiss(d, from);
+        d.dialogue = null;
+      }
     }),
   endTurn: () => commit(set, (d) => endPlayerTurn(d)),
   brace: () => commit(set, (d) => brace(d)),
@@ -769,7 +792,7 @@ export const useGame = create<Store>((set, get) => ({
         .filter((a) => a.alive && a.mapId === d.mapId && !a.companion)
         .sort((a, b) => dist(d.player, a) - dist(d.player, b));
       const near = people.find((a) => dist(d.player, a) <= 1);
-      if (near) openTalk(d, near);
+      if (near) openTalk(d, near, { force: true });
       else if (people[0]) {
         d.path = pathNear(d, people[0].x, people[0].y) ?? [];
         d.intent = { type: "talk", id: people[0].id };

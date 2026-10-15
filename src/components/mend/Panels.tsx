@@ -885,7 +885,7 @@ export function DialogueBox() {
           <ul className="mt-2 space-y-1.5">
             {replies.map((r, i) => (
               <li key={i}>
-                <button type="button" className="min-h-10 w-full border border-brass-dim px-3 py-1.5 text-left text-sm hover:border-brass" onClick={() => choose(i)}>
+                <button type="button" className="min-h-10 w-full border border-brass-dim px-3 py-1.5 text-left text-sm hover:border-brass" onMouseDown={(e) => e.preventDefault()} onClick={() => choose(i)}>
                   {r.text}
                   {r.check && (
                     <span className="mt-1 block text-xs text-brass">

@@ -786,6 +786,8 @@ function movePlayer(d, x, y) {
   const oy = d.player.y;
   d.player.x = x;
   d.player.y = y;
+  // Stepping off the dismiss tile lets the same NPC/door talk again on purpose.
+  if ((x !== ox || y !== oy) && d.flags.dismissAt) delete d.flags.dismissAt;
   if (!d.combat && mates.length) {
     const [first, second] = mates;
     if (first) {

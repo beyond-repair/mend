@@ -318,6 +318,18 @@ function PlayScreen() {
     return () => cancelAnimationFrame(raf);
   }, [step]);
 
+  const playRef = useRef<HTMLDivElement>(null);
+  const focusPlay = () => {
+    const el = playRef.current;
+    if (!el) return;
+    // Keep OS arrow keys on the play shell after talk/HUD clicks (button focus swallows them in some hosts).
+    if (document.activeElement !== el) el.focus({ preventScroll: true });
+  };
+
+  useEffect(() => {
+    if (!d.dialogue) focusPlay();
+  }, [d.dialogue]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useGame.getState().data;
@@ -335,6 +347,16 @@ function PlayScreen() {
       if (levelUp || s.dialogue || (s.panel !== "none" && s.panel !== "audit")) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      const walk =
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "w" ||
+        e.key === "a" ||
+        e.key === "s" ||
+        e.key === "d";
+      if (walk) e.preventDefault();
       const x = s.player.x;
       const y = s.player.y;
       if (e.key === "ArrowUp" || e.key === "w") click(x, y - 1);
@@ -382,7 +404,17 @@ function PlayScreen() {
       ];
 
   return (
-    <div className="relative mx-auto flex h-dvh w-full max-w-[440px] flex-col">
+    <div
+      ref={playRef}
+      tabIndex={-1}
+      className="relative mx-auto flex h-dvh w-full max-w-[440px] flex-col outline-none"
+      onMouseDown={(e) => {
+        // Clicks on non-interactive chrome keep the shell focused for OS arrow keys.
+        const t = e.target as HTMLElement | null;
+        if (t?.closest("button, a, input, textarea, select, [role='button']")) return;
+        focusPlay();
+      }}
+    >
       <header className="plate-head">
         <div className="head-row">
           <button type="button" className="head-gear" onClick={() => open("menu")} aria-label="Menu">
@@ -539,7 +571,14 @@ const HUD_ART: Record<string, string> = {
 
 function HudButton({ kind, label, onClick, dim }: { kind: string; label: string; onClick: () => void; dim?: boolean }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} aria-disabled={dim || undefined} className={`hud-key ${dim ? "opacity-40" : ""}`}>
+    <button
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      aria-label={label}
+      aria-disabled={dim || undefined}
+      className={`hud-key ${dim ? "opacity-40" : ""}`}
+    >
       <img src={HUD_ART[kind] ?? HUD_ART.menu} alt="" className="hud-art" />
       {hudShowsCaption(kind) ? <span className="hud-label">{label}</span> : null}
     </button>

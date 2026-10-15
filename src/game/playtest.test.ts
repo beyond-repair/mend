@@ -426,6 +426,62 @@ describe("playtest 2026-10-15", () => {
     assert.equal(D().dialogue, null);
   });
 
+  it("immediate re-bump into Wren after Leave does not reopen; step away does", () => {
+    // Spawn lane: Wren stands south of (3,3). Down into her after Leave used to reopen forever.
+    const wren = D().actors.wren;
+    assert.ok(wren);
+    useGame.setState((s) => ({
+      data: { ...s.data, player: { ...s.data.player, x: wren.x, y: wren.y - 1 }, path: [], intent: null, dialogue: null },
+    }));
+    G().clickTile(wren.x, wren.y);
+    assert.equal(D().dialogue?.convo, "wren");
+    pick(/Back to the iron/);
+    assert.equal(D().dialogue, null);
+    G().clickTile(wren.x, wren.y);
+    assert.equal(D().dialogue, null, "same-tile bump after Leave must stay quiet");
+    // Talk HUD still works (force).
+    G().talkNearest();
+    assert.equal(D().dialogue?.convo, "wren");
+    pick(/Back to the iron/);
+    // Step aside, then bump again — talk is allowed.
+    G().clickTile(wren.x + 1, wren.y - 1);
+    walkOut();
+    assert.equal(D().dialogue, null);
+    assert.equal(D().player.x, wren.x + 1);
+    G().clickTile(wren.x, wren.y);
+    walkOut();
+    assert.equal(D().dialogue?.convo, "wren");
+  });
+
+  it("plate-stair Ledger sign does not re-open on every Down after Leave it", () => {
+    // Door at (5,11). Standing at (5,10) and pressing Down used to loop "A bar sits in the plate stair…".
+    useGame.setState((s) => ({
+      data: { ...s.data, player: { ...s.data.player, x: 5, y: 10 }, path: [], intent: null, dialogue: null },
+    }));
+    G().clickTile(5, 11);
+    assert.equal(D().dialogue?.convo, "plate-stair");
+    pick(/Leave it/);
+    assert.equal(D().dialogue, null);
+    G().clickTile(5, 11);
+    assert.equal(D().dialogue, null, "same-tile door after Leave it must stay quiet");
+    G().clickTile(6, 10);
+    walkOut();
+    G().clickTile(5, 11);
+    assert.equal(D().dialogue?.convo, "plate-stair", "after stepping away the sign can be read again");
+  });
+
+  it("Recommended Engineering/Audit/Speech tags do not skip the guard-line", () => {
+    // Fresh ledger uses recommend() → audit+engineering+speech. Crossing y=12 still opens Moll.
+    assert.ok((D().player.skills.speech ?? 0) >= 40);
+    assert.ok((D().player.skills.engineering ?? 0) >= 40);
+    assert.ok((D().player.skills.audit ?? 0) >= 40);
+    assert.equal(Boolean(D().flags.checkpointSpoke), false);
+    useGame.setState((s) => ({ data: { ...s.data, player: { ...s.data.player, x: 14, y: 10 } } }));
+    G().clickTile(14, 12);
+    walkOut();
+    assert.equal(D().dialogue?.convo, "guard-line");
+  });
+
   it("Menu quit label names the title return; quit() restores the title phase", () => {
     // "Close the ledger" read like dismissing the panel; the X already closes. Wording matches epilogue.
     assert.equal(MENU_QUIT_LABEL, "Return to the title");

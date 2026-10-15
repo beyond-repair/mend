@@ -187,7 +187,7 @@ Non-blocking polish leftovers from this pass were addressed in **Polish pass 1**
 
 ## Polish pass 1 (2026-10-15)
 
-Play tip for this hand-check round: **`eb7b0f9`** (~5:17–5:21 AM ET Continue PASS). Fixes below on **`2c9d817`** (`fix/mend-playtest-rc`). First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
+Play tip for prior HUD/Wren-leave/fight-reach round: **`2c9d817`** (~5:31–5:34 AM ET live recheck). Fixes below land on the next tip of `fix/mend-playtest-rc`. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
 
 | Finding | Root cause | Fix | Regression test |
 | --- | --- | --- | --- |
@@ -197,21 +197,25 @@ Play tip for this hand-check round: **`eb7b0f9`** (~5:17–5:21 AM ET Continue P
 | Menu "Close the ledger" returns to the title | Intended quit (`quit()` → `phase: "title"`), but the wording sounded like dismissing the panel. The panel **X** already closes via `closePanel`. | Renamed control to **Return to the title** (`MENU_QUIT_LABEL`), matching the epilogue. Behaviour unchanged. | `playtest`: "Menu quit label names the title return…" |
 | Title **Continue** looks greyed on first page load even when auto + slot1 exist; click still works; after Menu → title it looks enabled | Two layers: (1) `hasSave` started `false` until `boot()` after paint; (2) SSR renders `disabled` with no `localStorage`, client has a save → React hydration **does not patch** the `disabled` attribute, so Continue can stay grey forever after reload. Menu quit remounted with client-only state, so it looked fine. | Seed `hasSave` via `hasStoredLedger()`; `boot()`/`quit()` share that scan; title gates `disabled={titleReady && !hasSave}` so SSR and first client paint both omit disabled, then mount+boot set the real state before paint. | `playtest`: "title Continue reads disk before paint…" |
 | Wren **"Back to the iron."** click leaves the option list open; Esc closes it | `choose` was fine. Dialogue lived inside `.world-frame` (`overflow: hidden`). The leave line sat below the frame edge under the party strip (`Silas Vance` / near-face row), so real mouse hits landed on the footer, not the button. Esc has no pointer target. | Move `DialogueBox` out of the world frame onto the play column; `bottom-[10.5rem]` so it overlays the party strip above the HUD keys; party strip `pointer-events-none` while talking. | `playtest`: "Wren's Back to the iron leave closes…"; browser mouse click on :8080 |
-| Fight-reach steps failed for the live tester | Walking near Moll/Varr only fills the **near-face** strip (actors within 8 tiles) — it does **not** start a fight. Guard-line fires only when a step crosses **y &lt; 12 → y ≥ 12** in the Sinks with no crawl/act1/checkpoint yet. Tobin's opening has **no leave line** on purpose (Esc does nothing; bug 4). | Documented reliable path below; store regression walks (14,10)→(14,12) → **Move.** → **Read them.** | `playtest`: "checkpoint fight from a fresh ledger…" |
+| Fight-reach / near-face ≠ fight | Walking near Moll/Varr only fills the **near-face** strip (actors within 8 tiles) — it does **not** start a fight. Guard-line fires only when a step crosses **y &lt; 12 → y ≥ 12** in the Sinks with no crawl/act1/checkpoint yet. Tobin's opening has **no leave line** on purpose (Esc does nothing; bug 4). Recommended Engineering/Audit/Speech tags do **not** auto-pass. | Documented by-sight recipe below; store + :8080 real-key drive → combat HUD screenshot `.playtest/combat-hud.png`. | `playtest`: "checkpoint fight from a fresh ledger…"; "Recommended Engineering/Audit/Speech tags do not skip the guard-line" |
+| Wren bump re-opens talk on every Down after Leave | Wren stands on the spawn's south lane. `clickTile` into her tile while adjacent always `openTalk`s — so Down right after **"Back to the iron."** reopens forever and blocks the walk south. | On Leave, set `flags.dismissAt` to `convo@x,y`. Bump/door open skips while still on that tile; cleared on the next step. Talk HUD uses `force` and still opens. | `playtest`: "immediate re-bump into Wren after Leave…" |
+| Ledger sign ("A bar sits in the plate stair…") loops while walking south | Locked plate-stair door at the mid plate. Arrow Down into that door tile re-opens the narrator **"Ledger"** sign after every **"Leave it."** | Same `dismissAt` gate on locked-door open (and door intent arrival). | `playtest`: "plate-stair Ledger sign does not re-open…" |
+| OS arrow keys dead after clicking a talk line / HUD; browser-dispatched keys still move | Click focused the reply/HUD `<button>`. When dialogue unmounted (or in some hosts), focus left the play surface so trusted OS key events never reached the window listener; CDP/dispatched events still did. | Play shell `tabIndex={-1}` + refocus when talk closes; `onMouseDown preventDefault` on dialogue replies and HUD keys so they do not steal focus; `preventDefault` on walk keys. | Live :8080: focus stays `DIV.relative` after Leave / Audit; ArrowDown still steps |
 
-### Fight-reach (checkpoint combat, verified store + :8080)
+### Fight-reach by sight (checkpoint combat)
 
 Fresh **New ledger** → **Recommended file** → **Enter the Sinks**:
 
-1. Tobin opening: **"Then show me the pump."** → **"I'll audit it."** (only those two lines — **no leave**; Esc does nothing here by design).
-2. Optional: Audit → pump, or skip straight south. Start tile after Tobin is about **(3,3)**.
-3. Walk to **(14,10)** (north of the plate), then step onto **(14,12)** (or any path whose first plate tile is y≥12). Moll's **guard-line** opens.
-4. Choose **"Move."** → **"Read them."** → combat vs **Varr, Moll (en1), Hess (en2)**. HUD shows Strike / Brace / End (art words) with `aria-label` End turn.
-5. Do **not** take the Engineering/Speech talk-past first if you want this fight on the same ledger (`checkpointSpoke` closes the line). Wren's crawl also bypasses it.
+1. Tobin: **"Then show me the pump."** → **"I'll audit it."** (only those two lines — **no leave**; Esc does nothing here by design).
+2. Optional: Audit the pump, or skip. After Tobin you stand near the north shop floor; **Wren** is the soot-stained figure straight south of spawn — step **around** her (one tile east or west) rather than mashing Down into her.
+3. Walk **south** toward the open metal plate where the Bureau squad stands (Captain Varr + two enforcers). Landmarks: past the glowing floor grates / yard crane area, onto the wide plate itself — **not** merely when their faces appear in the party strip (that strip lights up from several tiles away).
+4. Avoid the mid-plate **barred stair** tile if a **"Ledger"** sign ("A bar sits in the plate stair…") pops — step one tile aside and keep south. The fight cue is Moll's line: **"Checkpoint. Nobody walks the south plate…"**
+5. Choose **"Move."** → **"Read them."** → combat vs **Varr, Moll, Hess**. HUD shows Strike / Brace / End (art words). Screenshot: `.playtest/combat-hud.png`.
+6. Do **not** take Engineering/Speech talk-past first if you want this fight (`checkpointSpoke` closes the line). Wren's crawl also bypasses it.
 
-If Moll and Captain Varr appear in the party strip but no dialogue opens, you are only in near-face range — keep walking **south across y=12**.
+Rough key budget from spawn if you go east around Wren then south onto the east side of the plate: about **2 Right, then ~8–10 Down** until Moll speaks (exact count varies if you stop for Audit or bump Tobin). If faces show in the strip but no dialogue, you are still north of the plate line — keep walking south.
 
-**Verification (automated):** `npm test` **196 + 55 + 51 PASS** (playtest +3: HUD caption rule, Wren leave, fight-reach); `npm run typecheck` clean; headless `SEED=4 node scripts/playtest-loop.mjs` **PASS**.
+**Verification (automated):** `npm test` **196 + 55 + 54 PASS** (playtest +3: Wren dismiss, plate-stair dismiss, Recommended≠skip); `npm run typecheck` clean; headless `SEED=4 node scripts/playtest-loop.mjs` **PASS**; :8080 real `keydown` New ledger → … → **Move.** → **Read them.** combat HUD captured.
 
 **Live hand re-check (2026-10-15 ~5:06–5:08 AM ET on `1167c2f` play / `1b6cbea` docs):** real mouse clicks, no Map.
 
@@ -223,7 +227,9 @@ If Moll and Captain Varr appear in the party strip but no dialogue opens, you ar
 | Combat captions (Strike / Brace / End turn) | NOT checked live on that tip (no fight); re-checked after fight-reach fix — art words only, no double `.hud-label` |
 | New: title Continue greyed on first load with autosave + slot1; click still works; after Menu → title looks normally enabled | FOUND → fixed on `eb7b0f9`; live ~5:17–5:21 AM ET Continue enabled after hard reload + loads Oakhaven **PASS** |
 
-**Live hand re-check (2026-10-15 ~5:17–5:21 AM ET on play tip `eb7b0f9`):** Continue PASS; double HUD captions FOUND; Wren leave click FOUND; fight-reach steps insufficient FOUND. Fixes in the table above.
+**Live hand re-check (2026-10-15 ~5:17–5:21 AM ET on play tip `eb7b0f9`):** Continue PASS; double HUD captions FOUND; Wren leave click FOUND; fight-reach steps insufficient FOUND. Fixes in the table above (`2c9d817`).
+
+**Live hand re-check (2026-10-15 ~5:31–5:34 AM ET on play tip `2c9d817`):** HUD single captions PASS; Wren leave click 3/3 PASS; combat FAIL (never crossed plate line — near-face only; Wren re-bump + Ledger sign + OS key focus blocked the walk). Fixes in the four new table rows; combat re-verified on :8080 with real keys → `.playtest/combat-hud.png`.
 
 ## Before COMPLETE — PLAYTEST VERIFIED: record (all done on c82cd73)
 
