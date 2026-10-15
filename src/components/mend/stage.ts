@@ -184,3 +184,21 @@ export function hitMouthLabel(mx: number, my: number, sx: number, sy: number, te
   const b = mouthLabelBox(sx, sy, text, plate);
   return mx >= b.left && mx <= b.right && my >= b.top && my <= b.bottom;
 }
+
+/**
+ * Plate taps skip tiles Silas cannot stand on, and a shut locked door is not standable, so a tap
+ * on the door itself used to walk to the nearest neighbour instead (Kiln cellar cut, act2 K28).
+ * A tap inside a shut door's own tile diamond takes the door; clickTile then walks beside it and
+ * opens its sign. `doors` are already projected and presence-culled by the caller.
+ */
+export function hitShutDoor(mx: number, my: number, doors: { x: number; y: number; sx: number; sy: number }[], hitX: number, hitY: number) {
+  let hit: { x: number; y: number; dd: number } | null = null;
+  for (const door of doors) {
+    const nx = Math.abs(mx - door.sx) / hitX;
+    const ny = Math.abs(my - door.sy) / hitY;
+    if (nx + ny > 1) continue;
+    const dd = (mx - door.sx) ** 2 + (my - door.sy) ** 2;
+    if (!hit || dd < hit.dd) hit = { x: door.x, y: door.y, dd };
+  }
+  return hit && { x: hit.x, y: hit.y };
+}

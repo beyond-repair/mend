@@ -14,7 +14,7 @@ const mem = new Map<string, string>();
 } as Storage;
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex, hasStoredLedger } = await import("./store.ts");
-const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS } = await import("./maps.ts");
+const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS, LOCKED_DOORS, tileAt, WALKABLE } = await import("./maps.ts");
 const { regionOpen, openAudit } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
 const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
@@ -561,5 +561,65 @@ describe("playtest 2026-10-15", () => {
     }));
     openAudit(D(), { kind: "machine", id: "pump" });
     assert.equal(D().uiNode, "valve");
+  });
+  it("every shut locked door has free orthogonal approaches on both sides (Nim no longer blocks the Kiln cellar cut)", () => {
+    // act2 K28: Nim stood on (6,15), the only orthogonal tile north of the Kiln cellar door (6,16).
+    // Arrow keys step orthogonally, so a keyboard player could never bump the door open.
+    const d = D();
+    const blocked: string[] = [];
+    for (const door of LOCKED_DOORS) {
+      const map = MAPS[door.map];
+      const free = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ].filter(([dx, dy]) => {
+        const x = door.x + dx;
+        const y = door.y + dy;
+        if (!WALKABLE.has(tileAt(map, x, y))) return false;
+        if (Object.values(d.machines).some((m) => m.mapId === door.map && m.x === x && m.y === y)) return false;
+        return !Object.values(d.actors).some((a) => a.alive && a.mapId === door.map && a.x === x && a.y === y);
+      });
+      if (free.length < 2) blocked.push(`${door.map} ${door.x},${door.y} (${door.convo}): ${free.length} free`);
+    }
+    assert.deepEqual(blocked, []);
+    const nim = d.actors.nim;
+    assert.ok(!(nim.mapId === "kiln" && nim.x === 6 && nim.y === 15), "Nim is beside the cut, not in front of it");
+  });
+
+  it("Kiln cellar cut opens by arrow keys from the north (step down, bump the door)", () => {
+    useGame.setState((s) => ({
+      data: {
+        ...s.data,
+        mapId: "kiln",
+        player: { ...s.data.player, mapId: "kiln", x: 6, y: 14 },
+        flags: { ...s.data.flags, "seen:kiln": true, checkpointSpoke: true, kilnTold: true },
+        panel: "none",
+        dialogue: null,
+        path: [],
+      },
+    }));
+    G().clickTile(6, 15); // ArrowDown
+    walkOut();
+    assert.deepEqual([D().player.x, D().player.y], [6, 15]);
+    G().clickTile(6, 16); // ArrowDown into the door
+    assert.equal(D().dialogue?.convo, "kiln-cellar");
+    pick(/Use the give/);
+    assert.equal(D().flags.kilnCellar, true);
+    pick(/Go down/);
+    G().clickTile(6, 16);
+    walkOut();
+    G().clickTile(6, 17);
+    walkOut();
+    assert.deepEqual([D().player.x, D().player.y], [6, 17]);
+  });
+
+  it("a plate tap inside a shut door's tile diamond takes the door, not the nearest standable tile", () => {
+    const doors = [{ x: 6, y: 16, sx: 200, sy: 300 }];
+    assert.deepEqual(stage.hitShutDoor(200, 300, doors, 32, 16), { x: 6, y: 16 });
+    assert.deepEqual(stage.hitShutDoor(215, 306, doors, 32, 16), { x: 6, y: 16 });
+    assert.equal(stage.hitShutDoor(240, 300, doors, 32, 16), null, "a tap on the neighbour's centre still walks");
+    assert.equal(stage.hitShutDoor(200, 320, doors, 32, 16), null);
   });
 });

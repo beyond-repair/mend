@@ -1544,7 +1544,9 @@ function cityRoutines(d) {
   else standAt(d, "teb", "kiln", 8, 14);
   standAt(d, "jun", "kiln", hour === 2 ? 27 : 30, hour === 2 ? 6 : 7);
   if (d.flags.kilnCellar) standAt(d, "nim", "kiln", 7, 18);
-  else standAt(d, "nim", "kiln", 6, 15);
+  // Beside the cut, not in front of it: on (6,15) she was the only orthogonal approach to the door (6,16),
+  // so a keyboard player could never bump it (act2 K28).
+  else standAt(d, "nim", "kiln", 5, 15);
   if (d.flags.vossLeft) standAt(d, "voss", "road", 18, 11);
   else if (d.flags.stampCut) standAt(d, "voss", "kiln", 18, 16);
   else standAt(d, "voss", "kiln", 14, 9);
@@ -1568,7 +1570,8 @@ function cityRoutines(d) {
   if (hour === 3) standAt(d, "rue", "switch", 6, 4);
   else standAt(d, "rue", "switch", 5, 6);
   if (d.flags.switchBay) standAt(d, "ske", "switch", 7, 15);
-  else standAt(d, "ske", "switch", 6, 12);
+  // Beside the bay cut, not on (6,12): that was the only orthogonal approach to the door (6,13), same as Nim (act2 K28).
+  else standAt(d, "ske", "switch", 5, 12);
   const glassClaim = d.machines.panestamp?.nodes.find((n) => n.id === "claim");
   const ness = d.actors.ness;
   if (ness?.alive && (glassClaim?.severed || d.flags.paneCaught) && !ness.hostile) {

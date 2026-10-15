@@ -299,6 +299,195 @@ s = await S(page);
 step(s.phase === "play" && s.map === "kiln" && s.flags["seen:kiln"] && s.x === before.x && s.y === before.y, `K18 Continue resumes Kiln (${s.map} ${s.x},${s.y}; seen:kiln ${s.flags["seen:kiln"]}; was ${before.x},${before.y})`);
 await shot(page, `${tag}-09-continued-kiln`);
 
+// —— Kiln past the flue: set, board, stamp, cellar (K20+) ——
+const actorAt = (id) => page.evaluate((id) => { const a = window.__mend.getState().data.actors[id]; return a && { x: a.x, y: a.y, map: a.map, alive: a.alive, hostile: a.hostile }; }, id);
+const inv = (id) => page.evaluate((id) => window.__mend.getState().data.inventory.find((r) => r.id === id)?.qty ?? 0, id);
+const scrip = () => page.evaluate(() => window.__mend.getState().data.scrip);
+// Real canvas tap on a target tile when it is on deck; otherwise the same store call a tap makes.
+async function tapAt(tx, ty) {
+  const q = await stageAt(page, tx, ty);
+  if (q.on >= 0.3 && q.sx > 0 && q.sx < q.w && q.sy > 0 && q.sy < q.h) { await page.mouse.click(q.l + q.sx, q.t + q.sy); return "tap"; }
+  await page.evaluate(([x, y]) => window.__mend.getState().clickTile(x, y), [tx, ty]);
+  return "clickTile";
+}
+async function settle(max = 15000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < max) { const s = await S(page); if (!s.path || s.dlg) break; await page.waitForTimeout(100); }
+  await page.waitForTimeout(150);
+  return S(page);
+}
+async function talkTo(id) {
+  for (let tries = 0; tries < 4; tries++) {
+    const a = await actorAt(id);
+    const how = await tapAt(a.x, a.y);
+    const s = await settle();
+    if (s.dlg) return { s, how };
+  }
+  return { s: await S(page), how: "none" };
+}
+async function auditAt(id) {
+  const m = await page.evaluate((id) => { const m = window.__mend.getState().data.machines[id]; return { x: m.x, y: m.y }; }, id);
+  let how = "none";
+  for (let tries = 0; tries < 4; tries++) {
+    how = await tapAt(m.x, m.y);
+    const s = await settle();
+    if (s.panel === "audit") break;
+  }
+  const a = await page.evaluate(() => window.__mend.getState().data.audit);
+  return { ok: a?.id === id && (await S(page)).panel === "audit", how };
+}
+async function special(re) {
+  const b = page.getByRole("button", { name: re });
+  if (!(await b.count())) return false;
+  await b.first().click();
+  await page.waitForTimeout(250);
+  return true;
+}
+
+// K20 Pack → Dismantle the seized gearset → plate scrap (field-dry needs it)
+await hud(page, "Pack");
+const dis = page.getByRole("button", { name: "Dismantle" });
+const hadDis = await dis.count();
+if (hadDis) { await dis.first().click(); await page.waitForTimeout(200); }
+step((await inv("scrap")) >= 1, `K20 Pack → Dismantle gearset → plate scrap (${await inv("scrap")}; gears ${await inv("gears")})`);
+await key(page, "Escape");
+
+// K21 Field-dry the set at the flue (Engineering roll; scrap only spent on success)
+let r = await auditAt("kilnfire");
+step(r.ok, `K21a tap Kiln flue opens its audit (${r.how})`);
+let dried = false, dryTries = 0;
+for (; dryTries < 10 && !dried; dryTries++) {
+  if ((await S(page)).panel !== "audit") await auditAt("kilnfire");
+  await special(/Field-dry the set/);
+  s = await S(page);
+  dried = Boolean(s.flags.fieldDry);
+  if (!dried) console.log("   field-dry:", s.log[0]);
+}
+s = await S(page);
+step(dried && s.flags.brickLive && s.flags.kilnHouses, `K21 Field-dry holds (tries ${dryTries}; brickLive ${s.flags.brickLive}; houses ${s.flags.kilnHouses}; levy ${s.flags.kilnLevy}; shop ${s.flags.kilnShop}; scrap ${await inv("scrap")})`);
+step(s.panel === "none" && !s.dlg, `K21b panel closes after the dry (panel ${s.panel})`);
+await shot(page, `${tag}-10-field-dry`);
+
+// K22 Jun's board talk → journal kiln-board; Esc leaves
+let t = await talkTo("jun");
+step(/jun/.test(t.s.dlg || ""), `K22 Talk Jun (${t.how}; ${t.s.dlg})`);
+const junRs = await replies(page);
+step(junRs.some((x) => /won't sell/.test(x)), `K22b Jun offers the held-brick line once the set holds (${junRs.join(" / ")})`);
+await pick(page, /What is the board waiting on/); await pick(page, /The bench, then/);
+s = await S(page);
+step((s.journal || []).some((j) => j.startsWith("kiln-board")) && !s.dlg, `K22c Jun files kiln-board and closes (${JSON.stringify(s.journal)})`);
+
+// K23 Inn bench: draw a brick, then sell it quietly (levy intact, board unlicensed)
+r = await auditAt("kilnbench");
+step(r.ok, `K23a Inn bench audit opens (${r.how})`);
+await special(/Draw a set brick/);
+step((await inv("brick")) === 1, `K23 Draw a set brick (bricks ${await inv("brick")}; log ${(await S(page)).log[0]})`);
+let sc0 = await scrip();
+await special(/Sell a brick/);
+s = await S(page);
+step((await inv("brick")) === 0 && (await scrip()) > sc0 && /under the board/.test(s.log[0]), `K23b quiet sale pays less and Cress hears (${sc0}→${await scrip()}; ${s.log[0]})`);
+await special(/Draw a set brick/);
+await key(page, "Escape");
+
+// K24 Stamp desk: License the stamp (pay; Speech < 60) → Jun's board opens
+r = await auditAt("kilnstamp");
+step(r.ok, `K24a Stamp desk audit opens (${r.how})`);
+sc0 = await scrip();
+await special(/License the stamp/);
+s = await S(page);
+step(s.flags.kilnLicensed && s.flags.kilnShop && s.flags.kilnLevy && (await scrip()) < sc0, `K24 License the stamp (scrip ${sc0}→${await scrip()}; shop ${s.flags.kilnShop}; levy ${s.flags.kilnLevy}; ${s.log[0]})`);
+await shot(page, `${tag}-11-stamp-licensed`);
+
+// K25 Legal sale at the bench pays the full price
+r = await auditAt("kilnbench");
+sc0 = await scrip();
+await special(/Sell a brick/);
+s = await S(page);
+step((await scrip()) - sc0 >= 10 && /allowed/.test(s.log[0]), `K25 legal sale (${sc0}→${await scrip()}; ${s.log[0]})`);
+await key(page, "Escape");
+
+// K26 Cress / Voss react to the license
+t = await talkTo("cress");
+step(/cress/.test(t.s.dlg || "") && (await replies(page)).some((x) => /board is open/.test(x)), `K26 Cress knows the board is open (${t.how}; ${(await replies(page)).join(" / ")})`);
+await closeTalk(page);
+t = await talkTo("voss");
+step(/voss/.test(t.s.dlg || "") && (await replies(page)).some((x) => /licensed her/.test(x)), `K26b Voss has the licensed line (${t.how}; ${(await replies(page)).join(" / ")})`);
+await closeTalk(page);
+step(!(await S(page)).dlg && !(await S(page)).combat, "K26c leave Voss without a fight");
+
+// K27 Teb → cellar hint, Nim → the give (journal kiln-cellar)
+t = await talkTo("teb");
+step(/teb/.test(t.s.dlg || ""), `K27 Talk Teb (${t.how}; ${t.s.dlg}; ${(await replies(page)).join(" / ")})`);
+await pick(page, /another way through/).catch((e) => console.log("  ", e.message));
+await closeTalk(page);
+t = await talkTo("nim");
+step(/nim/.test(t.s.dlg || ""), `K27b Talk Nim (${t.how}; ${t.s.dlg})`);
+await pick(page, /How does the lock/); await pick(page, /Show me the give/);
+s = await S(page);
+step(s.flags.kilnTold && (s.journal || []).some((j) => j.startsWith("kiln-cellar")) && !s.dlg, `K27c Nim shows the give (kilnTold ${s.flags.kilnTold})`);
+
+// K28 Cellar cut door (6,16) → Use the give → open → Go down
+writeFileSync(`${SHOTS}/${tag}-k27-storage.json`, await page.evaluate(() => JSON.stringify({ ...localStorage })));
+const pre28 = await S(page);
+const how28 = await tapAt(6, 16);
+s = await settle();
+if (s.dlg !== "kiln-cellar/start") console.log("   K28a debug: before", pre28.x, pre28.y, "after", s.x, s.y, "path", s.path, "log", s.log.slice(0, 3));
+step(s.dlg === "kiln-cellar/start", `K28a cellar door sign (${how28}; ${s.dlg})`);
+await pick(page, /Use the give/); await pick(page, /Go down/).catch(() => {});
+s = await S(page);
+step(s.flags.kilnCellar && !s.dlg, `K28 cellar opens (kilnCellar ${s.flags.kilnCellar}; dlg ${s.dlg})`);
+// Keyboard through the cut: (6,15) must be free (Nim used to stand there), then Down, Down.
+await walk(page, 6, 15);
+await key(page, "ArrowDown", 2);
+s = await S(page);
+step(s.x === 6 && s.y === 17 && !s.dlg, `K28b ArrowDown ×2 from (6,15) through the cut into the cellar (${s.x},${s.y}; dlg ${s.dlg})`);
+const feetC = await stageAt(page, s.x, s.y);
+step(feetC.feetIn, `K28c cellar keeps Silas on canvas (fx ${feetC.fx.toFixed(2)} fy ${feetC.fy.toFixed(2)})`);
+await shot(page, `${tag}-12-cellar`);
+
+// K29 Old flue: Read the nest (Audit roll) → Lift the glass → sootglass, mite stays nested
+r = await auditAt("kilncache");
+step(r.ok, `K29a Old flue audit opens (${r.how})`);
+let read = false, readTries = 0;
+for (; readTries < 12 && !read; readTries++) {
+  if ((await S(page)).panel !== "audit") await auditAt("kilncache");
+  await special(/Read the nest/);
+  read = await page.evaluate(() => window.__mend.getState().data.machines.kilncache.nodes.find((n) => n.id === "glass").revealed);
+}
+step(read, `K29 Read the nest names the soot glass (tries ${readTries}; ${(await S(page)).log[0]})`);
+if ((await S(page)).panel !== "audit") await auditAt("kilncache");
+await special(/Lift the glass/);
+s = await S(page);
+const mite = await actorAt("mite");
+step(s.flags.glassLifted && (await inv("sootglass")) === 1 && !s.flags.miteAwake && !s.combat && !mite.hostile, `K29b Lift the glass (glass ${await inv("sootglass")}; mite hostile ${mite.hostile}; combat ${s.combat}; ${s.log[0]})`);
+
+// K30 Back up through the cut: Nim and Harl follow-up lines
+await walk(page, 6, 15).catch(() => {});
+t = await talkTo("nim");
+step((await replies(page)).some((x) => /I have the glass/.test(x)), `K30 Nim has the glass line (${(await replies(page)).join(" / ")})`);
+await pick(page, /I have the glass/); await closeTalk(page);
+t = await talkTo("harl");
+step((await replies(page)).some((x) => /houses are warm/.test(x)), `K30b Harl has the warm-houses line (${(await replies(page)).join(" / ")})`);
+await closeTalk(page);
+s = await S(page);
+step(!s.dlg, "K30c talks closed");
+
+// K31 Save → reload → Continue keeps every Kiln outcome
+await hud(page, "Menu");
+await page.getByRole("button", { name: /slot ?1/i }).first().click();
+await page.waitForTimeout(200);
+await key(page, "Escape");
+const kb = await S(page);
+await page.reload({ waitUntil: "networkidle" });
+await page.waitForFunction(() => window.__mend);
+await page.waitForTimeout(300);
+await page.getByRole("button", { name: "Continue" }).click(); await page.waitForTimeout(400);
+s = await S(page);
+const keep = ["fieldDry", "brickLive", "kilnHouses", "kilnLicensed", "kilnShop", "kilnLevy", "kilnTold", "kilnCellar", "glassLifted"];
+const lost = keep.filter((k) => s.flags[k] !== kb.flags[k]);
+step(s.map === "kiln" && s.x === kb.x && s.y === kb.y && lost.length === 0 && (await inv("sootglass")) === 1, `K31 Continue keeps Kiln outcomes (${s.map} ${s.x},${s.y}; lost [${lost.join(",")}]; glass ${await inv("sootglass")})`);
+await shot(page, `${tag}-13-kiln-done`);
+
 step(errors.length === 0, `K19 no page/console errors (${errors.length}) ${errors.slice(0, 3).join(" | ")}`);
 await browser.close();
 writeFileSync(`${SHOTS}/${tag}.txt`, out.join("\n") + "\n");

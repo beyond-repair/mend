@@ -3,7 +3,7 @@ import { bursts, decayFx, floaters, shake } from "@/game/fx";
 import { gait, nodeLive, regionOpen, seamMark, walkable } from "@/game/logic";
 import { LOCKED_DOORS, MAPS, MOUTHS, tileAt, usableMouths } from "@/game/maps";
 import { useGame } from "@/game/store";
-import { hitMouthLabel, layoutStage, mouthPresence, presence, projectTile, stageNow } from "@/components/mend/stage";
+import { hitMouthLabel, hitShutDoor, layoutStage, mouthPresence, presence, projectTile, stageNow } from "@/components/mend/stage";
 import type { Actor, Data } from "@/game/types";
 
 const TW = 78;
@@ -1480,6 +1480,15 @@ export function WorldCanvas() {
         }
         if (body.hit) {
           clickTile(body.hit.x, body.hit.y);
+          return;
+        }
+        // Shut locked doors are not standable, so the tile loop below skips them; take a tap on the door itself.
+        const shut = LOCKED_DOORS.filter((door) => door.map === d.mapId && !d.flags[door.flag])
+          .map((door) => ({ x: door.x, y: door.y, ...projectTile(rect.width, rect.height, d.player.x, d.player.y, door.x, door.y, zoom, TW, TH) }))
+          .filter((door) => presence(door.sx, door.sy) >= 0.25 && Math.max(Math.abs(door.x - d.player.x), Math.abs(door.y - d.player.y)) <= 9);
+        const doorHit = hitShutDoor(mx, my, shut, hitX, hitY);
+        if (doorHit) {
+          clickTile(doorHit.x, doorHit.y);
           return;
         }
       }
