@@ -1,6 +1,6 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed Stack Road east pan, no floating brass labels, the arrive toast once (including after closing Lark), Ward stair → Oakhaven Lower Ward, talk, and Save/reload/Continue; the headless SEED=4 loop and `npm test` pass on the same tip. See "Hand re-playtest 6 (COMPLETE)".
+**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for Act II yards past Oakhaven (Kiln + Switch + Pane played in headless Chromium; see "Beyond Oakhaven — Act II yards"). Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed Stack Road east pan, no floating brass labels, the arrive toast once (including after closing Lark), Ward stair → Oakhaven Lower Ward, talk, and Save/reload/Continue; the headless SEED=4 loop and `npm test` pass on the same tip. See "Hand re-playtest 6 (COMPLETE)".
 Scope of the verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Areas beyond Oakhaven are logic-tested only (see below).
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
@@ -242,44 +242,33 @@ Rough key budget from spawn if you go east around Wren then south onto the east 
 2. **Death reload design call (unchanged, non-blocking):** the autosave is written on every combat commit. After a lost fight, "Open the last ledger" can drop you back into the same fight at 1–8 HP and 0–1 AP. You can quit to the title, or load a manual slot if you made one. Not changed: deciding whether to keep a pre-fight checkpoint is a design question.
 3. **Beyond Oakhaven (out of scope for this verdict):** Quarry, Rust, Kiln, Switch, Pane, Tundra, Citadel, Spire, and the epilogue are covered only by the `pass3` logic tests. These areas have not been played in a browser in this pass.
 
-## Beyond Oakhaven — The Kiln (IN PROGRESS) (2026-10-15, ~10:26–10:36 AM ET on tip before push)
+## Beyond Oakhaven — Act II yards (IN PROGRESS) (2026-10-15, ~10:55–11:15 AM ET)
 
-**Status:** **IN PROGRESS** for the beyond-Oakhaven scope. First region after Oakhaven Lower Ward was played in a real headless browser (Playwright / Chromium against `npm run dev`). Quarry, Rust, Switch, Pane, Tundra, Citadel, Spire, and the epilogue remain unplayed in a browser (logic-only via `pass3`).
+**Status:** **IN PROGRESS** for the beyond-Oakhaven scope. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. The three Act II yards off The Stack Road — **The Kiln**, **The Switch**, **The Pane** — were played end-to-end in a real headless browser (Playwright / Chromium against `npm run dev`, SEED=4). Quarry, Rust, Tundra, Citadel, Spire, and the epilogue remain unplayed in a browser (logic-only via `pass3`). A full hand pass without the harness is still open.
 
-**How the next region is reached (from data, not guesswork):**
-- Oakhaven (`haven`) has one mouth: **Stack mouth** at (34,6) → Stack Road (20,3).
-- Campaign Lark line `"The brick yard."` (`seen:road`, missing `seen:kiln`) points south of the walk to the kiln before Rust.
-- Stack Road **Brick stair** at (16,11) → **The Kiln** (`need: null`, `nearOnly: true`). Yard/Glass stairs and Quarry/Rust cuts are other exits; Kiln is the campaign's first named Act II district after the road.
+**Path played (act2):** New ledger → … → Oakhaven → Brick stair → **Kiln** (Harl, flue, field-dry, Jun board, stamp, cellar, sootglass) → Yard stair → **Switch** (Hale, slick plates, yard stamp, shunt, boots, bay, waybill) → Glass stair → **Pane** (Orla, seat flue, quiet/legal sales, Fen vault, anneal lens) → Ward stair → Oakhaven → Save/reload/Continue. Real canvas taps on the road stairs; arrow keys through the three locked cuts.
 
-**Harness:** `scripts/playtest-act2.mjs` (SEED=4). Continues the verified first-act path through Oakhaven, leaves via Stack mouth, walks to the Brick stair with real canvas taps, ArrowDown into The Kiln.
+**Harness:** `scripts/playtest-act2.mjs` (SEED=4). Baseline `scripts/playtest-loop.mjs` still covers Act I.
 
-### Results (act2)
+### Results (act2, tip of this note)
 
-| Step | Result |
+| Slice | Result |
 | --- | --- |
-| A0–A2 Moll → Stack Road → Ward stair → Oakhaven | PASS |
-| K0 Oakhaven Stack mouth → Stack Road | PASS |
-| K1 real taps beside Brick stair (Silas on canvas) | PASS |
-| K2 Brick stair → The Kiln; arrive toast + clay line; `seen:kiln` | PASS |
-| K3–K4 plate camera keeps feet on canvas after arrive + short walk | PASS |
-| K5–K7 Stack mouth labeled/on deck; walk out to road and re-enter | PASS |
-| K8–K10 Talk Harl → parents line → journal `kiln-parents` / pin; Esc closes | PASS |
-| K11 Audit Kiln flue | PASS |
-| K11b audit selects **flue** not Borrowed heat | PASS (after fix) |
-| K11c–K12 Seat the flue special; set takes (`brickLive`) | PASS |
-| K13–K15 Esc closes Audit/Menu | PASS |
-| K16–K18 Save slot 1 → reload → Continue resumes Kiln | PASS |
-| K19 no page/console errors | PASS |
+| A0–A2 / K0–K19 (prior Kiln arrive + Harl + Seat flue + Save/Continue) | PASS |
+| K20–K31 Kiln past the flue (dismantle → field-dry → Jun → draw/sell → license → Cress/Voss → Teb/Nim → cellar by tap+keys → Read nest / Lift glass → Continue) | PASS |
+| Y0–Y8 The Switch (Yard stair taps → Hale → slick bite → license → shunt → boots → Ske give → bay by tap+keys → waybill → Continue) | PASS |
+| P0–P10 The Pane (Glass stair taps → Orla → Seat flue → draw/sell → Fen give → vault by tap+keys → Read anneal / Lift lens → Stack mouth out → Ward stair → Oakhaven Continue; Map lists Kiln/Switch/Pane) | PASS |
 
-Baseline `SEED=4 scripts/playtest-loop.mjs` still **PASS**. `npm test` **196 + 55 + 55 PASS** (playtest +1). `npm run typecheck` clean.
+`npm test` **196 + 55 + 58 PASS** (playtest +5: door sweep, Kiln cellar keys, door tap hit, landing sweep, landing clear). `npm run typecheck` clean.
 
-### Bugs found / fixed
+### Bugs found / fixed this pass
 
 | # | Found by play | Root cause | Fix | Regression test |
 | --- | --- | --- | --- | --- |
-| 20 | **HIGH — Kiln Audit opens on unused Borrowed heat.** First Audit · Kiln flue selected severed optional **Borrowed heat**, so **Mend** misreconstructed and the real verb (**Seat the flue**) sat below the fold unread. | `openAudit` ranks any severed node as worst (`-1e3`), including optional leaves with no dependents (Kiln/Pane borrow starts severed by design). | Prefer required seams: a severed node that feeds nobody scores as a non-urgent leaf (`50`); severed parents that still feed children, dark seams, and low integrity keep priority. Pump valve selection unchanged. | `playtest`: "Kiln flue audit selects the dark flue, not the unused Borrowed heat leaf"; act2 K11b |
+| 20 | (prior) Kiln Audit opened on unused Borrowed heat | `openAudit` ranked any severed node worst, including optional leaves | Prefer required seams; unused severed leaves score as non-urgent | `playtest`: Kiln flue…; act2 K11b |
+| 21 | **HIGH — Kiln cellar cut unreachable.** After Nim showed the give, no real input opened the door at (6,16). Plate taps walked to a neighbour; arrow keys never bumped the door. | (1) Plate hit-test skips non-standable tiles, and a shut locked door is not standable, so a tap on the door itself walked to the nearest neighbour. (2) Nim stood on (6,15), the only orthogonal approach north of the cut, so ArrowDown into the door was impossible. Same pattern: Ske on (6,12) blocked the Switch bay door (6,13). | WorldCanvas: a plate tap inside a shut locked door's tile diamond takes the door (`hitShutDoor` in stage.ts). Nim stands beside the cut at (5,15); Ske beside the bay at (5,12). | `playtest`: door sweep; Kiln cellar by ArrowDown; door tap hit; act2 K28 / Y7 / P6 |
+| 22 | **HIGH — Pane Stack mouth stacked Silas on Sol.** Leaving The Pane after the melt held landed Silas on Sol at the Glass stair's road landing (27,2). | Sol's routine moved to (27,2) once `paneCharge` — the mouth's `tx,ty`. `arrive` placed the player on that tile with no clearance. | Sol stands beside the stair at (28,2). `arrive` also runs `clearLanding`: if someone is on the land tile, step Silas to the nearest free non-mouth neighbour. | `playtest`: no routine parks on a landing; arrive clears a stacked landing; act2 P8 |
 
 ### Still unplayed (browser)
 
-Quarry (Clockwork Canyon), Rust Districts, The Switch, The Pane, Brass Tundra, High Citadel, Void Spire, epilogue. Also unplayed in Kiln: stamp desk / Cress full path, nest/cellar, refuse-yard branch, and a full hand pass without the harness.
-
+Quarry (Clockwork Canyon), Rust Districts, Brass Tundra, High Citadel, Void Spire, epilogue. Also unplayed inside the three yards: refuse / cut-stamp / jam-table / smash-glass branches, combat vs Cress/Voss/Rue/Ness, and a full hand pass without the harness. Death → "Open the last ledger" mid-fight design call unchanged.
