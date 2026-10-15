@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Headless browser playtest: first-act loop through Oakhaven, then into The Kiln (Brick stair).
-// Region after Oakhaven Lower Ward: The Kiln via Brick stair on Stack Road (campaign Lark "The brick yard.").
+// Headless browser playtest: first-act loop through Oakhaven, then Act II yards past Oakhaven.
+// Path: Kiln (Brick stair) → Switch (Yard stair) → Pane (Glass stair) → Ward stair back to Oakhaven.
 //   SEED=4 CHROME_PATH=/usr/bin/google-chrome SHOTS=/tmp/mend-act2 node scripts/playtest-act2.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
@@ -300,7 +300,7 @@ step(s.phase === "play" && s.map === "kiln" && s.flags["seen:kiln"] && s.x === b
 await shot(page, `${tag}-09-continued-kiln`);
 
 // —— Kiln past the flue: set, board, stamp, cellar (K20+) ——
-const actorAt = (id) => page.evaluate((id) => { const a = window.__mend.getState().data.actors[id]; return a && { x: a.x, y: a.y, map: a.map, alive: a.alive, hostile: a.hostile }; }, id);
+const actorAt = (id) => page.evaluate((id) => { const a = window.__mend.getState().data.actors[id]; return a && { x: a.x, y: a.y, map: a.mapId, alive: a.alive, hostile: a.hostile }; }, id);
 const inv = (id) => page.evaluate((id) => window.__mend.getState().data.inventory.find((r) => r.id === id)?.qty ?? 0, id);
 const scrip = () => page.evaluate(() => window.__mend.getState().data.scrip);
 // Real canvas tap on a target tile when it is on deck; otherwise the same store call a tap makes.
@@ -337,10 +337,12 @@ async function auditAt(id) {
   return { ok: a?.id === id && (await S(page)).panel === "audit", how };
 }
 async function special(re) {
+  await fileLevel(page);
   const b = page.getByRole("button", { name: re });
   if (!(await b.count())) return false;
   await b.first().click();
   await page.waitForTimeout(250);
+  await fileLevel(page);
   return true;
 }
 
@@ -427,11 +429,8 @@ s = await S(page);
 step(s.flags.kilnTold && (s.journal || []).some((j) => j.startsWith("kiln-cellar")) && !s.dlg, `K27c Nim shows the give (kilnTold ${s.flags.kilnTold})`);
 
 // K28 Cellar cut door (6,16) → Use the give → open → Go down
-writeFileSync(`${SHOTS}/${tag}-k27-storage.json`, await page.evaluate(() => JSON.stringify({ ...localStorage })));
-const pre28 = await S(page);
 const how28 = await tapAt(6, 16);
 s = await settle();
-if (s.dlg !== "kiln-cellar/start") console.log("   K28a debug: before", pre28.x, pre28.y, "after", s.x, s.y, "path", s.path, "log", s.log.slice(0, 3));
 step(s.dlg === "kiln-cellar/start", `K28a cellar door sign (${how28}; ${s.dlg})`);
 await pick(page, /Use the give/); await pick(page, /Go down/).catch(() => {});
 s = await S(page);
@@ -487,6 +486,255 @@ const keep = ["fieldDry", "brickLive", "kilnHouses", "kilnLicensed", "kilnShop",
 const lost = keep.filter((k) => s.flags[k] !== kb.flags[k]);
 step(s.map === "kiln" && s.x === kb.x && s.y === kb.y && lost.length === 0 && (await inv("sootglass")) === 1, `K31 Continue keeps Kiln outcomes (${s.map} ${s.x},${s.y}; lost [${lost.join(",")}]; glass ${await inv("sootglass")})`);
 await shot(page, `${tag}-13-kiln-done`);
+
+
+// —— The Switch (Yard stair on the Stack Road) — Y0+ ——
+const hp = () => page.evaluate(() => window.__mend.getState().data.player.hp);
+// Kiln → Stack Road via the Kiln Stack mouth (16,1)
+await walk(page, 16, 2);
+await key(page, "ArrowUp");
+for (let i = 0; i < 20; i++) { s = await S(page); if (s.map !== "kiln") break; await page.waitForTimeout(120); }
+step(s.map === "road" && s.x === 16 && s.y === 11, `Y0a Kiln Stack mouth → Stack Road (${s.map} ${s.x},${s.y})`);
+// Real taps along the lower gantry to beside the Yard stair (22,14), then ArrowDown onto it
+const yardTap = await tapWalk(page, 22, 13, [22, 14]);
+s = await S(page);
+step(yardTap.ok && s.x === 22 && s.y === 13 && yardTap.onCanvas, `Y0b real taps to beside the Yard stair (${yardTap.taps} taps; at ${s.x},${s.y}; on canvas ${yardTap.onCanvas}; stair on deck ${yardTap.mouthSeen})`);
+await shot(page, `${tag}-14-by-yard-stair`);
+await key(page, "ArrowDown");
+for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== "road") break; await page.waitForTimeout(120); }
+step(s.map === "switch" && /You arrive at The Switch/.test(s.log.join(" | ")) && s.flags["seen:switch"] && s.panel === "none", `Y0 Yard stair → The Switch (${s.map} ${s.x},${s.y}; log ${s.log.slice(0, 2).join(" / ")})`);
+const yf = await stageAt(page, s.x, s.y);
+const ym = await stageAt(page, 14, 1);
+step(yf.feetIn && ym.on > 0.4, `Y1 Switch arrive: feet on canvas (fx ${yf.fx.toFixed(2)}), Stack mouth on deck (${ym.on.toFixed(2)})`);
+await shot(page, `${tag}-15-switch-arrive`);
+
+// Y2 Hale: the floor, then leave by Esc
+t = await talkTo("hale");
+step(/hale/.test(t.s.dlg || ""), `Y2 Talk Hale (${t.how}; ${t.s.dlg})`);
+await pick(page, /floor actually doing/).catch((e) => console.log("  ", e.message));
+await closeTalk(page);
+step(!(await S(page)).dlg, "Y2b Hale talk closes");
+
+// Y3 Slick plates south of the table bite once without boots or grease
+const hp0 = await hp();
+await walk(page, 20, 11);
+s = await S(page);
+step(s.flags.switchSlipped && (await hp()) === hp0 - 1 && /plates take a little blood/.test(s.log.join(" | ")), `Y3 slick plates bite once (hp ${hp0}→${await hp()}; ${s.log[0]})`);
+await walk(page, 22, 12);
+step((await hp()) === hp0 - 1, `Y3b second slick step does not bite again (hp ${await hp()})`);
+
+// Y4 Yard desk (5,7): License the stamp (10 scrip, Speech < 60)
+r = await auditAt("switchdesk");
+step(r.ok, `Y4a Yard desk audit opens (${r.how})`);
+sc0 = await scrip();
+await special(/License the stamp/);
+s = await S(page);
+step(s.flags.switchLicensed && (await scrip()) === sc0 - 10, `Y4 License the yard stamp (scrip ${sc0}→${await scrip()}; ${s.log[0]})`);
+
+// Y5 Turntable (16,9): Shunt the haul (Engineering ≥ 50 knows the bypass)
+r = await auditAt("turntable");
+step(r.ok, `Y5a Yard table audit opens (${r.how}; uiNode ${await page.evaluate(() => window.__mend.getState().data.uiNode)})`);
+await special(/Shunt the haul/);
+s = await S(page);
+step(s.flags.switchShunt && s.panel === "none", `Y5 Shunt the haul (shunt ${s.flags.switchShunt}; ${s.log[0]})`);
+
+// Y6 Shed bench (22,7): buy yard boots, equip from the Pack
+r = await auditAt("switchbench");
+step(r.ok, `Y6a Shed bench audit opens (${r.how})`);
+sc0 = await scrip();
+await special(/Buy yard boots/);
+s = await S(page);
+step((await inv("slickboot")) === 1, `Y6 Buy yard boots (scrip ${sc0}→${await scrip()}; ${s.log[0]})`);
+await key(page, "Escape");
+await hud(page, "Pack");
+const bootRow = page.locator("li", { hasText: "boots" }).getByRole("button", { name: "Equip" });
+if (await bootRow.count()) { await bootRow.first().click(); await page.waitForTimeout(200); }
+const armor = await page.evaluate(() => window.__mend.getState().data.equipped.armor);
+step(armor === "slickboot", `Y6b Equip yard boots from the Pack (armor ${armor})`);
+await key(page, "Escape");
+
+// Y7 Ske → the give; bay door (6,13) by tap; through by keys; Waybill crate read + lift
+t = await talkTo("ske");
+step(/ske/.test(t.s.dlg || ""), `Y7a Talk Ske (${t.how}; ${(await replies(page)).join(" / ")})`);
+await pick(page, /Show me the give/).catch((e) => console.log("  ", e.message));
+await closeTalk(page);
+s = await S(page);
+step(s.flags.switchTold && !s.dlg, `Y7b Ske shows the give (switchTold ${s.flags.switchTold})`);
+const how7 = await tapAt(6, 13);
+s = await settle();
+step(s.dlg === "switch-bay/start", `Y7c bay door sign by tap (${how7}; ${s.dlg}; at ${s.x},${s.y})`);
+await pick(page, /Use the give/).catch((e) => console.log("  ", e.message));
+await closeTalk(page);
+s = await S(page);
+step(s.flags.switchBay && !s.dlg, `Y7d bay opens (switchBay ${s.flags.switchBay})`);
+await walk(page, 6, 12);
+await key(page, "ArrowDown", 2);
+s = await S(page);
+step(s.x === 6 && s.y === 14 && !s.dlg, `Y7e ArrowDown ×2 from (6,12) into the bay (${s.x},${s.y}; dlg ${s.dlg})`);
+r = await auditAt("waycrate");
+step(r.ok, `Y7f Waybill crate audit opens (${r.how})`);
+await special(/Read the waybill/);
+if ((await S(page)).panel !== "audit") await auditAt("waycrate");
+await special(/Lift the waybill/);
+s = await S(page);
+const rat = await actorAt("yardrat");
+step(s.flags.waybillRead && s.flags.waybillLifted && (await inv("waybill")) === 1 && !rat.hostile && !s.combat, `Y7 read + lift the waybill (rat hostile ${rat.hostile}; ${s.log[0]})`);
+await key(page, "Escape");
+await shot(page, `${tag}-16-switch-bay`);
+
+// Y8 Save → reload → Continue keeps the Switch outcomes
+await walk(page, 6, 14);
+await hud(page, "Menu");
+await page.getByRole("button", { name: /slot ?1/i }).first().click();
+await page.waitForTimeout(200);
+await key(page, "Escape");
+const yb = await S(page);
+await page.reload({ waitUntil: "networkidle" });
+await page.waitForFunction(() => window.__mend);
+await page.waitForTimeout(300);
+await page.getByRole("button", { name: "Continue" }).click(); await page.waitForTimeout(400);
+s = await S(page);
+const ykeep = ["seen:switch", "switchSlipped", "switchLicensed", "switchShunt", "switchTold", "switchBay", "waybillRead", "waybillLifted", "brickLive", "glassLifted"];
+const ylost = ykeep.filter((k) => s.flags[k] !== yb.flags[k]);
+step(s.map === "switch" && s.x === yb.x && s.y === yb.y && ylost.length === 0 && (await page.evaluate(() => window.__mend.getState().data.equipped.armor)) === "slickboot", `Y8 Continue keeps Switch outcomes (${s.map} ${s.x},${s.y}; lost [${ylost.join(",")}])`);
+writeFileSync(`${SHOTS}/${tag}-switch-done-storage.json`, await page.evaluate(() => JSON.stringify({ ...localStorage })));
+
+// —— The Pane (Glass stair on the Stack Road) — P0+ ——
+await walk(page, 14, 2);
+await key(page, "ArrowUp");
+for (let i = 0; i < 20; i++) { s = await S(page); if (s.map !== "switch") break; await page.waitForTimeout(120); }
+step(s.map === "road" && s.x === 22 && s.y === 13, `P0a Switch Stack mouth → Stack Road (${s.map} ${s.x},${s.y})`);
+const glassTap = await tapWalk(page, 27, 2, [27, 1]);
+s = await S(page);
+step(glassTap.ok && s.x === 27 && s.y === 2 && glassTap.onCanvas, `P0b real taps up the road to beside the Glass stair (${glassTap.taps} taps; at ${s.x},${s.y}; on canvas ${glassTap.onCanvas}; stair on deck ${glassTap.mouthSeen})`);
+await shot(page, `${tag}-17-by-glass-stair`);
+await key(page, "ArrowUp");
+for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== "road") break; await page.waitForTimeout(120); }
+step(s.map === "pane" && /You arrive at The Pane/.test(s.log.join(" | ")) && s.flags["seen:pane"] && s.panel === "none", `P0 Glass stair → The Pane (${s.map} ${s.x},${s.y}; log ${s.log.slice(0, 2).join(" / ")})`);
+const pf = await stageAt(page, s.x, s.y);
+const pm = await stageAt(page, 16, 18);
+step(pf.feetIn && pm.on > 0.4, `P1 Pane arrive: feet on canvas (fx ${pf.fx.toFixed(2)} fy ${pf.fy.toFixed(2)}), Stack mouth on deck (${pm.on.toFixed(2)})`);
+await shot(page, `${tag}-18-pane-arrive`);
+
+// P2 Orla → parents
+t = await talkTo("orla");
+step(/orla/.test(t.s.dlg || ""), `P2 Talk Orla (${t.how}; ${t.s.dlg})`);
+await pick(page, /pane that doesn't craze/).catch((e) => console.log("  ", e.message));
+await closeTalk(page);
+s = await S(page);
+step(!s.dlg, `P2b Orla closes (journal ${JSON.stringify((s.journal || []).filter((j) => /pane/.test(j)))})`);
+
+// P3 Pane furnace: audit selects the dark flue (not the unused Borrowed kiln heat leaf); Seat the flue
+r = await auditAt("panefire");
+const pui = await page.evaluate(() => window.__mend.getState().data.uiNode);
+step(r.ok && pui === "flue", `P3a Pane furnace audit opens on the flue (${r.how}; uiNode ${pui})`);
+const f0 = await page.evaluate(() => window.__mend.getState().data.focus);
+await special(/Seat the flue/);
+s = await S(page);
+step(s.flags.paneCharge && s.flags.paneHouses && s.flags.paneLevy && s.panel === "none", `P3 Seat the flue → melt holds (focus ${f0}→${await page.evaluate(() => window.__mend.getState().data.focus)}; charge ${s.flags.paneCharge}; houses ${s.flags.paneHouses}; levy ${s.flags.paneLevy}; ${s.log[0]})`);
+const moth = await actorAt("panemoth");
+step(!moth.hostile && !s.combat, `P3b glass moth comes to the heat without a fight (moth ${moth.x},${moth.y} hostile ${moth.hostile})`);
+await shot(page, `${tag}-19-pane-melt`);
+
+// P4 Glass bench: draw + quiet sale; then license and a legal sale if the scrip allows
+r = await auditAt("panebench");
+step(r.ok, `P4a Glass bench audit opens (${r.how})`);
+await special(/Draw a clear pane/);
+step((await inv("clearpane")) === 1, `P4 Draw a clear pane (${await inv("clearpane")}; ${(await S(page)).log[0]})`);
+sc0 = await scrip();
+await special(/Sell a pane/);
+s = await S(page);
+step((await scrip()) > sc0 && /under the board/.test(s.log[0]), `P4b quiet pane sale (${sc0}→${await scrip()}; ${s.log[0]})`);
+await special(/Draw a clear pane/); await special(/Draw a clear pane/);
+await special(/Sell a pane/);
+await key(page, "Escape");
+r = await auditAt("panestamp");
+step(r.ok, `P5a Glass desk audit opens (${r.how})`);
+sc0 = await scrip();
+await special(/License the stamp/);
+s = await S(page);
+step(s.flags.paneLicensed ? s.flags.paneShop && (await scrip()) < sc0 : /scrip/.test(s.log[0]), `P5 License the glass stamp (scrip ${sc0}→${await scrip()}; licensed ${s.flags.paneLicensed}; shop ${s.flags.paneShop}; ${s.log[0]})`);
+await key(page, "Escape");
+if (s.flags.paneLicensed) {
+  r = await auditAt("panebench");
+  sc0 = await scrip();
+  await special(/Sell a pane/);
+  s = await S(page);
+  step((await scrip()) > sc0 && /allowed/.test(s.log[0]), `P5b legal pane sale (${sc0}→${await scrip()}; ${s.log[0]})`);
+  await key(page, "Escape");
+}
+
+// P6 Fen → the give; vault door (6,15) by tap; keys into the vault; read + lift the lens
+t = await talkTo("fen");
+step(/fen/.test(t.s.dlg || ""), `P6a Talk Fen (${t.how}; ${(await replies(page)).join(" / ")})`);
+await pick(page, /Show me the give/).catch((e) => console.log("  ", e.message));
+await closeTalk(page);
+s = await S(page);
+step(s.flags.paneTold && !s.dlg, `P6b Fen shows the give (paneTold ${s.flags.paneTold})`);
+const how6 = await tapAt(6, 15);
+s = await settle();
+step(s.dlg === "pane-vault/start", `P6c vault door sign by tap (${how6}; ${s.dlg}; at ${s.x},${s.y})`);
+await pick(page, /Use the give/).catch((e) => console.log("  ", e.message));
+await closeTalk(page);
+s = await S(page);
+step(s.flags.paneVault && !s.dlg, `P6d vault opens (paneVault ${s.flags.paneVault})`);
+await walk(page, 6, 14);
+await key(page, "ArrowDown", 2);
+s = await S(page);
+step(s.x === 6 && s.y === 16 && !s.dlg, `P6e ArrowDown ×2 from (6,14) into the vault (${s.x},${s.y}; dlg ${s.dlg})`);
+r = await auditAt("anneal");
+step(r.ok, `P7a Anneal vault audit opens (${r.how})`);
+let lread = false, lt = 0;
+for (; lt < 12 && !lread; lt++) {
+  if ((await S(page)).panel !== "audit") await auditAt("anneal");
+  await special(/Read the anneal/);
+  lread = await page.evaluate(() => { const d = window.__mend.getState().data; return Boolean(d.flags.annealRead || d.machines.anneal.nodes.find((n) => n.id === "lens").revealed); });
+}
+if ((await S(page)).panel !== "audit") await auditAt("anneal");
+await special(/Lift the lens/);
+s = await S(page);
+step(lread && s.flags.annealLifted && (await inv("anneallens")) === 1 && !s.combat, `P7 read (${lt} tries) + lift the lens (${s.log[0]})`);
+await key(page, "Escape");
+
+// P8 Leave by the Pane Stack mouth onto the road (Sol moves to the Glass stair once the melt holds)
+await walk(page, 6, 15);
+await walk(page, 16, 17);
+await key(page, "ArrowDown");
+for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== "pane") break; await page.waitForTimeout(120); }
+const sol = await actorAt("sol");
+step(s.map === "road" && !(sol.map === "road" && sol.x === s.x && sol.y === s.y), `P8 Pane Stack mouth → Stack Road; Silas not stacked on Sol (Silas ${s.x},${s.y}; Sol ${sol.map} ${sol.x},${sol.y})`);
+await shot(page, `${tag}-20-back-on-road`);
+// …and the Glass stair is still enterable by keys after arriving
+await key(page, "ArrowUp");
+for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== "road") break; await page.waitForTimeout(120); }
+step(s.map === "pane", `P8b ArrowUp back onto the Glass stair re-enters The Pane (${s.map} ${s.x},${s.y}; log ${s.log[0]})`);
+await walk(page, 16, 17);
+await key(page, "ArrowDown");
+for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== "pane") break; await page.waitForTimeout(120); }
+
+// P9 Back to Oakhaven by the Ward stair (Act II round trip), Save → reload → Continue
+await walk(page, 20, 2);
+await key(page, "ArrowUp");
+for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== "road") break; await page.waitForTimeout(120); }
+step(s.map === "haven", `P9a Ward stair → Oakhaven after the three yards (${s.map} ${s.x},${s.y})`);
+await hud(page, "Menu");
+await page.getByRole("button", { name: /slot ?1/i }).first().click();
+await page.waitForTimeout(200);
+await key(page, "Escape");
+const pb = await S(page);
+await page.reload({ waitUntil: "networkidle" });
+await page.waitForFunction(() => window.__mend);
+await page.waitForTimeout(300);
+await page.getByRole("button", { name: "Continue" }).click(); await page.waitForTimeout(400);
+s = await S(page);
+const pkeep = ["seen:pane", "paneCharge", "paneHouses", "paneLevy", "paneTold", "paneVault", "annealLifted", "switchShunt", "waybillLifted", "brickLive", "glassLifted", "kilnLicensed"];
+const plost = pkeep.filter((k) => s.flags[k] !== pb.flags[k]);
+step(s.map === "haven" && s.x === pb.x && s.y === pb.y && plost.length === 0 && (await inv("anneallens")) === 1 && (await inv("sootglass")) === 1 && (await inv("waybill")) === 1, `P9 Continue keeps Kiln + Switch + Pane outcomes (${s.map} ${s.x},${s.y}; lost [${plost.join(",")}])`);
+await hud(page, "Map");
+const mapTxt = await page.evaluate(() => document.body.innerText);
+step(/The Kiln/.test(mapTxt) && /The Switch/.test(mapTxt) && /The Pane/.test(mapTxt), "P10 Map lists all three Act II yards as seen");
+await key(page, "Escape");
+await shot(page, `${tag}-21-act2-done`);
 
 step(errors.length === 0, `K19 no page/console errors (${errors.length}) ${errors.slice(0, 3).join(" | ")}`);
 await browser.close();

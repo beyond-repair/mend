@@ -1593,7 +1593,8 @@ function cityRoutines(d) {
   else standAt(d, "ness", "pane", 23, 7);
   if (d.flags.paneCharge) standAt(d, "panemoth", "pane", 14, 10);
   else standAt(d, "panemoth", "pane", 10, 17);
-  if (d.flags.paneCharge) standAt(d, "sol", "road", 27, 2);
+  // Beside the Glass stair, not on its landing (27,2): arriving from the Pane stacked Silas on Sol (act2 P8).
+  if (d.flags.paneCharge) standAt(d, "sol", "road", 28, 2);
   else standAt(d, "sol", "road", 26, 4);
   if (d.flags.paneCharge && d.mapId === "pane" && !d.flags.paneMothOut && d.phase === "play") {
     d.flags.paneMothOut = true;
@@ -7449,6 +7450,7 @@ function arrive(d) {
   d.player.mapId = id;
   d.player.x = typeof lx === "number" ? lx : MAPS[id].entry.x;
   d.player.y = typeof ly === "number" ? ly : MAPS[id].entry.y;
+  clearLanding(d);
   d.pendingMap = null;
   d.path = [];
   d.intent = null;
@@ -7662,6 +7664,27 @@ function depart(d) {
   d.path = [];
   d.flags.traveled = true;
   arrive(d);
+}
+/**
+ * A routine can park someone on a stair's landing tile while Silas is elsewhere (Sol on the Glass stair
+ * landing once the Pane melt holds; act2 P8). Arriving on top of them stacked two figures on one tile.
+ * Step Silas to the nearest free, non-mouth neighbour instead.
+ */
+function clearLanding(d) {
+  const here = Object.values(d.actors).find(
+    (a) => a.alive && !a.companion && a.mapId === d.mapId && a.x === d.player.x && a.y === d.player.y,
+  );
+  if (!here) return;
+  const ring = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+  for (const [dx, dy] of ring) {
+    const x = d.player.x + dx;
+    const y = d.player.y + dy;
+    if (isExit(d.mapId, x, y)) continue;
+    if (!walkable(d, x, y, "player")) continue;
+    d.player.x = x;
+    d.player.y = y;
+    return;
+  }
 }
 function freshActors() {
   const actors = {};

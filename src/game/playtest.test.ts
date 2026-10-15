@@ -15,7 +15,7 @@ const mem = new Map<string, string>();
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex, hasStoredLedger } = await import("./store.ts");
 const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS, LOCKED_DOORS, tileAt, WALKABLE } = await import("./maps.ts");
-const { regionOpen, openAudit } = await import("./logic.ts");
+const { regionOpen, openAudit, reconcileWorld, depart } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
 const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
 (globalThis as unknown as { Image: unknown }).Image = class {
@@ -621,5 +621,60 @@ describe("playtest 2026-10-15", () => {
     assert.deepEqual(stage.hitShutDoor(215, 306, doors, 32, 16), { x: 6, y: 16 });
     assert.equal(stage.hitShutDoor(240, 300, doors, 32, 16), null, "a tap on the neighbour's centre still walks");
     assert.equal(stage.hitShutDoor(200, 320, doors, 32, 16), null);
+  });
+  it("no routine parks an actor on a stair's landing tile (Sol on the Glass stair landing, act2 P8)", () => {
+    const landings = new Set(MOUTHS.map((m) => `${m.to}:${m.tx},${m.ty}`));
+    const flagSets: Record<string, unknown>[] = [
+      {},
+      { paneCharge: true, kilnHouses: true, kilnCellar: true, switchBay: true, paneVault: true, switchShed: true },
+      { kilnRefused: true, paneRefused: true, stampCut: true },
+      { vossLeft: true },
+    ];
+    const hits: string[] = [];
+    for (const extra of flagSets) {
+      for (let hour = 0; hour < 4; hour++) {
+        freshLedger();
+        const d = D();
+        // Keep Silas off the road so routines are free to place people there.
+        d.mapId = "kiln";
+        d.player.mapId = "kiln";
+        d.player.x = 16;
+        d.player.y = 3;
+        Object.assign(d.flags, extra, { hour });
+        if (extra.paneCharge) {
+          // Derived flags are recomputed from the machines: seat the Pane flue and bed so the melt holds.
+          for (const n of d.machines.panefire.nodes) if (n.id === "flue" || n.id === "bed") Object.assign(n, { severed: false, integrity: 100 });
+          for (const n of d.machines.kilnfire.nodes) if (n.id === "flue" || n.id === "bed") Object.assign(n, { severed: false, integrity: 100 });
+          d.flags.fieldDry = true;
+        }
+        reconcileWorld(d);
+        if (extra.paneCharge) assert.equal(d.flags.paneCharge, true, "melt holds for the sweep");
+        for (const a of Object.values(d.actors)) {
+          if (a.alive && !a.companion && landings.has(`${a.mapId}:${a.x},${a.y}`)) hits.push(`${a.id} ${a.mapId} ${a.x},${a.y} (hour ${hour}, ${Object.keys(extra).join("+") || "fresh"})`);
+        }
+      }
+    }
+    assert.deepEqual([...new Set(hits)], []);
+  });
+
+  it("arriving on a landing someone is standing on steps Silas beside them, not on top", () => {
+    const d = D();
+    d.mapId = "pane";
+    d.player.mapId = "pane";
+    d.player.x = 16;
+    d.player.y = 18;
+    d.dialogue = null;
+    d.panel = "none";
+    d.flags["seen:pane"] = true;
+    // Park Sol on the road landing of the Pane Stack mouth (27,2) the way the old routine did.
+    const sol = d.actors.sol;
+    sol.mapId = "road";
+    sol.x = 27;
+    sol.y = 2;
+    depart(d);
+    assert.equal(d.mapId, "road");
+    assert.notDeepEqual([d.player.x, d.player.y], [27, 2], "Silas is not stacked on Sol");
+    assert.ok(Math.max(Math.abs(d.player.x - 27), Math.abs(d.player.y - 2)) <= 1, "Silas lands beside the stair");
+    assert.ok(!MOUTHS.some((m) => m.map === "road" && m.x === d.player.x && m.y === d.player.y), "not on a mouth");
   });
 });
