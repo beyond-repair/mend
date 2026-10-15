@@ -1,6 +1,6 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven: Act II yards (Kiln/Switch/Pane), Act III (Quarry/Rust), and Acts IV–VI (Brass Tundra → High Citadel → Void Spire → epilogue, one branch) are played in headless Chromium; see sections below. Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop. On this tip the headless SEED=4 Act I loop, Act II, Act III, and Act IV harnesses all pass.
+**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven: Act II yards (Kiln/Switch/Pane), Act III (Quarry/Rust), and Acts IV–VI (Brass Tundra → High Citadel → Void Spire → epilogue: Splice/decline, Splice/Sovereign fight, Sever/impose) are played in headless Chromium; see sections below. Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop. On this tip the headless SEED=4 Act I loop, Act II, Act III, and Act IV harnesses all pass.
 Scope of the first-act verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Act III Quarry + Rust and the Act IV–VI critical path are harness-played (see "Beyond Oakhaven — Act III" and "Beyond Oakhaven — Acts IV–VI").
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
@@ -365,3 +365,60 @@ Brass Tundra, High Citadel, Void Spire, epilogue. Also unplayed: Kael duel / Rel
 - Cinder companion dark-mouth and Spire refusals.
 - A full hand pass of Acts IV–VI without the harness.
 
+## Beyond Oakhaven — Acts V–VI side branches: Sever, Sovereign fight, impose (IN PROGRESS) (2026-10-15, ~12:29–1:15 PM ET)
+
+**Status:** **IN PROGRESS.** Three more Act V/VI branches were played end-to-end in headless Chromium from New ledger to the epilogue. `scripts/playtest-act4.mjs` now takes `CRUCIBLE=splice|sever` and `SPIRE=decline|impose|fight`. The default run (Splice → "I'll circle" → Leave the holes) is unchanged and still passes. These are harness plays with the same patterns as before. Real DOM buttons are used for Talk, Audit, Strike, Brace, End turn, Stand down, Pack → Use, Menu → Save/Load/Strain, seam buttons, and Unmend → Confirm unmend. Canvas taps strike a hostile on deck and walk beside it, and the store `clickTile` is used for long walks. They are not hand plays.
+
+**How the branches are reached (existing content only):**
+- **Sever:** Audit Crucible core → **Sever the siphon**. Without `shaftOpen`, this starts Guard Senn + Guard Oll ("The floor notices the dark."). The harness files slot 1 at the crucible first, as a player would. Severing also darkens the road lamps (`roadDark`), which arms the **Lamp shade** at (30,12), inside vision 4 of the Spire mouth.
+- **Sovereign fight:** after "I'll circle" and a save, the Talk key re-opens `sovereign-pre` (a bump on the same tile is dismissed by design). "Then I'll read you while you move." opens Continuity and starts Sovereign + Echo. The Sovereign is brought to 0 → `sovereign-down` → **Write the shape.** → impose epilogue.
+- **Impose (heart):** Unissued baseline → Read what is holding → **Issue a baseline** → "Baseline imposed" epilogue.
+
+### Results (tip of this note)
+
+| Run | Path | Result |
+| --- | --- | --- |
+| `SEED=4` default | Splice → decline → Leave the holes (regression) | **57/57 PASS** |
+| `SEED=4 SPIRE=fight` | Splice → "I'll circle" → save → Talk → **Sovereign + Echo fight** → `sovereign-down` → Write the shape → **Baseline imposed** | **59/59 PASS** |
+| `SEED=4 CRUCIBLE=sever SPIRE=impose` | **Sever** → guard fight → stood down → Vane "already touched it" → dark road → **Lamp shade** stood down → no re-engagement → Spire → Issue a baseline → **Baseline imposed** (epilogue remembers the siphon) | **63/63 PASS** |
+| `SEED=7 CRUCIBLE=sever SPIRE=impose` | same; guards stood down on field strain, shade killed | **63/63 PASS** |
+| Act I loop `SEED=4` | regression | **23 PASS / 0 FAIL** |
+
+New steps: C7s/C7t (Sever → guard fight resolved), V0s/V0t (dark-road shade fight → walk on with no re-engagement), V5 (Sovereign fight → `sovereign-down`), V5b (Continuity opened; HUD Audit on the Sovereign opens its graph with **Pin seam**), V6 (Write the shape / Leave the holes offered), E1 (ending flag + "Baseline imposed" label), E1b (impose epilogue line), and E1c (epilogue remembers the siphon). Z0 page/console errors: 0 in all runs.
+
+**How hard the fights were (level 3, the harness character: comprehension 6, 52/54 HP, prybar, 2 bandages):**
+- **Sovereign + Echo:** the Sovereign has initiative and does about 25 damage before Silas's first turn. Store-level sweep, 10 RNG seeds per cell:
+
+  | Strategy | Field | Story |
+  | --- | --- | --- |
+  | strike only | 0/10 | 0/10 |
+  | strike + brace | 0/10 | 0/10 |
+  | bandage under 45% + strike + brace | **2/10** | **5/10** |
+
+  The `SPIRE=fight` browser run won on **Strain story** (Menu, an existing setting) after 11 deaths and 3 loads of slot 1. An earlier run of the same harness won on field strain after 2 deaths. It is winnable, but a level-3 critical-path character is underpowered for it. The fight is optional: declining reaches both endings.
+- **Sever guard fight:** cutting both rifle mounts and then using Stand down is the working line. The guards reseat rifles. Store sweep: 3/8 wins on field strain. Browser runs: one won with 0 deaths; `SEED=4` won after 13 deaths and 6 slot loads (story strain); `SEED=7` won after 5 deaths and 2 slot loads (field strain). It is not a soft-lock, but it is punishing.
+- **"Open the last ledger" inside a fight** (same design question as before, now with evidence). The auto ledger is written on every commit, so after a death it reopens the same fight on Silas's last turn, usually with **1–7 HP**. In these runs it returned to 1–3 HP up to 6 times in a row. A player with no manual save can loop there. Not changed. This needs a design call (for example, an auto ledger at engagement start).
+
+### Bugs found / fixed this pass
+
+| # | Found by play | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 28 | **HIGH — the guards could not be read in the Sever fight.** HUD Audit (or Q) reopened the **Crucible core** every turn, because Sever starts the fight with Silas standing beside it. In a fight Audit is the only way to read a foe, since a tap on a hostile strikes. | `auditNearest` checked "machine beside Silas" before "hostile in reach". | In a fight, a foe in reach wins Audit. The beside-machine fallback and the out-of-fight order (bug 24) are unchanged. | `playtest`: "in a fight, Audit reads the foe in reach, not the machine… (bugs 28–29)" (fails on 390085c); act4 C7t |
+| 29 | **MED — Strike/Audit spent turns on someone outside the fight.** During the guard fight, Strike and Audit went to **Sentry Quill**. The sentry is hostile on the map but not in the turn order, so swings at it never got an answer, and Audit kept opening its graph. | `strikeNearest` / `auditNearest` picked any hostile on the map. | New `engagedFoes()`: in a fight, prefer the engagement roster (`combat.order`), and fall back to map hostiles only if the roster has none. | same test |
+| 30 | **HIGH — the Lamp shade on the dark road could not be stood down.** After "They step out of the engagement", the very next step started the same fight again. The Spire mouth could only be reached by killing it, and each stand-down paid out +28 XP again. | `syncShade` re-armed the shade (`hostile = roadDark`) on every reconcile and ignored its recorded fate. | A shade recorded as stood-down or escaped stays settled. | `playtest`: "a stood-down Lamp shade stays down on the dark road… (bug 30)" (fails on 390085c); act4 V0s/V0t |
+| 31 | **LOW — the fight route to the impose ending left no ending flag.** `sovereign-down` → Write the shape set `d.ending`, but not `flags.ending` or the +100 XP. | The reply's effects list `epilogue` first, and `applyEffects` skips ops once the phase leaves play. | The `epilogue` op also records `flags.ending`, the same as the Spire heart special. No content change. | `playtest`: "the Sovereign's down choice records the ending… (bug 31)"; act4 E1 on `SPIRE=fight` |
+
+Also on this tip: `npm test` **196 + 55 + 68 PASS** (playtest +3), `npm run typecheck` clean.
+
+**Not a bug (noted):** after "I'll circle", bumping the Sovereign from the same tile does not reopen the talk. That is the dismiss rule; the Talk key (force) reopens it.
+
+### Still unplayed (browser)
+
+- **Seize**: needs comprehension 8 or Continuity. Continuity is only opened by accepting the Sovereign fight, which comes after the Citadel, so a critical-path character needs comprehension 8 (this one has 6).
+- Vane's **horns** (speech 58) and **history** (60) checks, and the failed-ceremony fight.
+- Shaft door and sentry (Sever with `shaftOpen`), lamp glass **cut**, and Sarn toll and stores beats.
+- Sovereign fight → **Leave the holes** from `sovereign-down` (the reply is offered, V6; only Write the shape was taken).
+- Tundra **iceCut** and Kel's cleats.
+- Cinder companion dark-mouth and Spire refusals.
+- A design call on the mid-fight auto ledger, and on the Sovereign / Sever balance for a level-3 critical-path character.
+- A full hand pass of Acts IV–VI without the harness.
