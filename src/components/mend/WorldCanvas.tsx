@@ -3,7 +3,7 @@ import { bursts, decayFx, floaters, shake } from "@/game/fx";
 import { gait, nodeLive, regionOpen, seamMark, walkable } from "@/game/logic";
 import { LOCKED_DOORS, MAPS, MOUTHS, tileAt, usableMouths } from "@/game/maps";
 import { useGame } from "@/game/store";
-import { layoutStage, mouthPresence, presence, projectTile, stageNow } from "@/components/mend/stage";
+import { hitMouthLabel, layoutStage, mouthPresence, presence, projectTile, stageNow } from "@/components/mend/stage";
 import type { Actor, Data } from "@/game/types";
 
 const TW = 78;
@@ -1483,6 +1483,10 @@ export function WorldCanvas() {
           return;
         }
       }
+      // Tile centres first (walk / diamond). Brass labels sit under the tile (~sy+16 plate) and can
+      // overlap the neighbour south of a stair — prefer a walkable neighbour hit over the label so
+      // east/north taps on the Stack Road do not accidentally take the Ward. Label wins only when it
+      // is clearly the nearer target (tap on the words, not on a standable tile centre).
       let best: { x: number; y: number; dd: number; stand: boolean } | null = null;
       for (let y = 0; y < map.height; y++) {
         for (let x = 0; x < map.width; x++) {
@@ -1498,6 +1502,31 @@ export function WorldCanvas() {
           if (nx + ny > (plate ? 2.2 : 1.15)) continue;
           const dd = (p.sx - mx) ** 2 + (p.sy - my) ** 2;
           if (!best || (stand && !best.stand) || (stand === best.stand && dd < best.dd)) best = { x, y, dd, stand };
+        }
+      }
+      {
+        const mouths = usableMouths(d.mapId, (need) => regionOpen(d, need));
+        let labelHit: { x: number; y: number; dd: number } | null = null;
+        for (const mouth of mouths) {
+          const dist = Math.abs(mouth.x - d.player.x) + Math.abs(mouth.y - d.player.y);
+          if (mouth.nearOnly && dist > 2) continue;
+          const p = projectTile(rect.width, rect.height, d.player.x, d.player.y, mouth.x, mouth.y, zoom, TW, TH);
+          if (plate && mouthPresence(p.sx, p.sy) <= 0.04) continue;
+          if (!hitMouthLabel(mx, my, p.sx, p.sy, mouth.label, Boolean(plate))) continue;
+          const ly = p.sy + (plate ? 16 : 26);
+          const dd = (p.sx - mx) ** 2 + (ly - my) ** 2;
+          if (!labelHit || dd < labelHit.dd) labelHit = { x: mouth.x, y: mouth.y, dd };
+        }
+        if (labelHit) {
+          const neighbourWalk =
+            best &&
+            best.stand &&
+            (best.x !== labelHit.x || best.y !== labelHit.y) &&
+            best.dd <= labelHit.dd + 16;
+          if (!neighbourWalk) {
+            clickTile(labelHit.x, labelHit.y);
+            return;
+          }
         }
       }
       if (best) clickTile(best.x, best.y);

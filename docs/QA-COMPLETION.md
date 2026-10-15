@@ -182,13 +182,28 @@ Played by hand in a live browser on `c82cd73` (`npm run dev`, `http://localhost:
 
 Same tip, automated: headless `SEED=4` loop 17 steps plus substeps (L8b, L9a, L9a', L9b, L9c, L9c') **PASS**; `npm test` 196 + 55 + 43 **PASS** (Node 22, `PATH=/workspace/tools/node-v22/bin:$PATH`).
 
-Non-blocking polish leftovers seen in this pass. None were fixed here; they are recorded for a later pass:
+Non-blocking polish leftovers from this pass were addressed in **Polish pass 1** (below), except death-reload (design call, unchanged).
 
-- Act I vs Act II header label when returning to Oakhaven (worth a look).
-- A mouth's tap target is the brass diamond, not its label text.
-- Combat action buttons have no accessible names.
-- Death → "Open the last ledger" mid-fight is still brutal (it can drop you back into the same fight at low HP/AP). This is the design call below, unchanged.
-- Menu "Close the ledger" returns to the title.
+
+## Polish pass 1 (2026-10-15)
+
+Small verified polish on tip after `6cfebab` / play build `c82cd73`. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
+
+| Finding | Root cause | Fix | Regression test |
+| --- | --- | --- | --- |
+| Act I vs Act II header on return to Oakhaven | Not a bug. Header subline is `MAPS[mapId].act`. Oakhaven Lower Ward and The Sinks are **Act I**; The Stack Road is **Act II**. Returning via the Ward stair correctly flips the plaque back to Act I. | None (documented). | `playtest`: "Oakhaven stays Act I and Stack Road Act II…" |
+| Mouth tap target is only the brass diamond | Label is drawn below the tile centre (`sy+16` plate / `sy+26` board); pointer hit tested the tile centre diamond only, so taps on the brass name often walked a neighbour tile instead. | `hitMouthLabel` / `mouthLabelBox` in `stage.ts`; WorldCanvas takes a drawn usable mouth when the tap is on its label. Walkable neighbour tile centres win over the label when equally close (label sits on the tile south of a stair — without that gate, Stack Road east taps stole the Ward exit). Same nearOnly / presence rules as drawing. | `playtest`: "a tap on a mouth's brass label…"; headless loop L9b/L9c' |
+| Combat action buttons have no accessible names | HUD keys were image-only. `aria-label` was present but the unused `.hud-label` CSS never rendered, so names were easy to miss and tooling/hand notes called them unlabeled. | `HUD_LABELS` in `hud.ts`; `HudButton` renders `<span className="hud-label">` plus `aria-label`. Combat End reads **End turn**. | `playtest`: "combat HUD keys expose accessible names…" |
+| Menu "Close the ledger" returns to the title | Intended quit (`quit()` → `phase: "title"`), but the wording sounded like dismissing the panel. The panel **X** already closes via `closePanel`. | Renamed control to **Return to the title** (`MENU_QUIT_LABEL`), matching the epilogue. Behaviour unchanged. | `playtest`: "Menu quit label names the title return…" |
+
+**Verification (automated):** `npm test` **196 + 55 + 47 PASS** (was 196 + 55 + 43; +4 polish regressions); `npm run typecheck` clean; headless `SEED=4 node scripts/playtest-loop.mjs` **PASS** (17 steps + L8b, L9a, L9a', L9b, L9c, L9c').
+
+**Live hand re-check: pending** (next human pass on the :8080 build). Suggested checks:
+
+1. **Act plaque** — Stack Road → Ward stair → Oakhaven: header should say **Act I** under "Oakhaven Lower Ward" (correct).
+2. **Mouth label tap** — In the Sinks after Moll, tap the words **Stack mouth** (not only the diamond) and confirm you path onto the road; on the road, tap **Ward stair** text likewise.
+3. **Combat HUD names** — Enter any fight (e.g. force a hostile or use a known encounter); confirm Strike / Brace / End turn captions on the image keys.
+4. **Menu quit wording** — Menu → **Return to the title** leaves to the title; Menu **X** only closes the panel and stays in play.
 
 ## Before COMPLETE — PLAYTEST VERIFIED: record (all done on c82cd73)
 

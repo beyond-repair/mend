@@ -167,3 +167,20 @@ export function mouthPresence(sx: number, sy: number) {
 export function onDeck(sx: number, sy: number) {
   return presence(sx, sy) > 0.35;
 }
+
+/**
+ * Screen box for a mouth's brass name tag. Matches WorldCanvas label placement
+ * (11px Source Sans, centered, plate offset +16 / board +26 under the tile centre).
+ * Used so a tap on the label takes the same exit as a tap on the diamond.
+ */
+export function mouthLabelBox(sx: number, sy: number, text: string, plate: boolean) {
+  const ly = sy + (plate ? 16 : 26);
+  // ~6.4px advance at 11px "600 Source Sans 3" for the label alphabet (measured against strokeText).
+  const halfW = Math.max(22, text.length * 3.2);
+  return { left: sx - halfW, right: sx + halfW, top: ly - 11, bottom: ly + 3 };
+}
+
+export function hitMouthLabel(mx: number, my: number, sx: number, sy: number, text: string, plate: boolean) {
+  const b = mouthLabelBox(sx, sy, text, plate);
+  return mx >= b.left && mx <= b.right && my >= b.top && my <= b.bottom;
+}

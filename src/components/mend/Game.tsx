@@ -18,6 +18,7 @@ import {
   ToolsPanel,
 } from "./Panels";
 import { WorldCanvas } from "./WorldCanvas";
+import { HUD_LABELS } from "./hud";
 
 export function Game() {
   const phase = useGame((s) => s.data.phase);
@@ -442,18 +443,18 @@ function PlayScreen() {
           </button>
         )}
         <div className="grid grid-cols-4 gap-1.5">
-          <HudButton kind="audit" label="Audit" onClick={audit} dim={fighting && !myTurn} />
+          <HudButton kind="audit" label={HUD_LABELS.audit} onClick={audit} dim={fighting && !myTurn} />
           {fighting ? (
-            <HudButton kind="strike" label="Strike" onClick={strike} dim={noStrike} />
+            <HudButton kind="strike" label={HUD_LABELS.strike} onClick={strike} dim={noStrike} />
           ) : (
             <HudButton kind="talk" label="Talk" onClick={talk} />
           )}
           {fighting ? (
-            <HudButton kind="brace" label="Brace" onClick={brace} dim={noBrace} />
+            <HudButton kind="brace" label={HUD_LABELS.brace} onClick={brace} dim={noBrace} />
           ) : (
             <HudButton kind="map" label="Map" onClick={() => open("map")} />
           )}
-          <HudButton kind={fighting ? "end" : "menu"} label={fighting ? "End" : "Menu"} onClick={fighting ? endTurn : () => open("menu")} />
+          <HudButton kind={fighting ? "end" : "menu"} label={fighting ? HUD_LABELS.end : HUD_LABELS.menu} onClick={fighting ? endTurn : () => open("menu")} />
         </div>
         <div className="mt-1.5 grid grid-cols-4 gap-1.5">
           <HudButton kind="quests" label="Quests" onClick={() => open("journal")} />
@@ -522,6 +523,7 @@ function HudButton({ kind, label, onClick, dim }: { kind: string; label: string;
   return (
     <button type="button" onClick={onClick} aria-label={label} aria-disabled={dim || undefined} className={`hud-key ${dim ? "opacity-40" : ""}`}>
       <img src={HUD_ART[kind] ?? HUD_ART.menu} alt="" className="hud-art" />
+      <span className="hud-label">{label}</span>
     </button>
   );
 }

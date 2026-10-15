@@ -14,7 +14,7 @@ const mem = new Map<string, string>();
 } as Storage;
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex } = await import("./store.ts");
-const { MOUTHS, mouthAt, usableMouths } = await import("./maps.ts");
+const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS } = await import("./maps.ts");
 const { regionOpen } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
 const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
@@ -28,6 +28,7 @@ const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road
   }
 };
 const stage = await import("../components/mend/stage.ts");
+const { HUD_LABELS, MENU_QUIT_LABEL } = await import("../components/mend/hud.ts");
 
 const G = () => useGame.getState();
 const D = () => G().data;
@@ -337,5 +338,57 @@ describe("playtest 2026-10-15", () => {
     stage.layoutStage(ctx, w, h, 3, 3, "sinks");
     const s = stage.stageNow();
     assert.ok(s.feet.sy > h * DECK.top && s.feet.sy < h * DECK.bottom && s.feet.sx > w * DECK.left && s.feet.sx < w * DECK.right, "the shop entry is inside the band, so it frames as before");
+  });
+
+  it("Oakhaven stays Act I and Stack Road Act II: the header is map.act, not visit order", () => {
+    // Hand leftover: returning via Ward stair "felt" like Act II. Data is district-scoped.
+    assert.equal(MAPS.haven.act, "Act I");
+    assert.equal(MAPS.road.act, "Act II");
+    assert.equal(MAPS.sinks.act, "Act I");
+    assert.equal(REGIONS.find((r) => r.id === "haven")?.act, "Act I");
+    useGame.setState((s) => ({
+      data: {
+        ...s.data,
+        flags: { ...s.data.flags, checkpointSpoke: true, "seen:road": true },
+        mapId: "haven",
+        player: { ...s.data.player, x: 10, y: 12 },
+      },
+    }));
+    assert.equal(MAPS[D().mapId].act, "Act I", "header subline uses MAPS[mapId].act — Oakhaven is Act I after the road");
+  });
+
+  it("a tap on a mouth's brass label hits the same exit tile as the diamond", () => {
+    const ctx = { drawImage() {} } as unknown as CanvasRenderingContext2D;
+    const w = 440;
+    const h = 250;
+    stage.layoutStage(ctx, w, h, 24, 18, "sinks");
+    const mouth = mouthAt("sinks", 25, 18)!;
+    assert.equal(mouth.label, "Stack mouth");
+    const p = stage.projectTile(w, h, 24, 18, mouth.x, mouth.y, 1, 64, 32);
+    const box = stage.mouthLabelBox(p.sx, p.sy, mouth.label, true);
+    // Centre of the label text is a hit; a point well below the diamond but on the tag.
+    assert.equal(stage.hitMouthLabel((box.left + box.right) / 2, (box.top + box.bottom) / 2, p.sx, p.sy, mouth.label, true), true);
+    // Far off to the side of the tag is not a hit (no dead-area expansion).
+    assert.equal(stage.hitMouthLabel(box.right + 30, (box.top + box.bottom) / 2, p.sx, p.sy, mouth.label, true), false);
+    // Diamond centre (tile sy - 8) is outside the label box — tile hit still covers it separately.
+    assert.equal(stage.hitMouthLabel(p.sx, p.sy - 8, p.sx, p.sy, mouth.label, true), false);
+  });
+
+  it("combat HUD keys expose accessible names matching their actions", () => {
+    assert.equal(HUD_LABELS.strike, "Strike");
+    assert.equal(HUD_LABELS.brace, "Brace");
+    assert.equal(HUD_LABELS.end, "End turn");
+    assert.equal(HUD_LABELS.audit, "Audit");
+    for (const [kind, label] of Object.entries(HUD_LABELS)) {
+      assert.ok(label.trim().length > 0, `${kind} needs a name`);
+    }
+  });
+
+  it("Menu quit label names the title return; quit() restores the title phase", () => {
+    // "Close the ledger" read like dismissing the panel; the X already closes. Wording matches epilogue.
+    assert.equal(MENU_QUIT_LABEL, "Return to the title");
+    assert.equal(D().phase, "play");
+    G().quit();
+    assert.equal(D().phase, "title");
   });
 });

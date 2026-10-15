@@ -6,6 +6,7 @@ import { checkChance, comprehension, DOMAIN_NAME, FACTION_NAME, PERKS, SKILL_LIS
 import { becoming, carryMax, carryWeight, confidenceOf, districtYield, factionFacts, forecast, habitLine, LENS_NAME, lensReads, nodeLive, PRACTICE_VERBS, practiceBand, seamState, tendencies } from "@/game/logic";
 import { companyLines } from "@/game/companions";
 import { MAPS, REGIONS } from "@/game/maps";
+import { MENU_QUIT_LABEL } from "@/components/mend/hud";
 import { comp, regionOpen, useGame, visibleReplies } from "@/game/store";
 import type { BaselineMark, Data, Deed, DistrictReading, Fate, GNode, Verb } from "@/game/types";
 
@@ -774,7 +775,7 @@ export function MenuPanel() {
         ))}
       </ul>
       <button type="button" className="mt-4 min-h-11 border border-rust px-3 text-rust" onClick={quit}>
-        Close the ledger
+        {MENU_QUIT_LABEL}
       </button>
     </Shell>
   );
