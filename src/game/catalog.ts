@@ -1436,8 +1436,11 @@ export const SPAWNS: Spawn[] = [
   { id: "sera", template: "sera", map: "rust", x: 6, y: 11 },
   { id: "vane", template: "vane", map: "citadel", x: 12, y: 4 },
   { id: "sentry", template: "sentry", map: "citadel", x: 8, y: 8 },
-  { id: "guard1", template: "guard", map: "citadel", x: 19, y: 5, name: "Guard Senn" },
-  { id: "guard2", template: "guard", map: "citadel", x: 16, y: 4, name: "Guard Oll" },
+  // On the south line of the ranking floor (watching the west-wing walk) instead of beside
+  // Vane, Sarn, and the crucible, so the Act V primary talks/audit are not forced into combat.
+  // Same class as bug 23. The sever / failed-ceremony fights still call them by id.
+  { id: "guard1", template: "guard", map: "citadel", x: 17, y: 13, name: "Guard Senn" },
+  { id: "guard2", template: "guard", map: "citadel", x: 12, y: 13, name: "Guard Oll" },
   { id: "sovereign", template: "sovereign", map: "spire", x: 8, y: 6 },
   { id: "echo", template: "echo", map: "spire", x: 11, y: 8, aggro: false, hostile: false },
   { id: "nessa", template: "nessa", map: "haven", x: 7, y: 3 },
@@ -1453,11 +1456,19 @@ export const SPAWNS: Spawn[] = [
   { id: "kel", template: "lark", map: "tundra", x: 14, y: 6, name: "Kel", convo: "kel" },
   { id: "pip", template: "pell", map: "haven", x: 14, y: 11, name: "Pip", convo: "pip" },
   { id: "shade", template: "lurker", map: "road", x: 30, y: 12, name: "Lamp shade", convo: "shade", hostile: false, aggro: false },
-  { id: "rubble", template: "bruiser", map: "quarry", x: 28, y: 8 },
-  { id: "mill1", template: "mill", map: "quarry", x: 22, y: 18, name: "Unlicensed mill" },
-  { id: "warden1", template: "warden", map: "citadel", x: 28, y: 19, name: "Plate warden" },
+  // Off the east mouth corridor and the Rill/Pim south grade so Act III primary
+  // loop (Quarry road → Hask → clear → crane drop → Rill/Pim) is not forced into
+  // combat. Same class as Nim/Ske/Sol landing/door clearance. Optional fights stay.
+  // (20,3) still saw the crane → Stack mouth walk along row 6 (bug 33: Cut the brake, then leave = forced fight).
+  // (18,1) is the same north pit, five tiles off every primary leg; the fight is still there if you walk up.
+  { id: "rubble", template: "bruiser", map: "quarry", x: 18, y: 1 },
+  { id: "mill1", template: "mill", map: "quarry", x: 10, y: 20, name: "Unlicensed mill" },
+  // North-east corner of the orrery hall, off the tundra-stair landing corridor (was 28,19:
+  // vision 3 covered the stair landing and every step to lamps / buffer / Ime).
+  { id: "warden1", template: "warden", map: "citadel", x: 30, y: 5, name: "Plate warden" },
   { id: "caller1", template: "chanter", map: "citadel", x: 3, y: 4, name: "Line caller" },
-  { id: "cutter1", template: "lurker", map: "rust", x: 10, y: 17, name: "Ash cutter" },
+  // Off Nell's tenement tile so Rust primary talk is not forced into combat.
+  { id: "cutter1", template: "lurker", map: "rust", x: 4, y: 19, name: "Ash cutter" },
   { id: "doss", template: "pell", map: "sinks", x: 24, y: 5, name: "Doss", convo: "doss" },
   { id: "ada", template: "pell", map: "haven", x: 27, y: 7, name: "Ada", convo: "ada" },
   { id: "pim", template: "hask", map: "quarry", x: 18, y: 16, name: "Pim", convo: "pim" },
@@ -1475,12 +1486,12 @@ export const SPAWNS: Spawn[] = [
   { id: "cress", template: "cress", map: "kiln", x: 22, y: 16 },
   { id: "jun", template: "jun", map: "kiln", x: 30, y: 7 },
   { id: "teb", template: "teb", map: "kiln", x: 8, y: 14 },
-  { id: "nim", template: "nim", map: "kiln", x: 6, y: 15 },
+  { id: "nim", template: "nim", map: "kiln", x: 5, y: 15 },
   { id: "voss", template: "voss", map: "kiln", x: 14, y: 9 },
   { id: "mite", template: "mill", map: "kiln", x: 10, y: 19, name: "Kiln mite", convo: "mite", hostile: false, aggro: false },
   { id: "hale", template: "hale", map: "switch", x: 18, y: 9 },
   { id: "rue", template: "rue", map: "switch", x: 5, y: 6 },
-  { id: "ske", template: "ske", map: "switch", x: 6, y: 12 },
+  { id: "ske", template: "ske", map: "switch", x: 5, y: 12 },
   { id: "wick", template: "wick", map: "switch", x: 20, y: 12 },
   { id: "yardrat", template: "mill", map: "switch", x: 8, y: 15, name: "Yard rat", convo: "yard-rat", hostile: false, aggro: false },
   { id: "orla", template: "orla", map: "pane", x: 6, y: 8 },

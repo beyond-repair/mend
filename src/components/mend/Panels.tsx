@@ -6,6 +6,7 @@ import { checkChance, comprehension, DOMAIN_NAME, FACTION_NAME, PERKS, SKILL_LIS
 import { becoming, carryMax, carryWeight, confidenceOf, districtYield, factionFacts, forecast, habitLine, LENS_NAME, lensReads, nodeLive, PRACTICE_VERBS, practiceBand, seamState, tendencies } from "@/game/logic";
 import { companyLines } from "@/game/companions";
 import { MAPS, REGIONS } from "@/game/maps";
+import { MENU_QUIT_LABEL } from "@/components/mend/hud";
 import { comp, regionOpen, useGame, visibleReplies } from "@/game/store";
 import type { BaselineMark, Data, Deed, DistrictReading, Fate, GNode, Verb } from "@/game/types";
 
@@ -655,9 +656,23 @@ const PLATES: Record<string, string> = {
 export function MapPanel() {
   const d = useGame((s) => s.data);
   const travel = useGame((s) => s.travel);
+  // Same brass notes mendthegame added after its hand playtest 7/11: say where the labeled mouth is until you have used it.
+  const passed = Boolean(d.flags.checkpointSpoke || d.flags.usedCrawl || d.flags.act1);
+  const stackAhead = d.mapId === "sinks" && passed && !d.flags["seen:road"];
+  const wardAhead = d.mapId === "road" && !d.flags.seenWard && !d.flags["seen:haven"];
   return (
     <Shell title="Stack roads">
       <p className="mb-3 text-sm text-mist">You are in {MAPS[d.mapId]?.name}. The ledger can jump a throat you already know. The campaign is the walk between mouths.</p>
+      {stackAhead && (
+        <p className="mb-3 border border-brass-dim px-3 py-2 text-sm leading-relaxed text-brass">
+          Stack mouth is the labeled brass diamond at the far south-east of the Sinks, past the checkpoint plate. Step onto it for The Stack Road.
+        </p>
+      )}
+      {wardAhead && (
+        <p className="mb-3 border border-brass-dim px-3 py-2 text-sm leading-relaxed text-brass">
+          Ward stair is the labeled brass diamond east along the upper gantry, then north on the spur — not the Brick stair on the lower gantry (that mouth goes to the Kiln). Stepping on the Ward stair opens Oakhaven Lower Ward; you can also jump there below.
+        </p>
+      )}
       <p className="mb-3 border border-brass-dim px-3 py-2 text-sm leading-relaxed">{districtYield(d)}</p>
       <ul className="space-y-2">
         {REGIONS.map((r) => {
@@ -760,7 +775,7 @@ export function MenuPanel() {
         ))}
       </ul>
       <button type="button" className="mt-4 min-h-11 border border-rust px-3 text-rust" onClick={quit}>
-        Close the ledger
+        {MENU_QUIT_LABEL}
       </button>
     </Shell>
   );
@@ -823,7 +838,8 @@ export function ToolsPanel() {
 export function LevelModal() {
   const d = useGame((s) => s.data);
   const ack = useGame((s) => s.ackLevel);
-  if (!d.pendingLevel) return null;
+  // Held while a talk is open: the level lands on a check, and the modal used to sit over the replies until filed.
+  if (!d.pendingLevel || d.dialogue) return null;
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-soot/70 p-4">
       <div className="ledger w-full max-w-md p-5">
@@ -853,7 +869,7 @@ export function DialogueBox() {
     convo.convo.startsWith("checkpoint-") ||
     convo.node.startsWith("checkpoint");
   return (
-    <div className="pointer-events-auto absolute inset-x-2 bottom-1 z-40 max-h-[46%] overflow-y-auto overscroll-contain">
+    <div className="pointer-events-auto absolute inset-x-2 bottom-[10.5rem] z-40 max-h-[min(46dvh,22rem)] overflow-y-auto overscroll-contain">
       <div className="ledger rivet mx-auto flex max-w-[440px] gap-2 p-2">
         {speakerId.portrait ? (
           <img src={speakerId.portrait} alt="" className="h-16 w-14 shrink-0 border border-brass object-cover object-top" />
@@ -869,7 +885,7 @@ export function DialogueBox() {
           <ul className="mt-2 space-y-1.5">
             {replies.map((r, i) => (
               <li key={i}>
-                <button type="button" className="min-h-10 w-full border border-brass-dim px-3 py-1.5 text-left text-sm hover:border-brass" onClick={() => choose(i)}>
+                <button type="button" className="min-h-10 w-full border border-brass-dim px-3 py-1.5 text-left text-sm hover:border-brass" onMouseDown={(e) => e.preventDefault()} onClick={() => choose(i)}>
                   {r.text}
                   {r.check && (
                     <span className="mt-1 block text-xs text-brass">

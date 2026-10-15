@@ -703,6 +703,7 @@ function journal(d, id, title, text, status) {
     hit.status = status;
   } else d.journal.unshift({ id, title, text, status });
   if (status === "open") d.pinned = title;
+  else if (d.pinned === title) d.pinned = "";
 }
 function rememberGraph(d, nodes) {
   const owner = graphOwner(d, nodes);
@@ -785,6 +786,8 @@ function movePlayer(d, x, y) {
   const oy = d.player.y;
   d.player.x = x;
   d.player.y = y;
+  // Stepping off the dismiss tile lets the same NPC/door talk again on purpose.
+  if ((x !== ox || y !== oy) && d.flags.dismissAt) delete d.flags.dismissAt;
   if (!d.combat && mates.length) {
     const [first, second] = mates;
     if (first) {
@@ -1308,7 +1311,11 @@ function ensureCast(d) {
 function syncShade(d) {
   const shade = d.actors.shade;
   if (!shade || !shade.alive || d.combat) return;
-  const dark = Boolean(d.flags.roadDark);
+  // A shade that stood down (or left the engagement) stays down. Re-arming it every reconcile
+  // re-engaged Silas on the next step, so the dark road could only be crossed by killing it,
+  // and each stand-down paid out again (bug 30).
+  const settled = didStandDown(d, "shade") || didEscape(d, "shade");
+  const dark = Boolean(d.flags.roadDark) && !settled;
   shade.hostile = dark;
   shade.aggro = dark;
   shade.vision = dark && d.flags.cartPinned ? 6 : dark ? 4 : 0;
@@ -1541,7 +1548,9 @@ function cityRoutines(d) {
   else standAt(d, "teb", "kiln", 8, 14);
   standAt(d, "jun", "kiln", hour === 2 ? 27 : 30, hour === 2 ? 6 : 7);
   if (d.flags.kilnCellar) standAt(d, "nim", "kiln", 7, 18);
-  else standAt(d, "nim", "kiln", 6, 15);
+  // Beside the cut, not in front of it: on (6,15) she was the only orthogonal approach to the door (6,16),
+  // so a keyboard player could never bump it (act2 K28).
+  else standAt(d, "nim", "kiln", 5, 15);
   if (d.flags.vossLeft) standAt(d, "voss", "road", 18, 11);
   else if (d.flags.stampCut) standAt(d, "voss", "kiln", 18, 16);
   else standAt(d, "voss", "kiln", 14, 9);
@@ -1565,7 +1574,8 @@ function cityRoutines(d) {
   if (hour === 3) standAt(d, "rue", "switch", 6, 4);
   else standAt(d, "rue", "switch", 5, 6);
   if (d.flags.switchBay) standAt(d, "ske", "switch", 7, 15);
-  else standAt(d, "ske", "switch", 6, 12);
+  // Beside the bay cut, not on (6,12): that was the only orthogonal approach to the door (6,13), same as Nim (act2 K28).
+  else standAt(d, "ske", "switch", 5, 12);
   const glassClaim = d.machines.panestamp?.nodes.find((n) => n.id === "claim");
   const ness = d.actors.ness;
   if (ness?.alive && (glassClaim?.severed || d.flags.paneCaught) && !ness.hostile) {
@@ -1587,7 +1597,8 @@ function cityRoutines(d) {
   else standAt(d, "ness", "pane", 23, 7);
   if (d.flags.paneCharge) standAt(d, "panemoth", "pane", 14, 10);
   else standAt(d, "panemoth", "pane", 10, 17);
-  if (d.flags.paneCharge) standAt(d, "sol", "road", 27, 2);
+  // Beside the Glass stair, not on its landing (27,2): arriving from the Pane stacked Silas on Sol (act2 P8).
+  if (d.flags.paneCharge) standAt(d, "sol", "road", 28, 2);
   else standAt(d, "sol", "road", 26, 4);
   if (d.flags.paneCharge && d.mapId === "pane" && !d.flags.paneMothOut && d.phase === "play") {
     d.flags.paneMothOut = true;
@@ -3670,8 +3681,17 @@ function openAudit(d, target) {
   }
   d.audit = target;
   const revealed = nodes.filter((n) => n.revealed);
+  // Prefer a seam that is actually holding the graph up. A severed leaf with no dependents
+  // (Kiln "Borrowed heat", Pane borrow, etc.) is an unused optional parent — selecting it first
+  // makes Mend the wrong verb and hides Seat/Borrow specials behind a Misreconstruction.
   const worst = [...revealed].sort((a, b) => {
-    const score = (n) => (n.severed ? -1e3 : !nodeLive(nodes, n) ? -500 : n.integrity);
+    const score = (n) => {
+      const feeds = nodes.some((c) => c.dependsOn.includes(n.id));
+      if (n.severed && !feeds) return 50;
+      if (n.severed) return -1e3;
+      if (!nodeLive(nodes, n)) return -500;
+      return n.integrity;
+    };
     return score(a) - score(b);
   })[0];
   d.uiNode = worst?.id ?? nodes[0]?.id ?? null;
@@ -3768,7 +3788,7 @@ function mendNode(d, target, nodeId) {
   const rolled = rollD100();
   if (rolled > clamp(chance, 8, 95)) {
     n.integrity = Math.max(n.integrity, 20);
-    addLog(d, `Misreconstruction. ${n.name} returns wrong. (${rolled})`);
+    addLog(d, `Misreconstruction. ${n.name} returns wrong. (${rolled} vs ${clamp(chance, 8, 95)})`);
     if (target.kind === "machine" && target.id === "pump") {
       d.flags.pumpFate = "flood";
       d.flags.actReady = true;
@@ -7414,6 +7434,10 @@ function applyEffects(d, effects) {
     else if (e.op === "arrive") arrive(d);
     else if (e.op === "epilogue") {
       d.ending = e.ending;
+      // The Sovereign's "Write the shape." / "Leave the holes." list the epilogue first; once the
+      // phase flips the later flag op is skipped. Record the ending here, same as the Spire heart
+      // special does, so both routes leave the same ledger (bug 31).
+      d.flags.ending = e.ending;
       d.epilogue = buildEpilogue(d, e.ending);
       d.phase = "epilogue";
       d.combat = null;
@@ -7434,6 +7458,7 @@ function arrive(d) {
   d.player.mapId = id;
   d.player.x = typeof lx === "number" ? lx : MAPS[id].entry.x;
   d.player.y = typeof ly === "number" ? ly : MAPS[id].entry.y;
+  clearLanding(d);
   d.pendingMap = null;
   d.path = [];
   d.intent = null;
@@ -7647,6 +7672,27 @@ function depart(d) {
   d.path = [];
   d.flags.traveled = true;
   arrive(d);
+}
+/**
+ * A routine can park someone on a stair's landing tile while Silas is elsewhere (Sol on the Glass stair
+ * landing once the Pane melt holds; act2 P8). Arriving on top of them stacked two figures on one tile.
+ * Step Silas to the nearest free, non-mouth neighbour instead.
+ */
+function clearLanding(d) {
+  const here = Object.values(d.actors).find(
+    (a) => a.alive && !a.companion && a.mapId === d.mapId && a.x === d.player.x && a.y === d.player.y,
+  );
+  if (!here) return;
+  const ring = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+  for (const [dx, dy] of ring) {
+    const x = d.player.x + dx;
+    const y = d.player.y + dy;
+    if (isExit(d.mapId, x, y)) continue;
+    if (!walkable(d, x, y, "player")) continue;
+    d.player.x = x;
+    d.player.y = y;
+    return;
+  }
 }
 function freshActors() {
   const actors = {};

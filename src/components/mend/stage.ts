@@ -9,9 +9,12 @@ export type Stage = {
   step: Step;
   w: number;
   h: number;
+  /** Painted plate draw offset (canvas px). Used to assert pan motion / plate↔board lock. */
+  ox: number;
+  oy: number;
 };
 
-type Shot = { src: string; zoom: number; fx: number; fy: number };
+type Shot = { src: string; zoom: number; fx: number; fy: number; ax?: number; ay?: number };
 
 const V = "?v=8";
 
@@ -24,7 +27,11 @@ const PLATES: Record<string, Shot> = {
   haven: { src: `/game/plates/haven.jpg${V}`, zoom: 1.16, fx: 0.46, fy: 0.62 },
   kiln: { src: `/game/plates/kiln.jpg${V}`, zoom: 1.16, fx: 0.5, fy: 0.64 },
   rust: { src: `/game/plates/streets.jpg${V}`, zoom: 1.14, fx: 0.5, fy: 0.62 },
-  road: { src: `/game/plates/road.jpg${V}`, zoom: 1.16, fx: 0.5, fy: 0.6 },
+  // Square road plate at cover≈1 had ~0 X slack, so east walks clamped immediately; look-ahead then
+  // scrolled the board under a frozen plate and floated brass mouths into the void. Widen zoom and
+  // bias fx west so the walk toward Ward (20,1) still pans the picture; slight left aim leaves the
+  // Ward on-deck without trailing-edge look-ahead drift.
+  road: { src: `/game/plates/road.jpg${V}`, zoom: 2.4, fx: 0.28, fy: 0.54, ax: 0.4 },
   switch: { src: `/game/plates/switch.jpg${V}`, zoom: 1.14, fx: 0.48, fy: 0.6 },
   sinks: { src: `/game/plates/sinks.jpg${V}`, zoom: 1.2, fx: 0.42, fy: 0.58 },
 };
@@ -41,7 +48,7 @@ function imageOf(src: string) {
   return image;
 }
 
-const empty: Stage = { plate: false, feet: { sx: 0, sy: 0 }, step: { x: 32, y: 16 }, w: 1, h: 1 };
+const empty: Stage = { plate: false, feet: { sx: 0, sy: 0 }, step: { x: 32, y: 16 }, w: 1, h: 1, ox: 0, oy: 0 };
 let current: Stage = empty;
 
 export function stageNow() {
@@ -67,24 +74,46 @@ export function layoutStage(ctx: CanvasRenderingContext2D, w: number, h: number,
   const home = MAPS[mapId]?.entry ?? { x: px, y: py };
   const panX = ((px - home.x) - (py - home.y)) * step.x;
   const panY = ((px - home.x) + (py - home.y)) * step.y;
-  const ax = w * 0.46;
-  const ay = h * 0.56;
+  const ax = w * (shot.ax ?? 0.46);
+  const ay = h * (shot.ay ?? 0.56);
   const rawX = ax - dw * shot.fx - panX;
   const rawY = ay - dh * shot.fy - panY;
   const minX = Math.min(0, w - dw);
   const minY = Math.min(0, h - dh);
   const x = Math.max(minX, Math.min(0, rawX));
   const y = Math.max(minY, Math.min(0, rawY));
+  // Once the backdrop has run out of picture it rests at its edge. Feet stay on the home aim so the
+  // board does not scroll under a frozen plate (look-ahead drift floated mouths into empty void).
+  // Carrying the overshoot onto DECK.right is also avoided — that pinned Silas and lost the Ward.
+  // Road pan room is widened above so the Ward walk still moves the plate before this clamp fires.
   current = {
     plate: true,
-    feet: { sx: ax + (x - rawX), sy: ay + (y - rawY) },
+    feet: keepOnDeck(ax, ay, w, h),
     step,
     w,
     h,
+    ox: x,
+    oy: y,
   };
   ctx.drawImage(image, x, y, dw, dh);
   return current;
 }
+
+/**
+ * Safety net for where Silas stands on screen on a plate.
+ * The plate pans with him until it hits its own edge; past that his feet stay on the home aim so
+ * markers stay plate-aligned (no independent board scroll under a frozen backdrop). This band only
+ * guarantees the feet can never leave the canvas.
+ */
+export function keepOnDeck(sx: number, sy: number, w: number, h: number): Point {
+  return {
+    sx: Math.max(w * DECK.left, Math.min(w * DECK.right, sx)),
+    sy: Math.max(h * DECK.top, Math.min(h * DECK.bottom, sy)),
+  };
+}
+
+/** The band Silas's feet stay inside on a plate, as fractions of the canvas. */
+export const DECK = { left: 0.18, right: 0.82, top: 0.3, bottom: 0.62 };
 
 export function projectTile(
   w: number,
@@ -121,6 +150,55 @@ export function presence(sx: number, sy: number) {
   return Math.max(0, Math.min(1, left, right, top, bottom));
 }
 
+/**
+ * Softer edge fade for mouth diamonds and brass labels so a stair near the frame edge
+ * stays readable further out than an actor tag would.
+ */
+export function mouthPresence(sx: number, sy: number) {
+  if (!current.plate) return 1;
+  const { w, h } = current;
+  const left = sx / (w * 0.12);
+  const right = (w - sx) / (w * 0.12);
+  const top = (sy - h * 0.01) / (h * 0.1);
+  const bottom = (h * 0.92 - sy) / (h * 0.14);
+  return Math.max(0, Math.min(1, left, right, top, bottom));
+}
+
 export function onDeck(sx: number, sy: number) {
   return presence(sx, sy) > 0.35;
+}
+
+/**
+ * Screen box for a mouth's brass name tag. Matches WorldCanvas label placement
+ * (11px Source Sans, centered, plate offset +16 / board +26 under the tile centre).
+ * Used so a tap on the label takes the same exit as a tap on the diamond.
+ */
+export function mouthLabelBox(sx: number, sy: number, text: string, plate: boolean) {
+  const ly = sy + (plate ? 16 : 26);
+  // ~6.4px advance at 11px "600 Source Sans 3" for the label alphabet (measured against strokeText).
+  const halfW = Math.max(22, text.length * 3.2);
+  return { left: sx - halfW, right: sx + halfW, top: ly - 11, bottom: ly + 3 };
+}
+
+export function hitMouthLabel(mx: number, my: number, sx: number, sy: number, text: string, plate: boolean) {
+  const b = mouthLabelBox(sx, sy, text, plate);
+  return mx >= b.left && mx <= b.right && my >= b.top && my <= b.bottom;
+}
+
+/**
+ * Plate taps skip tiles Silas cannot stand on, and a shut locked door is not standable, so a tap
+ * on the door itself used to walk to the nearest neighbour instead (Kiln cellar cut, act2 K28).
+ * A tap inside a shut door's own tile diamond takes the door; clickTile then walks beside it and
+ * opens its sign. `doors` are already projected and presence-culled by the caller.
+ */
+export function hitShutDoor(mx: number, my: number, doors: { x: number; y: number; sx: number; sy: number }[], hitX: number, hitY: number) {
+  let hit: { x: number; y: number; dd: number } | null = null;
+  for (const door of doors) {
+    const nx = Math.abs(mx - door.sx) / hitX;
+    const ny = Math.abs(my - door.sy) / hitY;
+    if (nx + ny > 1) continue;
+    const dd = (mx - door.sx) ** 2 + (my - door.sy) ** 2;
+    if (!hit || dd < hit.dd) hit = { x: door.x, y: door.y, dd };
+  }
+  return hit && { x: hit.x, y: hit.y };
 }

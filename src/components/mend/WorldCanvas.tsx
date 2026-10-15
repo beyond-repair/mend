@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { bursts, decayFx, floaters, shake } from "@/game/fx";
-import { gait, nodeLive, seamMark, walkable } from "@/game/logic";
-import { LOCKED_DOORS, MAPS, MOUTHS, tileAt } from "@/game/maps";
+import { gait, nodeLive, regionOpen, seamMark, walkable } from "@/game/logic";
+import { LOCKED_DOORS, MAPS, MOUTHS, tileAt, usableMouths } from "@/game/maps";
 import { useGame } from "@/game/store";
-import { layoutStage, presence, projectTile, stageNow } from "@/components/mend/stage";
+import { hitMouthLabel, hitShutDoor, layoutStage, mouthPresence, presence, projectTile, stageNow } from "@/components/mend/stage";
 import type { Actor, Data } from "@/game/types";
 
 const TW = 78;
@@ -1181,6 +1181,8 @@ export function WorldCanvas() {
       const playerH = stageNow().plate ? Math.max(30, Math.min(40, h * 0.12)) : Math.max(84, Math.min(118, TH * 2.7 * zoom));
       const jobs: { z: number; run: () => void }[] = [];
       const tags: { z: number; run: () => void }[] = [];
+      const mouths = usableMouths(d.mapId, (need) => regionOpen(d, need));
+      const open = new Set(mouths.map((m) => `${m.x},${m.y}`));
       for (let y = 0; y < map.height; y++) {
         for (let x = 0; x < map.width; x++) {
           const p = project(x, y);
@@ -1191,7 +1193,24 @@ export function WorldCanvas() {
           const mouth = MOUTHS.some((m) => m.map === d.mapId && m.x === x && m.y === y);
           if (stageNow().plate) {
             const near = Math.abs(x - d.player.x) + Math.abs(y - d.player.y) <= 4;
-            if (near && (mouth || shut)) {
+            const rec = mouths.find((m) => m.x === x && m.y === y);
+            // Landmark usable mouths (Stack mouth, Ward stair, …) get a brass diamond at any distance.
+            // nearOnly side stairs (Brick stair → Kiln) stay a quiet near chevron so they do not pull
+            // the eye off the first-act path. Shut doors keep the near-only chevron too.
+            if (mouth && open.has(`${x},${y}`) && !rec?.nearOnly) {
+              // Softer edge fade than actors so a stair clipped at the frame stays readable.
+              const seen = mouthPresence(p.sx, p.sy);
+              if (seen > 0.04)
+                jobs.push({
+                  z: (x + y) * 10 + 1,
+                  run: () => {
+                    ctx.save();
+                    ctx.globalAlpha = seen;
+                    drawMouth(ctx, p.sx, p.sy - 8, now);
+                    ctx.restore();
+                  },
+                });
+            } else if (near && (mouth || shut)) {
               jobs.push({
                 z: (x + y) * 10,
                 run: () => drawChevron(ctx, p.sx, p.sy, shut),
@@ -1249,6 +1268,24 @@ export function WorldCanvas() {
                 run: () => label(ctx, p.sx, p.sy + 26, m.name, down ? "#c45c26" : "#d4b483"),
               });
             }
+          },
+        });
+      }
+      // Usable mouths get the same brass name tags as machines, so the Stack mouth and the Ward stair are not only diamonds.
+      // nearOnly side stairs skip the distant tag (chevron only until close).
+      for (const mouth of mouths) {
+        const dist = Math.abs(mouth.x - d.player.x) + Math.abs(mouth.y - d.player.y);
+        if (mouth.nearOnly && dist > 2) continue;
+        const p = project(mouth.x, mouth.y);
+        const seen = stageNow().plate ? mouthPresence(p.sx, p.sy) : 1;
+        if (stageNow().plate && seen <= 0.04) continue;
+        tags.push({
+          z: (mouth.x + mouth.y) * 10 + 8,
+          run: () => {
+            ctx.save();
+            if (stageNow().plate) ctx.globalAlpha = seen;
+            label(ctx, p.sx, p.sy + (stageNow().plate ? 16 : 26), mouth.label, "#d4b483");
+            ctx.restore();
           },
         });
       }
@@ -1419,6 +1456,7 @@ export function WorldCanvas() {
       if (!map) return;
       const zoom = Math.max(1, d.zoom ?? 1);
       const plate = stageNow().plate;
+      const open = new Set(usableMouths(d.mapId, (need) => regionOpen(d, need)).map((m) => `${m.x},${m.y}`));
       const hitX = plate ? Math.max(12, stageNow().step.x) : (TW / 2) * zoom;
       const hitY = plate ? Math.max(7, stageNow().step.y) : (TH / 2) * zoom;
       if (plate) {
@@ -1444,13 +1482,28 @@ export function WorldCanvas() {
           clickTile(body.hit.x, body.hit.y);
           return;
         }
+        // Shut locked doors are not standable, so the tile loop below skips them; take a tap on the door itself.
+        const shut = LOCKED_DOORS.filter((door) => door.map === d.mapId && !d.flags[door.flag])
+          .map((door) => ({ x: door.x, y: door.y, ...projectTile(rect.width, rect.height, d.player.x, d.player.y, door.x, door.y, zoom, TW, TH) }))
+          .filter((door) => presence(door.sx, door.sy) >= 0.25 && Math.max(Math.abs(door.x - d.player.x), Math.abs(door.y - d.player.y)) <= 9);
+        const doorHit = hitShutDoor(mx, my, shut, hitX, hitY);
+        if (doorHit) {
+          clickTile(doorHit.x, doorHit.y);
+          return;
+        }
       }
+      // Tile centres first (walk / diamond). Brass labels sit under the tile (~sy+16 plate) and can
+      // overlap the neighbour south of a stair — prefer a walkable neighbour hit over the label so
+      // east/north taps on the Stack Road do not accidentally take the Ward. Label wins only when it
+      // is clearly the nearer target (tap on the words, not on a standable tile centre).
       let best: { x: number; y: number; dd: number; stand: boolean } | null = null;
       for (let y = 0; y < map.height; y++) {
         for (let x = 0; x < map.width; x++) {
           const p = projectTile(rect.width, rect.height, d.player.x, d.player.y, x, y, zoom, TW, TH);
           const near = Math.max(Math.abs(x - d.player.x), Math.abs(y - d.player.y));
-          if (plate && (near > 9 || presence(p.sx, p.sy) < 0.25)) continue;
+          // A drawn, labelled mouth answers a tap at any distance; other far tiles stay out of reach.
+          const far = near > 9 && !open.has(`${x},${y}`);
+          if (plate && (far || presence(p.sx, p.sy) < 0.25)) continue;
           const stand = walkable(d, x, y, "player");
           if (plate && !stand) continue;
           const nx = Math.abs(mx - p.sx) / hitX;
@@ -1458,6 +1511,31 @@ export function WorldCanvas() {
           if (nx + ny > (plate ? 2.2 : 1.15)) continue;
           const dd = (p.sx - mx) ** 2 + (p.sy - my) ** 2;
           if (!best || (stand && !best.stand) || (stand === best.stand && dd < best.dd)) best = { x, y, dd, stand };
+        }
+      }
+      {
+        const mouths = usableMouths(d.mapId, (need) => regionOpen(d, need));
+        let labelHit: { x: number; y: number; dd: number } | null = null;
+        for (const mouth of mouths) {
+          const dist = Math.abs(mouth.x - d.player.x) + Math.abs(mouth.y - d.player.y);
+          if (mouth.nearOnly && dist > 2) continue;
+          const p = projectTile(rect.width, rect.height, d.player.x, d.player.y, mouth.x, mouth.y, zoom, TW, TH);
+          if (plate && mouthPresence(p.sx, p.sy) <= 0.04) continue;
+          if (!hitMouthLabel(mx, my, p.sx, p.sy, mouth.label, Boolean(plate))) continue;
+          const ly = p.sy + (plate ? 16 : 26);
+          const dd = (p.sx - mx) ** 2 + (ly - my) ** 2;
+          if (!labelHit || dd < labelHit.dd) labelHit = { x: mouth.x, y: mouth.y, dd };
+        }
+        if (labelHit) {
+          const neighbourWalk =
+            best &&
+            best.stand &&
+            (best.x !== labelHit.x || best.y !== labelHit.y) &&
+            best.dd <= labelHit.dd + 16;
+          if (!neighbourWalk) {
+            clickTile(labelHit.x, labelHit.y);
+            return;
+          }
         }
       }
       if (best) clickTile(best.x, best.y);
