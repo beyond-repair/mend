@@ -1132,4 +1132,36 @@ describe("playtest 2026-10-15", () => {
     assert.equal(D().dialogue?.convo, "shaft-door", "door talk is available again after moving");
   });
 
+  it("Vane's ceremony checks are not offered again once the crucible is answered (bug 32)", () => {
+    // Played: VANE=fail → guards stood down → Splice (redirect) → Vane → look → the ceremony still offered
+    // horns / history. A pass would overwrite citadelFate; a fail would set the guards on a settled floor.
+    for (const fate of [undefined, "redirect", "sever", "seize", "expose"]) {
+      const d = D();
+      d.phase = "play";
+      d.combat = null;
+      d.panel = "none";
+      if (fate) d.flags.citadelFate = fate;
+      else delete d.flags.citadelFate;
+      d.dialogue = { convo: "vane", node: "choice" };
+      const texts = visibleReplies(D()).map((r) => r.text);
+      if (!fate) {
+        assert.ok(texts.some((t) => /on the horns/.test(t)) && texts.some((t) => /History, then/.test(t)), "both checks before the answer");
+      } else {
+        assert.ok(!texts.some((t) => /on the horns|History, then/.test(t)), `no ceremony check after ${fate}: ${texts.join(" / ")}`);
+        assert.ok(texts.some((t) => /answer on the machine/.test(t)), "a plain leave remains");
+      }
+    }
+    // A pass before the answer still exposes the crucible (the branch itself is unchanged).
+    const d = D();
+    delete d.flags.citadelFate;
+    d.player.skills.speech = 95;
+    d.dialogue = { convo: "vane", node: "choice" };
+    const real = Math.random;
+    Math.random = () => 0;
+    try { pick(/on the horns/); } finally { Math.random = real; }
+    assert.equal(D().flags.citadelFate, "expose");
+    assert.equal(D().flags.spireOpen, true);
+    assert.equal(D().dialogue, null);
+  });
+
 });
