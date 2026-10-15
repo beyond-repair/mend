@@ -1,10 +1,10 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** IN PROGRESS. Headless-browser loop covers L9a/L9a'/L9b/L9c/L9c'. Hand re-play on a snap of 5b4c48b (Wren crawl → Stack → Ward → Oakhaven) exposed look-ahead desync (floating brass) and a mid-road arrive toast after closing Lark — fixed on this tip and covered by tests, but **Stack Road east pan + arrive toast still need hand re-verify on this tip**.
-Do **not** mark COMPLETE — PLAYTEST VERIFIED until someone has re-played Stack Road → Ward stair → Oakhaven by hand (no Map jump) on this build and confirmed the painted plate still pans east without floating mouths.
+**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed Stack Road east pan, no floating brass labels, the arrive toast once (including after closing Lark), Ward stair → Oakhaven Lower Ward, talk, and Save/reload/Continue; the headless SEED=4 loop and `npm test` pass on the same tip. See "Hand re-playtest 6 (COMPLETE)".
+Scope of the verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Areas beyond Oakhaven are logic-tested only (see below).
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
-**Date:** 2026-10-15, about 1:30–2:00 AM ET (first pass); hand playtest 1 and its fixes about 2:20–2:45 AM ET; hand re-play + Stack Road camera about 2:50–3:10 AM ET; look-ahead / Ward fade / Brick soft about 3:30–3:50 AM ET; pan lock + LogChip remount about 4:00–4:20 AM ET
+**Date:** 2026-10-15, about 1:30–2:00 AM ET (first pass); hand playtest 1 and its fixes about 2:20–2:45 AM ET; hand re-play + Stack Road camera about 2:50–3:10 AM ET; look-ahead / Ward fade / Brick soft about 3:30–3:50 AM ET; pan lock + LogChip remount about 4:00–4:20 AM ET; hand re-playtest 6 (COMPLETE) on `c82cd73` about 4:20–4:35 AM ET
 **Runtime:** Node 22.12.0 (`.nvmrc`), Chromium (system Google Chrome) through Playwright 1.63, `npm run dev` on `:8080`, plus a production `npm run build` and `npm run preview` on `:4180`
 
 ## Scope
@@ -167,14 +167,36 @@ Hand path PASS to Oakhaven (Wren crawl → Stack mouth → Stack Road → Ward s
 | 18 | **HIGH — east walk frozen / brass labels float.** First ~4 ArrowRight presses pan the plate; further east leaves the painted road identical while sprites and brass (Ward mid-air, Quarry/Rust over the drop) keep sliding. Silas stays on screen. | Square `road` plate at cover≈1 had ~0 X slack, so clamp fired almost immediately. Look-ahead (bug 14) then drifted feet toward the trailing edge while the plate stayed put, so `projectTile` scrolled the board under a frozen backdrop and mouths left the painted structure. | Widen road pan (`zoom` 2.4, `fx` 0.28 west bias, `ax` 0.4) so the walk toward Ward (20,1) still moves the plate; drop look-ahead and keep feet on the home aim when clamped (no independent board scroll; still not DECK.right). `mouthPresence` unchanged. | "Stack Road east walk pans the plate… markers stay plate-aligned"; loop L9a' requires plate Δ 5→9 and Ward not rim-clipped |
 | 19 | **Regression — mid-road arrive toast** after closing Lark: "You arrive at The Stack Road." again. | `LogChip` only mounted when `!talking`. Closing talk remounted it with empty `seen`, so the still-current arrive line looked "fresh" and re-raised. Contents-change fix from 2fc0d6f was fine for steps; remount was the hole. | Keep `LogChip` mounted; pass `quiet={talking}` so it hides during talk without resetting `seen`. | "closing Lark mid-road does not push a second arrive…"; loop L9c + L9c' (talk then leave, chip stays down) |
 
-## Remaining before COMPLETE — PLAYTEST VERIFIED
+## Hand re-playtest 6 (COMPLETE) (2026-10-15, ~4:20–4:35 AM ET on c82cd73)
 
-1. **Human hand re-playtest** of the same loop on this build, with real canvas taps and visual feel: `npm run dev`, then open `http://localhost:8080/`.
-   Steps: New ledger → Recommended file → Enter the Sinks → "Then show me the pump." → "I'll audit it." → **Audit** (it must walk to the pump, not the checkpoint) → Mend → Esc → walk south through the gap at (14,11) → Moll → Engineering → (File the level once the talk closes) → walk to the SE Stack mouth by tapping → step on it → on The Stack Road, walk east (Brick stair is on the *lower* gantry at 16,11 — near-only chevron now, not a distant brass; it still goes to the Kiln), go back up the x=6 stair, walk east along the upper gantry, then north onto the **Ward stair** at (20,1) — **no Map jump** → Oakhaven → talk to someone → Menu → Save slot 1 → reload → Continue.
-   Check by hand:
+Played by hand in a live browser on `c82cd73` (`npm run dev`, `http://localhost:8080/`), real canvas taps and keys, **no Map jumps**. The checks left open after hand re-playtest 5 all passed:
+
+| Check | Result |
+| --- | --- |
+| Stack Road walking east pans the painted plate (bug 18); Silas stays about centred, not right-edge-pinned | PASS |
+| No floating brass labels: mouths stay on the road picture (no Ward mid-air / Quarry-over-void) | PASS |
+| Arrive toast "You arrive at The Stack Road." shows once on enter and stays down mid-road, including after closing Lark (bugs 13, 19) | PASS |
+| Ward stair walk-enter → Oakhaven Lower Ward (also left via the Stack mouth and walked back onto the Ward stair by tap) | PASS |
+| Talk in the ward (Sela) | PASS |
+| Menu → Save slot 1 → reload → Continue | PASS |
+
+Same tip, automated: headless `SEED=4` loop 17 steps plus substeps (L8b, L9a, L9a', L9b, L9c, L9c') **PASS**; `npm test` 196 + 55 + 43 **PASS** (Node 22, `PATH=/workspace/tools/node-v22/bin:$PATH`).
+
+Non-blocking polish leftovers seen in this pass. None were fixed here; they are recorded for a later pass:
+
+- Act I vs Act II header label when returning to Oakhaven (worth a look).
+- A mouth's tap target is the brass diamond, not its label text.
+- Combat action buttons have no accessible names.
+- Death → "Open the last ledger" mid-fight is still brutal (it can drop you back into the same fight at low HP/AP). This is the design call below, unchanged.
+- Menu "Close the ledger" returns to the title.
+
+## Before COMPLETE — PLAYTEST VERIFIED: record (all done on c82cd73)
+
+1. **Human hand re-playtest of the first-act loop: DONE, PASS** (hand re-playtest 6, ~4:20–4:35 AM ET on `c82cd73`). Path: New ledger → Recommended file → Enter the Sinks → Tobin → Audit → pump → Moll → Stack mouth by tapping → The Stack Road east → **Ward stair** → Oakhaven Lower Ward → talk → Menu → Save slot 1 → reload → Continue, with no Map jump.
    - (Verified on 51790a9) South of the plate, Silas stays in the frame and every tap moves him; arrows/WASD move him too; Stack mouth diamond + label come into view.
-   - (Verified headless on this tip; **must re-verify by hand**) on The Stack Road, walking east **pans the painted plate** for a clear stretch (not frozen art with sliding labels); brass mouths stay on the road picture (no Ward mid-air / Quarry-over-void); Silas is **not** pinned to the right edge; the **Ward stair** diamond + label are readable before you are on top of them; Brick stair does not shout from across the plate; ArrowUp / tap onto the Ward stair lands in Oakhaven.
-   - Esc: leaves Tobin's after-talk, Moll's "I'm already walking.", and Doss's single "Sleep. I won't move your weather." (bug 17); deliberately does nothing on Moll's opening and "No" lines.
-   - The arrival toast ("You arrive at The Stack Road.") shows once on enter and does **not** return mid-road or after closing Lark.
-2. **Death reload design call:** the autosave is written on every combat commit. After a lost fight, "Open the last ledger" can drop you back into the same fight at 1–8 HP and 0–1 AP. You can quit to the title, or load a manual slot if you made one. Not changed: deciding whether to keep a pre-fight checkpoint is a design question.
-3. **Beyond Oakhaven** (Quarry, Rust, Kiln, Switch, Pane, Tundra, Citadel, Spire, epilogue): covered only by the `pass3` logic tests. These areas have not been played in a browser in this pass.
+   - (Verified by hand on c82cd73) On The Stack Road, walking east pans the painted plate; brass mouths stay on the road picture; Silas stays about centred and is not pinned to the right edge; the Ward stair walk-enter lands in Oakhaven Lower Ward.
+   - (Verified by hand on c82cd73) The arrival toast shows once on enter and does not return mid-road or after closing Lark.
+   - (Verified by hand on c82cd73) Talk (Sela) and Save slot 1 → reload → Continue.
+   - Esc behaviour (Tobin's after-talk, Moll's "I'm already walking.", Doss's sole leave line from bug 17, and Moll's opening/"No" lines kept open) is covered by the unit tests and browser checks E1/E2. It was not called out separately in hand re-playtest 6.
+2. **Death reload design call (unchanged, non-blocking):** the autosave is written on every combat commit. After a lost fight, "Open the last ledger" can drop you back into the same fight at 1–8 HP and 0–1 AP. You can quit to the title, or load a manual slot if you made one. Not changed: deciding whether to keep a pre-fight checkpoint is a design question.
+3. **Beyond Oakhaven (out of scope for this verdict):** Quarry, Rust, Kiln, Switch, Pane, Tundra, Citadel, Spire, and the epilogue are covered only by the `pass3` logic tests. These areas have not been played in a browser in this pass.
