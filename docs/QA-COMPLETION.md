@@ -1,7 +1,7 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for Act II yards past Oakhaven (Kiln + Switch + Pane played in headless Chromium; see "Beyond Oakhaven — Act II yards"). Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed Stack Road east pan, no floating brass labels, the arrive toast once (including after closing Lark), Ward stair → Oakhaven Lower Ward, talk, and Save/reload/Continue; the headless SEED=4 loop and `npm test` pass on the same tip. See "Hand re-playtest 6 (COMPLETE)".
-Scope of the verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Areas beyond Oakhaven are logic-tested only (see below).
+**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven (Act II yards Kiln/Switch/Pane + Act III Quarry/Rust played in headless Chromium; see sections below). Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop; headless SEED=4 Act I loop, Act II, and Act III harnesses pass on this tip.
+Scope of the first-act verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Act III Quarry + Rust primary loops are harness-played (see "Beyond Oakhaven — Act III").
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
 **Date:** 2026-10-15, about 1:30–2:00 AM ET (first pass); hand playtest 1 and its fixes about 2:20–2:45 AM ET; hand re-play + Stack Road camera about 2:50–3:10 AM ET; look-ahead / Ward fade / Brick soft about 3:30–3:50 AM ET; pan lock + LogChip remount about 4:00–4:20 AM ET; hand re-playtest 6 (COMPLETE) on `c82cd73` about 4:20–4:35 AM ET
@@ -244,7 +244,7 @@ Rough key budget from spawn if you go east around Wren then south onto the east 
 
 ## Beyond Oakhaven — Act II yards (IN PROGRESS) (2026-10-15, ~10:55–11:15 AM ET)
 
-**Status:** **IN PROGRESS** for the beyond-Oakhaven scope. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. The three Act II yards off The Stack Road — **The Kiln**, **The Switch**, **The Pane** — were played end-to-end in a real headless browser (Playwright / Chromium against `npm run dev`, SEED=4). Quarry, Rust, Tundra, Citadel, Spire, and the epilogue remain unplayed in a browser (logic-only via `pass3`). A full hand pass without the harness is still open.
+**Status:** **IN PROGRESS** for the beyond-Oakhaven scope. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. The three Act II yards off The Stack Road — **The Kiln**, **The Switch**, **The Pane** — were played end-to-end in a real headless browser (Playwright / Chromium against `npm run dev`, SEED=4). Quarry + Rust are covered in the Act III section below; Tundra, Citadel, Spire, and the epilogue remain unplayed in a browser. A full hand pass without the harness is still open.
 
 **Path played (act2):** New ledger → … → Oakhaven → Brick stair → **Kiln** (Harl, flue, field-dry, Jun board, stamp, cellar, sootglass) → Yard stair → **Switch** (Hale, slick plates, yard stamp, shunt, boots, bay, waybill) → Glass stair → **Pane** (Orla, seat flue, quiet/legal sales, Fen vault, anneal lens) → Ward stair → Oakhaven → Save/reload/Continue. Real canvas taps on the road stairs; arrow keys through the three locked cuts.
 
@@ -269,6 +269,41 @@ Rough key budget from spawn if you go east around Wren then south onto the east 
 | 21 | **HIGH — Kiln cellar cut unreachable.** After Nim showed the give, no real input opened the door at (6,16). Plate taps walked to a neighbour; arrow keys never bumped the door. | (1) Plate hit-test skips non-standable tiles, and a shut locked door is not standable, so a tap on the door itself walked to the nearest neighbour. (2) Nim stood on (6,15), the only orthogonal approach north of the cut, so ArrowDown into the door was impossible. Same pattern: Ske on (6,12) blocked the Switch bay door (6,13). | WorldCanvas: a plate tap inside a shut locked door's tile diamond takes the door (`hitShutDoor` in stage.ts). Nim stands beside the cut at (5,15); Ske beside the bay at (5,12). | `playtest`: door sweep; Kiln cellar by ArrowDown; door tap hit; act2 K28 / Y7 / P6 |
 | 22 | **HIGH — Pane Stack mouth stacked Silas on Sol.** Leaving The Pane after the melt held landed Silas on Sol at the Glass stair's road landing (27,2). | Sol's routine moved to (27,2) once `paneCharge` — the mouth's `tx,ty`. `arrive` placed the player on that tile with no clearance. | Sol stands beside the stair at (28,2). `arrive` also runs `clearLanding`: if someone is on the land tile, step Silas to the nearest free non-mouth neighbour. | `playtest`: no routine parks on a landing; arrive clears a stacked landing; act2 P8 |
 
+### Still unplayed (browser) after Act II yards
+
+Brass Tundra, High Citadel, Void Spire, epilogue (Quarry + Rust moved to Act III section below). Also unplayed inside the three yards: refuse / cut-stamp / jam-table / smash-glass branches, combat vs Cress/Voss/Rue/Ness, and a full hand pass without the harness. Death → "Open the last ledger" mid-fight design call unchanged.
+
+## Beyond Oakhaven — Act III Quarry + Rust (IN PROGRESS) (2026-10-15, ~11:20 AM–12:00 PM ET)
+
+**Status:** **IN PROGRESS** for Act III. First-act **COMPLETE — PLAYTEST VERIFIED** and Act II yards harness results are unchanged. **The Clockwork Canyon (Quarry)** and **Rust Districts** were played end-to-end in headless Chromium (`scripts/playtest-act3.mjs` SEED=4 against `npm run dev`). Tundra, Citadel, Spire, and the epilogue remain unplayed in a browser. City-network heat (`stoneMoving` → `tenementWarm`) still needs `checkpointLead=varr` (combat deed); the Engineering talk-past path clears the slab without signing the plate stair — by design.
+
+**Path played (act3):** New ledger → … → Oakhaven → Quarry road taps → **Quarry** (Hask clear-the-stone → Rill named → Pim → Audit crane → Cut the brake clear → Save/Continue) → Stack mouth out → Rust cut taps → **Rust** (Nell → Ives → Audit hearth → Audit forge → Map lists Quarry+Rust → Save/Continue). Real canvas taps on Quarry road / Rust cut mouths; store `clickTile` for long walks.
+
+**Harness:** `scripts/playtest-act3.mjs` (SEED=4). Baseline `scripts/playtest-loop.mjs` still covers Act I; `scripts/playtest-act2.mjs` still covers Act II yards.
+
+### Results (act3, tip of this note)
+
+| Slice | Result |
+| --- | --- |
+| A0–A2 Act I → Oakhaven (Moll Engineering talk-past) | PASS |
+| Q0–Q3 Quarry road taps → Clockwork Canyon arrive + feet on canvas | PASS |
+| Q4–Q6 Hask workersClear → Rill named → Pim met | PASS |
+| Q7–Q8 Audit crane → Cut the brake clear (`quarryStone=clear`, no workerHurt) | PASS |
+| Q8b stoneMoving only when Varr holds the stair (Engineering path: lead unset → stoneMoving false) | PASS |
+| Q9–Q11 after-clear talks → Save/Continue in Quarry → Stack mouth out | PASS |
+| R1–R3 Rust cut taps → Rust Districts arrive | PASS |
+| R4–R7 Nell / Ives / hearth audit / forge audit (haul cold without stoneMoving) | PASS |
+| R8–R9 Map lists Quarry+Rust; Save/Continue in Rust | PASS |
+
+`npm test` **196 + 55 + 62 PASS** (playtest +2: Act III hostile-path clearance; Audit beside crane ≠ chute). `npm run typecheck` clean. Act I loop SEED=4 **PASS**.
+
+### Bugs found / fixed this pass
+
+| # | Found by play | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 23 | **HIGH — Quarry/Rust primary path forced combat.** Entering via Quarry road and walking to Hask/Rill (or Rust mouth → Nell) started "Structural engagement" before any talk. | `rubble` (28,8, vision 3) sat on the east mouth corridor; `mill1` (22,18) sat beside Rill; `cutter1` (10,17) sat beside Nell. `checkVision` uses Chebyshev `dist`. Same class as Nim/Ske/Sol clearance. | Reposition optional hostiles off the primary routes: rubble (20,3), mill1 (10,20), cutter1 (4,19). Fights remain if you walk into them. | `playtest`: Act III primary paths stay outside hostile vision; act3 Q4–Q6 / R4 |
+| 24 | **HIGH — Audit beside the Quarry crane opened the distant ore chute.** HUD Audit from (11,4) selected the severed chute `lip` instead of the adjacent crane, so Cut the brake never appeared. | `auditNearest` preferred any reachable "broken" machine over an intact machine Silas was already beside. Chute starts severed. Same class as bug 20 (wrong Audit target). | Prefer beside (and beside-broken) before remote broken/intact. | `playtest`: Audit beside the Quarry crane…; act3 Q7 |
+
 ### Still unplayed (browser)
 
-Quarry (Clockwork Canyon), Rust Districts, Brass Tundra, High Citadel, Void Spire, epilogue. Also unplayed inside the three yards: refuse / cut-stamp / jam-table / smash-glass branches, combat vs Cress/Voss/Rue/Ness, and a full hand pass without the harness. Death → "Open the last ledger" mid-fight design call unchanged.
+Brass Tundra, High Citadel, Void Spire, epilogue. Also unplayed: Kael duel / RelSec fight, scarred-drop branch, Varr-held stair → stoneMoving → tenementWarm / Seat stock with live ore, refuse-stock, combat vs rubble/mill/cutter, and a full hand pass without the harness. Death → "Open the last ledger" mid-fight design call unchanged.
