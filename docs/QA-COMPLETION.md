@@ -187,7 +187,7 @@ Non-blocking polish leftovers from this pass were addressed in **Polish pass 1**
 
 ## Polish pass 1 (2026-10-15)
 
-Play build **`1167c2f`** (first-act COMPLETE root `c82cd73`); Continue-grey fix + this hand-check note land on the tip that follows. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
+Play tip **`eb7b0f9`** (Continue grey fix; prior polish play `1167c2f`, first-act COMPLETE root `c82cd73`); this note on **`ef739af`**. First-act **COMPLETE — PLAYTEST VERIFIED** verdict is unchanged. Death → "Open the last ledger" mid-fight design call is unchanged.
 
 | Finding | Root cause | Fix | Regression test |
 | --- | --- | --- | --- |
