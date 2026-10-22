@@ -557,3 +557,43 @@ Harness-only (not a game bug): `mouthStep` now files a pending level before Arro
 - A full hand pass of Acts IV–VI without the harness.
 
 **BLACKSITE PR #5** remains **BLOCKED** on human held-key — not worked this run.
+
+## Beyond Oakhaven — Act III Kael duel / RelSec, Cinder companion, bug 34 (IN PROGRESS) (2026-10-22, ~12:25–1:10 AM ET)
+
+**Status:** **IN PROGRESS.** Kael's **duel** and the **Cinder** companion are now harness-played through to the epilogue on the Act I Varr network (`SEED=4`). Kael + Striker Pye together (**KAEL=both**) was not won. One game bug was found by play (34) and fixed. These are harness plays, not hand plays.
+
+**How these branches are reached (legitimate character only, no state edits):**
+- **Kael** (`NETWORK=varr KAEL=duel|both`): on the Quarry detour, after Hask clears the riggers (`workersClear`), file slot 1 and talk to Kael at (13,5) before Cut the brake. `duel`: **"The riggers walk. You and I finish this."** (needs `workersClear`) → Engage (roster Kael only) → peel Outer clasp / Steel frame / Inner mesh → prybar → **kael-down** → **"Live. Take that sentence…"** (`kaelFate=spared`, `knowsSiphon`, siphon journal). `both`: **"Then show me the layers."** → Kael + Pye. The harness stands on Kael (Pye has no weapon seam; he steps out once Kael is not holding).
+- **Cinder** (`NETWORK=varr CINDER=1`): Varr's **"Strip the coupling and let him crawl"** leaves plate scrap. Rest, then feed the moth at the bellows (30,3): **"Leave the plate scrap where she can take it."** → **"Hold still."** (`cinderFed`, `cinderChose`, companion). She walks the whole run. At the Spire mouth **cinder-spire** → **"Wait until she steps."** (`cinderSpireOk`). With `LAMP=break` the dark road also raises **cinder-dark** at the Tundra mouth → Wait (`cinderDarkOk`).
+- After a "Wait until she steps." answer Silas is still on the mouth tile. Tapping that tile departs; the harness does the same. Another Arrow press walks off the mouth instead (LOW UX note, not changed: fixing it needs a new effect).
+
+### Results (this tip)
+
+| Run | Path | Result |
+| --- | --- | --- |
+| `SEED=4 NETWORK=varr SARN=toll KAEL=duel` | checkpoint (varr broken open; 31 deaths) → Quarry Hask → **Kael duel** (0 deaths, 3 armor cuts, 10 strikes) → spare → Cut the brake → Rust → Tundra → Citadel Sarn stores → Splice → Spire decline → epilogue | **77/77 PASS** |
+| `SEED=4 NETWORK=varr SARN=toll KAEL=both` | … → Engage Kael + Pye | **NOT WON**: 40 losses with a Pye-first tactic (cap reached), then 54 losses with Kael-first, after which the page lost `window.__mend` mid-fight (harness crash, not chased). Store sim at the same file (level 2, 46 HP): ~0–7% of attempts win; the duel at the same file wins ~40%. |
+| `SEED=4 NETWORK=varr SARN=toll CINDER=1` | checkpoint → **feed + recruit Cinder** → Quarry → … → Spire mouth **cinder-spire Wait** → Spire decline → epilogue | **72/72 PASS** (after bug 34) |
+| `SEED=4 NETWORK=varr SARN=toll CINDER=1 LAMP=break` | same + Break the glass → dark road → **cinder-dark Wait** (Tundra mouth) + cinder-spire Wait | **77/77 PASS** |
+| `SEED=4` default | regression | **59/59 PASS** |
+| Act III `SEED=4` | regression | **47/47 PASS** |
+| Act I loop `SEED=4` | regression | **23/23 PASS** |
+
+Also on this tip: `npm test` **196 + 55 + 76 PASS** (one new bug-34 test), `npm run typecheck` clean. Z0 page/console errors: 0 on every completed run.
+
+Checkpoint fight variance stays high (3–31 deaths per run on this pass; the harness reloads slot 1 after each death). Design call, unchanged.
+
+### Bugs found / fixed this pass
+
+| # | Found by play | Root cause | Fix | Regression test |
+| --- | --- | --- | --- | --- |
+| 34 | **HIGH — a recruited Cinder freezes Silas near her perch.** `CINDER=1`: after "Hold still." at the bellows, the next walk out of the upper Sinks stopped at (28,3) and the Stack mouth could not be reached. The store threw `toward is not a function` on every step within 5 tiles of a perch (Sinks bellows, fed Haven plots, warm Tundra hollow). | `nudgeCreature` built `toward` as a comma expression `((tx, ty) => …, "toward")`, so it held the string `"toward"`. | Make `toward` a plain arrow function (no behaviour change otherwise). | `playtest`: "a recruited Cinder can walk with Silas past her perch (bug 34)" (fails without the fix with the same TypeError) |
+
+### Still unplayed / open
+
+- **KAEL=both** (Kael + Pye at level 2): optional, off the critical path (Ives opens the Citadel; "Not this minute." walks away). Near-unwinnable at the file this path reaches (~0–7% per attempt), while the duel is about 40%. **Balance is a user design call** and was not changed. The spare ending is verified through the duel.
+- **"The doctrine dies with the man."** (kaelFate dead) was not taken. Its effects differ only in flags, rep and journal text.
+- **Seize**: unchanged. It needs comprehension 8 or Continuity, which the critical path does not reach (see above).
+- **Cinder leaving** (`cinderRisk` from Doss + Rust heat + stopped bellows + fear ≥ 16) and her return were not played.
+- Design calls (unchanged): mid-fight auto ledger thin HP; checkpoint fight variance; Sovereign / Sever / ceremony guard balance; Kael + Pye balance.
+- A full hand pass of Acts IV–VI without the harness.
