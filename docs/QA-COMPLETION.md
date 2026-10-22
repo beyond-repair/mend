@@ -891,3 +891,15 @@ Played on :8080 via `__hand-load-v3.html`, round 1 to round 2, no death.
 | Act I loop | **23/23 PASS** |
 
 **Hand check needed (H14):** go to `http://localhost:8080/__hand-load-v3.html`, click Continue, then Talk → "Then I'll read you while you move." Cut the Echo's Power coupling (Audit → Unmend → Confirm) and end the turn. Under HP, check that "You: Tool haft severed by Echo construct" and "Echo construct: Power coupling severed, Arm mount unavailable" are on separate red lines with no "…". Check that the Echo intent row shows its whole "· needs Power coupling — …" reason, wrapping to a second line if needed.
+
+### H14 — HAND CHECK PASS on 82aa8d4 (2026-10-22 ~7:32 AM ET)
+
+Played from `http://localhost:8080/__hand-load-v3.html` (Continue → Talk → "Then I'll read you while you move."). The earlier attempt was inconclusive only because the cut lost its roll ("You were still guessing. The bond holds."). This time the cut landed on the first try.
+
+- PASS: the cut log read "The cut spends 8 Focus, all you had. It wanted 11." / "Power coupling severed." / "Arm mount unavailable."
+- PASS (H14): after End turn, the red lines under HP were two separate, fully readable rows with no "…": "You: Tool haft severed by Echo construct" and "Echo construct: Power coupling severed, Arm mount unavailable".
+- PASS: the intent rows were readable in full. Before the cut they read "Echo construct: Movement → you, then Piston arm · needs Power coupling" and "The Epistemic Sovereign: Cut → your Tool haft — out of reach". After the cut they read "Officer's baton → you" and "Bare hands → you". This layout never shows a longer "needs … — reason" row, so wrapping of that row is covered by the act4 V5c regression only.
+- MINOR (not fixed, cosmetic): turn-order name chips truncate ("THE EPISTE…", "ECHO CONS…").
+- Note: the loader page needed a second Continue click before it moved on.
+
+**Status: IN PROGRESS** for Acts IV–VI. H1–H14 are closed. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, the open design calls (including Sovereign damage), and the cosmetic turn-order chip truncation.
