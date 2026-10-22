@@ -978,3 +978,17 @@ On this save, nothing along the route is hostile within its vision (Lamp shade n
 **Hand check still wanted (short):** load `http://localhost:8080/__hand-load-c10.html` and Continue (reload the tab first so the new code is loaded). Check three things. (1) "Tundra stair ▼" shows at the bottom with a solid arrowhead. (2) On the Tundra, "◀ Stack mouth" shows on the left edge. (3) Walking the Stack Road, no two tags print into each other and none is dimmed. Also tap one pinned tag. In any fight, check that the turn-order names read whole.
 
 **Status: IN PROGRESS** for Acts IV–VI. H1–H14, H16 and the Citadel → Tundra → Stack Road → Spire walk without Map travel are hand-verified. H17 is not a bug. Remaining: the H15 follow-up hand look above (pins now full-strength with drawn arrowheads, and kept clear of the on-frame tags), the turn-order name wrap hand look, and the open design calls (Sovereign damage, KAEL=both, checkpoint variance, mid-fight auto-ledger HP, Seize from the Recommended file).
+
+### Hand check — H15 follow-up and turn-order names on 23e2efc (:8080, 2026-10-22 ~8:43 AM ET)
+
+A person played with mouse and keyboard only and never used Map travel. They loaded the C10 save, then the V3 Spire save.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Citadel pin | **PASS** | "Tundra stair ▼" shows at the bottom of the view with a solid, full-strength brass arrowhead. |
+| Tap a pinned tag | **PASS** | Clicking the pin walked Silas to the stair and logged "You arrive at The Brass Tundra." On the Tundra, clicking "◀ Stack mouth" took him to The Stack Road. |
+| Tundra pin | **PASS** | "◀ Stack mouth" is on the left edge on arrival and reads clearly. It is smaller than the Citadel pin. |
+| Stack Road tags | **PASS** | Checked during Up ×1 then Right ×20 at steps 7, 14 and 20. No overlap and no dimming. The left stack (Sinks mouth, Tundra walk, Yard stair) sits about 25–30px apart, and "Yard stair" reads clearly. |
+| Turn-order names | **PASS** | The Spire strip reads "YOU", "THE EPISTEMIC / SOVEREIGN" and "ECHO / CONSTRUCT", wrapped by word, with no "…". |
+
+**Status: IN PROGRESS** for Acts IV–VI. H1–H17 are closed. The walk without Map travel, the edge pins and the turn-order names are hand-verified. Remaining: the open design calls (Sovereign damage, KAEL=both, checkpoint variance, mid-fight auto-ledger HP, Seize from the Recommended file) and the unspent-points HUD signal (H5).
