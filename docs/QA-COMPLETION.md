@@ -873,3 +873,21 @@ Played on :8080 via `__hand-load-v3.html`, round 1 to round 2, no death.
 - NOTE: after its coupling was cut, the Echo still made its committed haft cut. That matches the replan logic (only the arm mount is lost, not the construct). Balance note again: the Sovereign hit for 10 each round (52 → 42 → 29 HP by round 2, counting the scald).
 
 **Status: IN PROGRESS** for Acts IV–VI. H11–H13 are hand-verified. Remaining: H14 (truncated fault line), a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage).
+
+### H14 — FIXED IN CODE at 0bcafb4, pending hand check (2026-10-22 ~7:20 AM ET)
+
+- Root cause: `src/components/mend/Game.tsx` built the fault line as one string (`knownFaults` joined each side with " · ") and drew it in a single `truncate` div. At the fixed 440px layout the foe's part after the "·" was cut off with "…". The foe intent rows under it used `truncate` too, so their reasons ("· needs Power coupling — no longer that shape", "— out of reach") were cut the same way.
+- Fix: `knownFaults` now returns one row per side ("You: …", "Echo construct: …"). Each fault row and each intent row wraps (`break-words`) instead of truncating. Same colors, same size, same 440px layout.
+- Regression: `scripts/playtest-act4.mjs` adds V5c. During the Sovereign fight it samples every fault and intent row and fails if any is clipped (ellipsis, nowrap, or wider than its box).
+
+| Check | Result |
+| --- | --- |
+| `npm test` | 196 + 55 + 88 PASS |
+| `npm run typecheck` | clean |
+| `npm run lint` | 37 problems, same as before (pre-existing) |
+| act4 default | **59/59 PASS** |
+| act4 `SPIRE=fight-leave` | **62/62 PASS** (adds V5c; 17 rows sampled, 0 clipped) |
+| Act III | **47/47 PASS** |
+| Act I loop | **23/23 PASS** |
+
+**Hand check needed (H14):** go to `http://localhost:8080/__hand-load-v3.html`, click Continue, then Talk → "Then I'll read you while you move." Cut the Echo's Power coupling (Audit → Unmend → Confirm) and end the turn. Under HP, check that "You: Tool haft severed by Echo construct" and "Echo construct: Power coupling severed, Arm mount unavailable" are on separate red lines with no "…". Check that the Echo intent row shows its whole "· needs Power coupling — …" reason, wrapping to a second line if needed.
