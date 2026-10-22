@@ -785,3 +785,22 @@ Test: `playtest.test.ts` "a committed cut Silas steps away from says out of reac
 **Hand check needed (H9):** load the V3 save via `http://localhost:8080/__hand-load-v3.html` → Talk → "Then I'll read you while you move." On round 1 the Sovereign line reads "Cut → Tool haft" (brass). Touch the Echo's face in the turn order, then Audit: Silas walks one step beside the Echo. The Sovereign line should now read "Cut → Tool haft — out of reach" (grey) before any cut. Unmend Power coupling: the Echo line reads "Cut → Tool haft" (brass) and the Sovereign line still "— out of reach". (The cut can miss; retry while AP ≥ 4.) End the turn. The Echo acts first and may cut the haft. When the Sovereign opens round 2, it logs "The Epistemic Sovereign loses the action they had committed to." Node replays of this exact path matched in 3 of 3 runs.
 
 **Status: IN PROGRESS** for Acts IV–VI. H9 is fixed and needs a hand check. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage).
+
+### H9 hand check — PASS on 774ded7 (2026-10-22 ~5:29 AM ET)
+
+Played by hand in the browser from `__hand-load-v3.html` (the loader lands on the title, so Continue first) → Talk → "Then I'll read you while you move."
+
+- Round 1 start: Sovereign "Cut → Tool haft", Echo "Movement → you, then Piston arm".
+- After touching the Echo's face and opening Audit (Silas steps beside the Echo): Sovereign "Cut → Tool haft — out of reach", Echo "Movement → you, then Piston arm · needs Power coupling".
+- After Unmend Power coupling: Echo re-plans to "Cut → Tool haft" (live), Sovereign stays "— out of reach".
+- Round 2: Silas's Tool haft severed by the Echo; intents read "Officer's baton → you" / "Bare hands → you".
+- No line said only "no longer that shape". Matches the expected path above.
+
+Silas HP: 52 → 28 at round 1 start (opening exchange) → 25 after the cut (Focus 8 → 0 during Audit/cut) → 14 at round 2 start. Tester stopped at R2 alive.
+
+New notes (not fixed, LOW):
+- **H10 (LOW, wording):** "Cut → Tool haft" on a foe's line means the foe will cut *Silas's* Tool haft, but it reads like the foe's own part. Consider "Cut → your Tool haft".
+- Silas lost 3 HP with no stated cause when Focus hit 0 after the cut (likely the over-read burn). The log should name it.
+- Sovereign damage is still heavy (24 HP opening exchange); left as an open design call, not changed.
+
+**Status: IN PROGRESS** for Acts IV–VI. H7, H8, H9 hand-verified. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, H10 wording, and the open design calls (including Sovereign damage).
