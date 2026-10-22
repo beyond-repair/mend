@@ -642,7 +642,7 @@ LOW note, not changed and not played: after the second choosing, `cinderLeftSaid
 - Design calls unchanged: mid-fight auto ledger thin HP; **checkpoint fight variance** (16–41 deaths per run this pass; two runs hit the 40 cap); Sovereign / Sever / ceremony guard balance; Kael + Pye balance; whether Seize should be reachable from the Recommended file.
 - A full hand pass of Acts IV–VI without the harness.
 
-## Hand pass — Citadel crucible → Spire (IN PROGRESS) — 2026-10-22 ~2:00 AM ET
+## Hand pass — Citadel crucible → Spire → epilogue — 2026-10-22 ~2:00 AM ET (re-check ~3:00 AM ET: release ending PASS)
 
 **Status: IN PROGRESS. The release ending has not yet been hand-played to the epilogue.** A person played (not the harness) from a High Citadel save made just before the crucible: a Recommended (mind 8) file going from level 2 to 3. The run went crucible (Splice) → Spire → Sovereign decline → Sovereign + Echo fight attempts. The fixes below are on `700521c`. Harness and unit regression is green, but nobody has replayed this stretch by hand since the fixes.
 
@@ -680,6 +680,25 @@ Z0 page/console errors: 0 on every run.
 
 ### Still open
 
-- **Hand-play the release ending to the epilogue** (decline → Unissued baseline → Read what is holding → Leave the holes). The hint, the Audit target, and the plate tag also need a hand re-check.
+- ~~Hand-play the release ending to the epilogue~~ — **done, PASS** (see re-check below).
+- Hand re-check of bug 38 (Stand down with the Sovereign's baton live). The re-check below never entered the fight; the fix is covered by the unit test and act4 fight-leave only.
+- Hand walk Citadel → Tundra stair → Stack road east → Spire mouth on this build. The re-check used Map travel.
 - Sovereign fight balance at level 3 (H6), plus the earlier design calls (KAEL=both, checkpoint variance, mid-fight auto-ledger HP, Seize from the Recommended file).
 - Unspent-points HUD signal (H5): a design question, not changed.
+
+### Hand re-check on `1e671df` — release ending (2026-10-22 ~2:59–3:00 AM ET)
+
+A person played on the fixed tip (dev server on :8080 from this branch), loading the same pre-crucible High Citadel save, mouse and keyboard only, with no harness. Path: Continue → HUD Audit → Splice toward the Sinks → File it (level-up) → Menu → Save slot 1 → reload → Continue → Map → Void Spire → Talk → "Not while the graph is a lie. I'll circle." → Audit → Read what is holding → Audit → Leave the holes → epilogue → Return to the title. 0 deaths; no soft-locks or visual glitches seen.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Bug 36: Audit targets the crucible | **PASS** | First Audit opened "Audit · Crucible core" ("Spire lifts. Functional."), Splice offered. Brass tags "Crucible core" (Citadel) and "Unissued baseline" (Spire) visible once panels closed. |
+| Bug 37: level-up does not re-fire | **PASS** | "Comprehension deepens: Level 3" → File it → save, reload, Continue: no modal. |
+| Bug 35: circle hint | **PASS** | Log: "The Sovereign lets you go. South, down the drop, the unissued baseline is still holding. It can be read without a fight." |
+| Release ending | **PASS** | Audit · Unissued baseline → Read what is holding → Leave the holes → "The ledger closes / BASELINE REFUSED" epilogue → MEND title. |
+| Bug 38: Stand down | **not hand-tested** | No fight was entered. |
+
+Notes (not changed): the Audit panel covers the map, so the target is only visible by name in the panel title; the level-up modal follows Splice with no beat between; the epilogue scrolls and its button is at the end of the text (reading order, by design).
+
+**Status: IN PROGRESS** for Acts IV–VI. The release (no-fight) ending is now hand-verified. Remaining: hand check of bug 38 in the Sovereign fight, a hand walk Citadel → Spire without Map travel, and the open design calls above.
+
