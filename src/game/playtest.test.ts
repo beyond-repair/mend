@@ -1379,4 +1379,45 @@ describe("playtest 2026-10-15", () => {
     const sov = boardIntents(d).find((r) => r.id === "sovereign");
     assert.ok(sov && !/Bare hands/.test(sov.line));
   });
+
+  it("a committed cut Silas steps away from says out of reach, not a lost part (H9)", () => {
+    // Hand pass: after walking to the Echo and cutting its coupling, the Sovereign's line read
+    // "Cut → Tool haft — no longer that shape" though the haft was whole. The step had taken Silas out of its reach.
+    const d = spireFight();
+    const sov = d.actors.sovereign;
+    const echo = d.actors.echo;
+    const haft = d.player.nodes.find((n) => n.effect === "weapon")!;
+    d.player.x = 9; d.player.y = 7;
+    sov.x = 8; sov.y = 6;
+    echo.x = 11; echo.y = 8;
+    for (const n of echo.nodes) { n.revealed = true; n.confidence = "confident"; }
+    freezeIntents(d);
+    const before = boardIntents(d).find((r) => r.id === "sovereign");
+    assert.equal(before?.line, `Cut → ${haft.name}`);
+    assert.equal(before?.live, true);
+    assert.equal(before?.why, "");
+    // The aimed-Audit walk: one step east, beside the Echo, two from the Sovereign.
+    d.player.x = 10;
+    assert.equal(dist(d.player, sov), 2);
+    for (let i = 0; i < 15 && !echo.nodes.find((n) => n.id === "coupling")!.severed; i++) {
+      d.player.ap = 20;
+      d.focus = 40;
+      d.player.stunned = false;
+      d.phase = "play";
+      unmendNode(d, { kind: "actor", id: "echo" }, "coupling");
+    }
+    assert.ok(echo.nodes.find((n) => n.id === "coupling")!.severed, "coupling cut");
+    assert.ok(!haft.severed, "nobody touched the haft");
+    const rows = boardIntents(d);
+    const s = rows.find((r) => r.id === "sovereign");
+    assert.equal(s?.line, `Cut → ${haft.name}`, "the Sovereign keeps its committed cut: no re-plan for a cut on someone else");
+    assert.equal(s?.live, false);
+    assert.equal(s?.why, "out of reach", "the line says why, and does not imply the haft was lost");
+    const e = rows.find((r) => r.id === "echo");
+    assert.equal(e?.line, `Cut → ${haft.name}`, "the Echo, now beside Silas, re-read its opening (H8)");
+    assert.equal(e?.live, true);
+    // Once the haft really is gone, the line says that instead.
+    haft.severed = true;
+    assert.equal(boardIntents(d).find((r) => r.id === "sovereign")?.why, `${haft.name} is gone`);
+  });
 });

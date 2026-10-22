@@ -3100,6 +3100,23 @@ function planFits(d, a, plan) {
   }
   return gait(a) !== "dead";
 }
+// Why a committed opening no longer fits, in the words the intent line shows (H9). A cut whose
+// target part is intact but out of reach is not a lost part: say which, so a step back does not
+// read as if something had been cut. Same tests as planFits, in the same order.
+function planMiss(d, a, plan) {
+  if (planFits(d, a, plan)) return "";
+  if (plan.kind === "cut") {
+    const seam2 = d.player.nodes.find((n) => n.name === plan.nodeName);
+    if (!seam2 || !nodeLive(d.player.nodes, seam2)) return `${plan.nodeName} is gone`;
+    return "out of reach";
+  }
+  if (plan.kind === "strike" || plan.kind === "close") {
+    const prey = plan.target === "player" ? d.player : d.actors[plan.target];
+    if (!prey?.alive) return "the target is down";
+    if (plan.kind === "strike" && weaponOf(a).id === plan.weaponId) return "out of reach";
+  }
+  return "no longer that shape";
+}
 function boardIntents(d) {
   if (!d.combat?.plans) return [];
   const rows = [];
@@ -3112,6 +3129,7 @@ function boardIntents(d) {
       name: a.name,
       line: openingLine(d, a, plan),
       live: planFits(d, a, plan),
+      why: planMiss(d, a, plan),
     });
   }
   return rows;

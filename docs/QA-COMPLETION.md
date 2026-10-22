@@ -755,7 +755,33 @@ The V3 loader lands in explore mode after the Sovereign's offer ("The Sovereign 
 | **H8** no stale line after cut | **PASS.** Before the cut the Echo's line read "Movement → you" (this save's opening, not Piston arm). After Unmend Power coupling, in the same turn, the Echo line read "Cut → Tool haft" with no "no longer that shape". Round 2 read "Bare hands → you". |
 
 New notes from this pass:
-- **H9 (LOW, to triage):** right after the Echo's coupling cut, the Sovereign's line read "Cut → Tool haft — no longer that shape", though none of its parts were cut. Possibly correct (both foes had committed the same cut on Silas's Tool haft, and the board changed), but the wording reads oddly. Needs a look at whether a sibling re-plan should mark the other foe stale.
+- **H9 (LOW, triaged below: fixed, needs hand check):** right after the Echo's coupling cut, the Sovereign's line read "Cut → Tool haft — no longer that shape", though none of its parts were cut. Possibly correct (both foes had committed the same cut on Silas's Tool haft, and the board changed), but the wording reads oddly. Needs a look at whether a sibling re-plan should mark the other foe stale.
 - **Balance note:** Silas went 40 → 11 HP in one enemy round in Round 3 after losing the Tool haft, then died after Set Brace + End ("Baseline lost", "Open the last ledger" / "Title" shown, no freeze). Feeds the open design call on Sovereign difficulty; not changed here.
 
 **Status: IN PROGRESS** for Acts IV–VI. H7 and H8 are hand-verified. Remaining: triage H9, a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage).
+
+
+### H9 triage — "Cut → Tool haft — no longer that shape" on the Sovereign (2026-10-22 ~5:10 AM ET)
+
+**Finding: the stale mark was correct, the wording was wrong.** Replayed in the node store from the V3 save (`/tmp/mend-v3.json`, Talk → "Then I'll read you while you move."): round 1 starts with Silas at (9,7), Sovereign at (8,6) (adjacent), Echo at (11,8) (two away). Intents freeze at the start of Silas's turn: Sovereign "Cut → Tool haft" (tier ≥ 2, adjacent, haft live), Echo "Movement → you, then Piston arm". Aiming Audit at the Echo walks Silas one step to (10,7), beside the Echo but **two tiles from the Sovereign**. From that step on, `planFits` fails the Sovereign's committed cut on distance (`dist(a, player) <= 1`), not on the haft, which stays whole. The coupling cut then re-reads only the Echo (`replanOwner`, H8) to "Cut → Tool haft", and the hand tester noticed the Sovereign's stale line at that moment. It was already stale since the step.
+
+The mechanic is existing design: a committed opening that no longer fits is lost when the foe acts (`followPlan`: "loses the action they had committed to"), so stepping out of reach of a telegraphed cut is a real dodge. A sibling re-plan would erase that dodge, so the Sovereign is **not** re-planned (`replanOwner` stays scoped to the body that was cut). The only defect was the generic suffix "no longer that shape", which read as if the haft had changed.
+
+**Fix:** `planMiss` in `src/game/logic.ts` gives `boardIntents` rows a `why` (same tests as `planFits`): a cut whose part is intact but out of reach reads "— out of reach"; a cut whose part is gone reads "— Tool haft is gone"; a strike or close whose target is down reads "— the target is down"; a strike with the same weapon but out of range reads "— out of reach"; anything else keeps "— no longer that shape". `Game.tsx` prints `row.why`. Display only: no AI or rules change.
+
+Test: `playtest.test.ts` "a committed cut Silas steps away from says out of reach, not a lost part (H9)" replays the step + coupling cut (Sovereign line live false, why "out of reach", haft intact, Echo "Cut → Tool haft" live), then severs the haft and expects "Tool haft is gone".
+
+| Run (dev server :8090, headless Chrome, `SEED=4`) | Result |
+| --- | --- |
+| `npm test` | 196 + 55 + 84 PASS (game suite 83 → 84) |
+| `npm run typecheck` | clean |
+| act4 default | **59/59 PASS** |
+| act4 `SPIRE=fight-leave` | **61/61 PASS** (twice: sovereign-down in 6 rounds / 0 deaths, then 22 rounds / 6 deaths). Baseline on cb0038c without this change also varied (14 rounds / 4 deaths, 7 / 0): the fight length is not deterministic under `SEED=4`, and the harness does not read intent lines. |
+| Act III | **47/47 PASS** |
+| Act I loop | **23/23 PASS** |
+
+**Balance numbers behind "40 → 11 in one round" (not changed):** Sovereign is polymorphic, 6 AP a turn; baton 7 + floor(body 7 / 2) + roll(−1..+1) = 9–11, +4 on "A matrix discharges" (45% while the Liturgy thread is live) = 13–15; to-hit 56 + 3×7 − 2×5 = 67% against Silas (finesse 5). Echo has 4 AP: Piston arm 8 + 3 ± 1 = 10–12, or bare hands 4 + 3 ± 1 = 6–8 once the Power coupling is cut; to-hit 58%. Silas has no armor node and no armor equipped, so no reduction (normal strain). While the haft is live and both foes are adjacent, both openings are a 4-AP cut, which leaves the Sovereign 2 AP (a strike costs 3) and the Echo 0: **a round of cuts deals no HP damage**. Once the haft is gone neither can open with a cut, so the Sovereign swings twice and the Echo once. That is 0 → about 20 expected per round, with a ceiling of 30 + 8 = 38 (Echo bare hands) or 42 (piston). 29 (40 → 11) is e.g. 10 + 13 from the baton plus 6 from the Echo's hands. Brace (×0.55) spends itself on the first blow only, so at 11 HP Set Brace + End still loses to a second baton hit. This is input for the open Sovereign difficulty design call.
+
+**Hand check needed (H9):** load the V3 save via `http://localhost:8080/__hand-load-v3.html` → Talk → "Then I'll read you while you move." On round 1 the Sovereign line reads "Cut → Tool haft" (brass). Touch the Echo's face in the turn order, then Audit: Silas walks one step beside the Echo. The Sovereign line should now read "Cut → Tool haft — out of reach" (grey) before any cut. Unmend Power coupling: the Echo line reads "Cut → Tool haft" (brass) and the Sovereign line still "— out of reach". (The cut can miss; retry while AP ≥ 4.) End the turn. The Echo acts first and may cut the haft. When the Sovereign opens round 2, it logs "The Epistemic Sovereign loses the action they had committed to." Node replays of this exact path matched in 3 of 3 runs.
+
+**Status: IN PROGRESS** for Acts IV–VI. H9 is fixed and needs a hand check. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage).

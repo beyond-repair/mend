@@ -507,7 +507,7 @@ function PlayScreen() {
             {intents.map((row) => (
               <div key={row.id} className={`truncate text-xs ${row.live ? "text-brass" : "text-mist"}`}>
                 {row.name}: {row.line}
-                {row.live ? "" : " — no longer that shape"}
+                {row.live ? "" : ` — ${row.why}`}
               </div>
             ))}
           </div>
