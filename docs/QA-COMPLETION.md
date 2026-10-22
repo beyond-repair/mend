@@ -1,6 +1,6 @@
 # MEND (public `mend`) — QA completion note
 
-**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven: Act II–VI critical paths and side branches (incl. Vane ceremony, Sarn toll/stores via `NETWORK=varr`, Sovereign fight→Leave, Sever/impose, iceCut, lamp cut) are harness-played in headless Chromium; see sections below. Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop. On this tip the headless SEED=4 Act I loop, Act II, Act III, and Act IV harnesses all pass.
+**Status:** **COMPLETE — PLAYTEST VERIFIED** (first-act loop). **IN PROGRESS** for beyond-Oakhaven (latest pass 2026-10-22 ~1:27–2:00 AM ET: Kael kill ending, Cinder leave/return, and Seize now harness-played to the epilogue — see the last section): Act II–VI critical paths and side branches (incl. Vane ceremony, Sarn toll/stores via `NETWORK=varr`, Sovereign fight→Leave, Sever/impose, iceCut, lamp cut) are harness-played in headless Chromium; see sections below. Hand re-play on `c82cd73` (live browser, real taps, no Map jumps) passed the first-act loop. On this tip the headless SEED=4 Act I loop, Act II, Act III, and Act IV harnesses all pass.
 Scope of the first-act verdict: New ledger → Sinks → pump → Moll → Stack Road → Ward stair → Oakhaven → Save/Continue. Act III Quarry + Rust and the Act IV–VI critical path are harness-played (see "Beyond Oakhaven — Act III" and "Beyond Oakhaven — Acts IV–VI").
 **Branch:** `fix/mend-playtest-rc`
 **Base:** `main` @ `8cfbd1e`
@@ -596,4 +596,48 @@ Checkpoint fight variance stays high (3–31 deaths per run on this pass; the ha
 - **Seize**: unchanged. It needs comprehension 8 or Continuity, which the critical path does not reach (see above).
 - **Cinder leaving** (`cinderRisk` from Doss + Rust heat + stopped bellows + fear ≥ 16) and her return were not played.
 - Design calls (unchanged): mid-fight auto ledger thin HP; checkpoint fight variance; Sovereign / Sever / ceremony guard balance; Kael + Pye balance.
+- A full hand pass of Acts IV–VI without the harness.
+
+## Beyond Oakhaven — Kael kill ending, Cinder's second choosing, Seize (IN PROGRESS) (2026-10-22, ~1:27–2:00 AM ET)
+
+**Status:** **IN PROGRESS.** Three more branches are harness-played to the epilogue in headless Chromium (dev build, `SEED=4`). No new game bugs were found (bug count stays at 34). These are harness plays, not hand plays. Open design calls are unchanged.
+
+**New harness switches (`scripts/playtest-act4.mjs`, commit `260aee2`):**
+- `KAEL_FATE=dead` (with `NETWORK=varr KAEL=duel`): at **kael-down** take **"The doctrine dies with the man."** instead of the spare line.
+- `CINDER=leave|risk` (implies `CINDER=1`): after she chooses the shadow, **Stop the lung** at the Sinks bellows. Her fear goes from 10 to 18 ("lung-restless"). Once the brake is cut, the Varr stair warms the Rust flues (`stoneMoving` → `tenementWarm`/`guildWarm`, i.e. `rustHeat`), so the **Rust cut** raises **cinder-heat**. `leave` answers **"I won't take you into that noise."**. `risk` answers **"I'm going in."** (`cinderRisk`), and she leaves on her own on the next tick. Then: talk to Ives, rest at the guild bench, walk back road → **Sinks mouth**, **Seat the reed**, and stand by her perch (28,3).
+- `CRUCIBLE=seize`: before the crucible, spend unspent skill points on **Audit** (Self → Improve Audit, +4 each) until comprehension reads 8, file slot 1, then **Seize the rank engine**. `BUILD=mind9`: Recommended file, then Presence −1 and Mind +1 on the create screen, using the screen's own buttons.
+- `NET_DEATHS` (already present) was raised to 80–100 for these runs. With the default cap of 40, two runs ran out of retries in the Act I checkpoint fight (41 deaths each). That is the known checkpoint variance, not a new bug.
+
+### Results (this tip)
+
+| Run | Path | Result |
+| --- | --- | --- |
+| `SEED=4 NETWORK=varr SARN=toll KAEL=duel KAEL_FATE=dead` | checkpoint (16 deaths) → Hask → **Kael duel** (1 death, 9 cuts, 27 strikes) → **"The doctrine dies with the man."** (`kaelFate=dead`, Kael `alive=false`, siphon journal "You killed Kael…", `citadelOpen`; Pye stays waved off) → guild rest → Cut the brake → Rust → Tundra → Citadel Sarn stores → Splice → Spire decline → epilogue. The epilogue says **"The quarry tells Kael's death as a fall of stone…"** and has no "Kael lives" line. | **82/82 PASS** |
+| `SEED=4 NET_DEATHS=80 NETWORK=varr SARN=toll CINDER=leave` | checkpoint (18 deaths) → feed + recruit Cinder → **Stop the lung** (fear 18) → Quarry → brake → **Rust cut: cinder-heat → "I won't take you into that noise."**. She leaves: `cinderLeft`, companion false, back at Sinks (30,3), line "The moth leaves the shadow…", quest **The second choosing** open. Then Ives → guild rest → **Sinks → Seat the reed → she steps back on** (`cinderBack`, companion true, "The reed is breathing. She steps onto the shadow again…", quest done) → Tundra → Citadel → Splice → Spire mouth **cinder-spire Wait** (she comes in) → epilogue | **79/79 PASS** |
+| `SEED=4 NET_DEATHS=80 NETWORK=varr SARN=toll CINDER=risk` | same, but **"I'm going in."**: `cinderRisk`, and she leaves on her own once in Rust. Return and Spire are the same. | **79/79 PASS** |
+| `SEED=4 CRUCIBLE=seize BUILD=mind9` (default talk network) | Crucible at **level 2** (xp 131). Audit 63→95 by 8 points still gives comprehension **7**. Seize refuses ("does not accept handwriting this small", −6 HP) and the run fails downstream. | **FAIL (expected): not reachable on the talk-past path** |
+| `SEED=4 NET_DEATHS=100 NETWORK=varr SARN=toll CRUCIBLE=seize BUILD=mind9` | checkpoint (25 deaths) → … → crucible at **level 3** (mind 9). **5 points on Audit (63→83)** take comprehension 7→**8** → **Seize** (`citadelFate=seize`, no HP cost, `spireOpen`) → Spire decline → epilogue, which says "You are the standard now…" | **73/73 PASS** |
+| `SEED=4` default | regression | **59/59 PASS** |
+| Act III `SEED=4` | regression | **47/47 PASS** |
+| Act I loop `SEED=4` | regression | **23/23 PASS** |
+
+Also on this tip: `npm test` **196 + 55 + 76 PASS**, `npm run typecheck` clean. Z0 page/console errors: 0 on every completed run.
+
+### Seize: reachable, but only off the default path
+
+Comprehension = 1 + ⌊mind/3⌋ + ⌊audit/40⌋ + (level − 1). The earlier note said "not legitimately reachable". That was measured on a file that had never spent its skill points. Corrected finding:
+- **Recommended file (mind 8)** at level 3 tops out at **7**, even with Audit at 95, so Seize needs level 4. Neither path played so far reaches level 4 before the crucible.
+- **A mind-9 file** (one point moved from Presence on the create screen) reaches **8** at level 3 by spending 5 of its banked skill points on Audit. The **Varr network** (checkpoint fight + Quarry detour) reaches level 3 before the Citadel. The talk-past path reaches only level 2, which gives 7.
+- So Seize is a legitimate, build-dependent ending, played above. Continuity is still only granted by the Sovereign fight after the Citadel. No balance was changed.
+
+### Bugs found / fixed this pass
+
+None. No game code changed. One harness label was fixed: B3c now says why it rests.
+
+LOW note, not changed and not played: after the second choosing, `cinderLeftSaid` stays set. If she ever left a second time (it needs `cinderRisk` + the lung stopped again in Rust heat), her departure line would not repeat. Fixing that is a design question about whether a second leave should speak, not a bug found in play.
+
+### Still open
+
+- **KAEL=both** (Kael + Pye) balance: user design call, unchanged (about 0–7% at the file this path reaches).
+- Design calls unchanged: mid-fight auto ledger thin HP; **checkpoint fight variance** (16–41 deaths per run this pass; two runs hit the 40 cap); Sovereign / Sever / ceremony guard balance; Kael + Pye balance; whether Seize should be reachable from the Recommended file.
 - A full hand pass of Acts IV–VI without the harness.

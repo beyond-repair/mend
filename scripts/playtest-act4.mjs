@@ -1030,7 +1030,7 @@ if ((KAEL !== "0" || CINDER_LEAVE) && process.env.NET_REST !== "0") {
   const ok = r.ok && (await useSpecial(/Rest and sort the ledger/));
   if ((await S(page)).panel !== "none") await key(page, "Escape");
   const st = await page.evaluate(() => { const d = window.__mend.getState().data; return { hp: d.player.hp, max: d.player.maxHp, focus: d.focus }; });
-  step(ok && st.focus >= 4, `B3c rest at the Guild bench after Kael (hp ${st.hp}/${st.max}; focus ${st.focus})`);
+  step(ok && st.focus >= 4, `B3c rest at the Guild bench (${KAEL !== "0" ? "after Kael" : "focus for Seat the reed"}; hp ${st.hp}/${st.max}; focus ${st.focus})`);
 }
 
 // B4 Back to the road via the Rust Stack mouth (34,8)
