@@ -3157,8 +3157,12 @@ function weaponsDark(d) {
     .map((id) => d.actors[id])
     .filter((a) => a?.alive && a.hostile);
   if (!hostiles.length) return false;
+  // Dark means the hand is empty: weaponOf falls back to fists. A foe with no weapon seam still swings what
+  // it carries (the Sovereign's baton), so it is not dark just because nothing on its graph is labelled weapon (bug 38).
   return hostiles.every(
-    (a) => !a.nodes.some((n) => n.effect === "weapon" && nodeLive(a.nodes, n)),
+    (a) =>
+      !a.nodes.some((n) => n.effect === "weapon" && nodeLive(a.nodes, n)) &&
+      weaponOf(a) === ITEMS.fist,
   );
 }
 function standDown(d) {

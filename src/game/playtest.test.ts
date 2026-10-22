@@ -15,7 +15,7 @@ const mem = new Map<string, string>();
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex, hasStoredLedger } = await import("./store.ts");
 const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS, LOCKED_DOORS, tileAt, WALKABLE } = await import("./maps.ts");
-const { regionOpen, openAudit, reconcileWorld, depart, pathTo, checkVision, dist, startCombat } = await import("./logic.ts");
+const { regionOpen, openAudit, reconcileWorld, depart, pathTo, checkVision, dist, startCombat, weaponsDark } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
 const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
 (globalThis as unknown as { Image: unknown }).Image = class {
@@ -1188,6 +1188,91 @@ describe("playtest 2026-10-15", () => {
     assert.deepEqual([D().player.x, D().player.y], [24, 18]);
     const moth = D().actors.cinder;
     assert.ok(moth.companion && moth.mapId === "sinks" && dist(moth, D().player) <= 3, `moth kept up (${moth.x},${moth.y})`);
+  });
+
+  it("'I'll circle' at the Sovereign points at the unissued baseline (bug 35)", () => {
+    // Hand pass: after declining the fight the tester kept re-talking to the Sovereign, decided the fight
+    // was mandatory and died four times. The release ending runs through the Unissued baseline (spireheart).
+    for (const node of ["start", "sat"]) {
+      const d = D();
+      d.phase = "play";
+      d.combat = null;
+      d.panel = "none";
+      d.flags.citadelFate = "seize";
+      d.dialogue = { convo: "sovereign-pre", node };
+      pick(/I'll circle/);
+      assert.equal(D().dialogue, null);
+      assert.equal(D().combat, null, "circling starts no fight");
+      assert.match(D().log[0], /unissued baseline/);
+      assert.match(D().log[0], /without a fight/);
+    }
+  });
+
+  it("Audit in the High Citadel walks to the unread crucible, not back to the read buffer (bug 36)", () => {
+    // Hand pass: HUD Audit / Q kept walking to the Infirmary buffer by Ime after it was read and charged.
+    // Its siphon child is cut by design, so it always looked "broken" and outranked the intact crucible.
+    const d = D();
+    d.phase = "play";
+    d.dialogue = null;
+    d.combat = null;
+    d.panel = "none";
+    d.mapId = "citadel";
+    d.player.mapId = "citadel";
+    d.player.x = 13;
+    d.player.y = 5;
+    for (const id of ["buffer", "lamps", "orrery"])
+      for (const n of d.machines[id].nodes) n.confidence = "understood";
+    assert.ok(d.machines.buffer.nodes.some((n) => n.severed), "the buffer's parent is cut by design");
+    G().auditNearest();
+    const aim = D().intent;
+    assert.ok(aim?.type === "audit" && aim.id === "crucible", `Audit aimed at ${JSON.stringify(aim)}`);
+    walkOut();
+    assert.equal(D().panel, "audit");
+    assert.equal(D().audit?.id, "crucible");
+    // Beside the crucible, Audit opens it directly.
+    G().closePanel();
+    G().auditNearest();
+    assert.equal(D().audit?.id, "crucible");
+  });
+
+  it("dismissing the level-up reaches the autosave, so Continue does not show it again (bug 37)", () => {
+    const d = D();
+    d.phase = "play";
+    d.dialogue = null;
+    d.pendingLevel = true;
+    G().auditNearest(); // any committed action writes the autosave with the modal still pending
+    assert.equal(JSON.parse(mem.get("mend-save-v1-auto")!).data.pendingLevel, true);
+    G().ackLevel();
+    assert.equal(D().pendingLevel, false);
+    assert.equal(JSON.parse(mem.get("mend-save-v1-auto")!).data.pendingLevel, false, "the autosave heard the dismissal");
+    G().quit();
+    G().load("auto");
+    assert.equal(D().pendingLevel, false, "Continue does not re-open Comprehension deepens");
+  });
+
+  it("Stand down is not offered while the Sovereign's baton is live (bug 38)", () => {
+    // Hand pass: cutting only the Echo's Power coupling showed "Stand down — their weapons are already dark",
+    // and a pass ended the fight with the Sovereign undefeated. Her baton has no weapon seam on the graph.
+    const d = D();
+    d.phase = "play";
+    d.dialogue = null;
+    d.mapId = "spire";
+    d.player.mapId = "spire";
+    d.player.x = 8;
+    d.player.y = 8;
+    const sov = d.actors.sovereign;
+    const echo = d.actors.echo;
+    assert.ok(sov && echo);
+    sov.hostile = true;
+    sov.aggro = true;
+    echo.hostile = true;
+    startCombat(d, ["sovereign", "echo"]);
+    assert.ok(d.combat);
+    echo.nodes.find((n) => n.id === "coupling")!.severed = true;
+    assert.equal(weaponsDark(d), false, "the Sovereign still carries a live baton");
+    // A foe whose weapon seam is cut (the Echo alone) is still dark, as before.
+    sov.hostile = false;
+    assert.equal(weaponsDark(d), true, "the Echo's arm mount is dark once its coupling is cut");
   });
 
 });

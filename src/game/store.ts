@@ -829,11 +829,20 @@ export const useGame = create<Store>((set, get) => ({
       const isBroken = (m: Machine) => m.nodes.some((n) => n.integrity < 50 || n.severed);
       // Prefer a machine Silas is already beside (Act III crane vs distant severed chute).
       // Only then prefer broken over intact among the remaining pool. Same class as audit flue (bug 20).
+      // A machine Silas has already audited carries a confidence on its seams. A root parent that is cut by
+      // design (the Infirmary buffer's siphon child) stays "broken" forever, so once it has been read it must
+      // not keep pulling Audit across the floor past a machine he has not read yet (High Citadel crucible, bug 36).
+      const unread = (m: Machine) => !m.nodes.some((n) => n.confidence);
       const besideBroken = beside.filter(isBroken);
-      const remoteBroken = pool.filter((m) => isBroken(m) && dist(d.player, m) > 1);
+      const remote = pool.filter((m) => dist(d.player, m) > 1);
+      const remoteUnreadBroken = remote.filter((m) => isBroken(m) && unread(m));
+      const remoteUnread = remote.filter(unread);
+      const remoteBroken = remote.filter(isBroken);
       const ranked =
         besideBroken.length ? besideBroken :
         beside.length ? beside :
+        remoteUnreadBroken.length ? remoteUnreadBroken :
+        remoteUnread.length ? remoteUnread :
         remoteBroken.length ? remoteBroken :
         pool;
       const machine = ranked.sort((a, b) => steps(a) - steps(b))[0];
@@ -930,7 +939,12 @@ export const useGame = create<Store>((set, get) => ({
         addLog(d, "The road does not stay empty.");
       } else arrive(d);
     }),
-  ackLevel: () => set((s) => ({ data: { ...s.data, pendingLevel: false } })),
+  // Dismissing the level-up must reach the autosave too. It used to change memory only, so the autosave
+  // written at the level-up kept pendingLevel and Continue showed "Comprehension deepens" again (bug 37).
+  ackLevel: () =>
+    commit(set, (d) => {
+      d.pendingLevel = false;
+    }),
 }));
 
 export function visibleReplies(d: Data) {

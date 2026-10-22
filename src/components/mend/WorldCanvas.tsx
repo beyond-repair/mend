@@ -1251,6 +1251,21 @@ export function WorldCanvas() {
             if (stageNow().plate) {
               if (m.id === "pump" && running) steamPuff(ctx, p.sx + 8, p.sy - 28, now, pumpFate === "flood" ? "rgba(196,92,38,0.55)" : "rgba(243,234,215,0.75)", 3);
               if (m.id === "pump" && pumpFate === "bleed") steamPuff(ctx, p.sx, p.sy - 8, now, "rgba(90,60,36,0.7)", 2);
+              // A plate paints its machines into the art, and the art does not always stand on the machine's tile
+              // (the High Citadel crucible is painted up the stair; its tile is the floor below). Name the tile when
+              // Silas is close, the same brass tag the drawn maps and the mouths already get (bug 36).
+              const seen = presence(p.sx, p.sy);
+              if (nearMachine <= 2 && seen > 0.04) {
+                tags.push({
+                  z: (m.x + m.y) * 10 + 8,
+                  run: () => {
+                    ctx.save();
+                    ctx.globalAlpha = seen;
+                    label(ctx, p.sx, p.sy + 16, m.name, down ? "#c45c26" : "#d4b483");
+                    ctx.restore();
+                  },
+                });
+              }
               return;
             }
             shadow(ctx, p.sx, p.sy, 22 * zoom);

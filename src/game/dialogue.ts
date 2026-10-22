@@ -1151,7 +1151,7 @@ export const CONVOS: Record<string, Convo> = {
             ],
             end: true,
           },
-          end("Not while the graph is a lie. I'll circle."),
+          end("Not while the graph is a lie. I'll circle.", [log("The Sovereign lets you go. South, down the drop, the unissued baseline is still holding. It can be read without a fight.")]),
         ],
       },
       sat: {
@@ -1169,7 +1169,7 @@ export const CONVOS: Record<string, Convo> = {
             ],
             end: true,
           },
-          end("Not while the graph is a lie. I'll circle."),
+          end("Not while the graph is a lie. I'll circle.", [log("The Sovereign lets you go. South, down the drop, the unissued baseline is still holding. It can be read without a fight.")]),
         ],
       },
     },
