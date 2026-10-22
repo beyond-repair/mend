@@ -825,3 +825,12 @@ Test: `playtest.test.ts` "a foe's cut names Silas's part as yours, and the coupl
 **Hand check needed (H10):** start at `http://localhost:8080/__hand-load-v3.html`. It lands on the title, so click Continue, then Talk → "Then I'll read you while you move." At round 1 the Sovereign line reads "Cut → your Tool haft". Touch the Echo's face, then Audit: the Sovereign line reads "Cut → your Tool haft — out of reach". Unmend Power coupling (retry while AP ≥ 4). When it severs, the log shows "Steam kicks out of the dead mount." and then "The steam scalds you too. (-3)", and Silas's HP drops by exactly that amount. The Echo line re-reads "Cut → your Tool haft". If the Echo cuts the haft in round 2, any leftover Sovereign cut line reads "— your Tool haft is gone".
 
 **Status: IN PROGRESS** for Acts IV–VI. H10 is fixed in code and needs a hand check. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage).
+
+#### H10 hand check on c6f1460 (2026-10-22 ~6:05 AM ET): PARTIAL
+
+- PASS: Round 1 Sovereign line "Cut → your Tool haft". After aiming Audit at the Echo it reads "Cut → your Tool haft — out of reach", and the Echo reads "· needs Power coupling".
+- PASS: Unmend on Power coupling severed on the first try. HP went 28 → 25 (−3). After that the Echo line read "Cut → your Tool haft".
+- NOT SEEN (H11, LOW): the tester could not find "Steam kicks out of the dead mount." or "The steam scalds you too. (-3)" anywhere on screen. The lines are in logic.ts and the unit test passes, so the combat log is probably not surfaced, or is hidden in this layout. The page also rendered as a narrow column, about 235px wide, in a 1024px window.
+- OPEN (H12, LOW): Focus went 8 → 0 right after the sever with no on-screen reason, then recovered to 2 in round 2.
+- OPEN (H13, LOW): the Tool haft was severed between round 1 and round 2, but the log/UI did not make clear who cut it. The Sovereign's attack logged as a miss ("70 vs 67").
+- NOT TESTED: "— your Tool haft is gone". By round 2 both foes had replanned to "Officer's baton → you" and "Bare hands → you".
