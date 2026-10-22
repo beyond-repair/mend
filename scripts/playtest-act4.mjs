@@ -2,6 +2,10 @@
 // Headless browser playtest: Act I → Rust (Ives opens the Citadel) → Brass Tundra → High Citadel → Void Spire → epilogue.
 //   SEED=4 CHROME_PATH=/usr/bin/google-chrome SHOTS=/tmp/mend-act4 node scripts/playtest-act4.mjs
 // Side branches (same run, different answers):
+//   CRUCIBLE=seize                      — Seize needs comprehension 8 (1 + mind/3 + audit/40 + level-1). Before the
+//     crucible, spend the file's unspent skill points on Audit (Self → Improve Audit; +4 each) until comprehension
+//     reads 8, then Seize the rank engine. BUILD=mind9 makes the file at creation: Recommended, then Presence −1,
+//     Mind +1 (the create screen's own buttons). The Recommended file (mind 8) tops out at 7 at level 3.
 //   CRUCIBLE=splice (default) | sever   — Sever with shaftOpen unset forces the guard fight ("The floor notices the dark.")
 //   SHAFT=1                             — before Sever, open the shaft door (engineering hinge) so Sever skips the guard fight
 //   TUNDRA=seat (default) | cut         — Seat the span, or Cut the span (iceCut) + Kel cleats after hollowRead
@@ -21,6 +25,8 @@
 //     talk to Kael at (13,5) before Cut the brake.
 //     duel (or KAEL=1): "The riggers walk. You and I finish this." → private geometry (duel flag filters rel1)
 //       → Engage → peel armor → prybar → kael-down → spare ("Live. Take that sentence…").
+//     KAEL_FATE=spare (default) | dead — at kael-down take "Live. Take that sentence…" (spared) or
+//       "The doctrine dies with the man." (kaelFate=dead; Kael killed; epilogue tells the quarry's fall of stone).
 //     both: "Then show me the layers." → Kael + Striker Pye together → same down/spare. Tactic stands on Kael
 //       (Pye has no weapon seam; downConvo ends the fight, and Pye steps out once Kael is not holding).
 //   SPIRE=decline | impose | fight | fight-leave
@@ -130,6 +136,7 @@ const VANE = process.env.VANE ?? "machine";
 const NETWORK = process.env.NETWORK ?? "talk";
 const _kaelRaw = (process.env.KAEL ?? "0").toLowerCase();
 const KAEL = _kaelRaw === "1" || _kaelRaw === "true" ? "duel" : (_kaelRaw === "duel" || _kaelRaw === "both" ? _kaelRaw : "0");
+const KAEL_FATE = (process.env.KAEL_FATE ?? "spare").toLowerCase() === "dead" ? "dead" : "spare";
 if (KAEL !== "0" && NETWORK !== "varr") {
   console.error("KAEL requires NETWORK=varr (Quarry detour after the checkpoint fight)");
   process.exit(2);
@@ -137,7 +144,13 @@ if (KAEL !== "0" && NETWORK !== "varr") {
 // CINDER=1 (requires NETWORK=varr): Varr's "Strip the coupling" leaves plate scrap; feed the reed moth at the
 // Sinks bellows (30,3) and let her choose the shadow. Her mouth refusals (cinder-dark / cinder-spire) are answered
 // "Wait until she steps." wherever a mouth raises them.
-const CINDER = process.env.CINDER === "1";
+// CINDER=leave | risk (implies CINDER=1): after she chooses the shadow, Stop the lung at the bellows (fear 10+8 ≥ 16).
+//   The Varr stair warms the Rust flues once the brake is cut (rustHeat), so the Rust cut raises cinder-heat.
+//   leave: "I won't take you into that noise." (cinderLeft). risk: "I'm going in." (cinderRisk → she leaves on her own).
+//   Either way she flies back to the Sinks reed. After Ives, rest at the guild bench, walk back to the Sinks,
+//   Seat the reed and stand by her perch: she steps back on (cinderBack, "The second choosing").
+const CINDER_LEAVE = ["leave", "risk"].includes((process.env.CINDER ?? "").toLowerCase()) ? process.env.CINDER.toLowerCase() : "";
+const CINDER = process.env.CINDER === "1" || Boolean(CINDER_LEAVE);
 if (CINDER && NETWORK !== "varr") {
   console.error("CINDER requires NETWORK=varr (plate scrap from the checkpoint)");
   process.exit(2);
@@ -145,8 +158,8 @@ if (CINDER && NETWORK !== "varr") {
 const cinderBeats = [];
 const tagBits = [];
 if (NETWORK !== "talk") tagBits.push(`net-${NETWORK}`);
-if (KAEL !== "0") tagBits.push(`kael-${KAEL}`);
-if (CINDER) tagBits.push("cinder");
+if (KAEL !== "0") tagBits.push(`kael-${KAEL}${KAEL_FATE === "dead" ? "-dead" : ""}`);
+if (CINDER) tagBits.push(CINDER_LEAVE ? `cinder-${CINDER_LEAVE}` : "cinder");
 if (VANE !== "machine") tagBits.push(`vane-${VANE}`);
 if (CRUCIBLE !== "splice") tagBits.push(CRUCIBLE);
 if (SHAFT) tagBits.push("shaft");
@@ -155,7 +168,7 @@ if (LAMP !== "audit") tagBits.push(`lamp-${LAMP}`);
 if (SARN !== "skip") tagBits.push(`sarn-${SARN}`);
 if (SPIRE !== "decline") tagBits.push(SPIRE);
 const tag = process.env.TAG ?? (tagBits.length ? `act4-${tagBits.join("-")}` : "act4");
-console.log(`act4 env NETWORK=${NETWORK} KAEL=${KAEL} CINDER=${CINDER} VANE=${VANE} CRUCIBLE=${CRUCIBLE} SHAFT=${SHAFT} TUNDRA=${TUNDRA} LAMP=${LAMP} SARN=${SARN} SPIRE=${SPIRE} tag=${tag}`);
+console.log(`act4 env NETWORK=${NETWORK} KAEL=${KAEL} KAEL_FATE=${KAEL_FATE} CINDER=${CINDER} VANE=${VANE} CRUCIBLE=${CRUCIBLE} SHAFT=${SHAFT} TUNDRA=${TUNDRA} LAMP=${LAMP} SARN=${SARN} SPIRE=${SPIRE} tag=${tag}`);
 const out = [];
 const step = (ok, msg) => { out.push(`${ok ? "PASS" : "FAIL"} ${msg}`); console.log(`${ok ? "PASS" : "FAIL"} ${msg}`); };
 const { browser, page, errors } = await open();
@@ -620,6 +633,12 @@ const noCombat = async (label) => { const c = await S(page); step(!c.combat, `${
 // —— Act I to Oakhaven (Moll Engineering talk-past sets act1) ——
 await page.getByRole("button", { name: "New ledger" }).click();
 await page.getByRole("button", { name: "Recommended file" }).click();
+if (process.env.BUILD === "mind9") {
+  await page.getByRole("button", { name: "Decrease Presence" }).click();
+  await page.getByRole("button", { name: "Increase Mind" }).click();
+  const a = await page.evaluate(() => window.__mend.getState().data.draft);
+  step(a.attrs.mind === 9 && a.attrs.presence === 4 && a.pool === 0, `A-b BUILD=mind9 on the create screen (mind ${a.attrs.mind}; presence ${a.attrs.presence}; pool ${a.pool}; tags ${a.tags.join(",")})`);
+}
 await page.getByRole("button", { name: "Enter the Sinks" }).click();
 await page.waitForTimeout(300);
 await pick(page, /show me the pump/); await pick(page, /audit it/);
@@ -693,6 +712,14 @@ if (NETWORK === "varr") {
     s = await S(page);
     const moth = await page.evaluate(() => { const c = window.__mend.getState().data.actors.cinder; return c && { companion: c.companion, map: c.mapId }; });
     step(s.flags.cinderFed === true && s.flags.cinderChose === true && moth?.companion === true && !s.combat, `A0c' Cinder fed and chose the shadow (cinderFed ${s.flags.cinderFed}; cinderChose ${s.flags.cinderChose}; companion ${moth?.companion}; log ${s.log[0]})`);
+    if (CINDER_LEAVE) {
+      const rb = await auditAt("bellows");
+      const stopped = rb.ok && (await useSpecial(/Stop the lung/));
+      if ((await S(page)).panel !== "none") await key(page, "Escape");
+      s = await S(page);
+      const c = await page.evaluate(() => { const a = window.__mend.getState().data.actors.cinder; return { companion: a.companion, fear: a.bond?.fear, focus: window.__mend.getState().data.focus }; });
+      step(stopped && s.flags.bellowsLive === false && c.companion && c.fear >= 16 && !s.flags.cinderLeft, `A0c'' Stop the lung with Cinder in the shadow (bellowsLive ${s.flags.bellowsLive}; companion ${c.companion}; fear ${c.fear}; focus ${c.focus}; log ${s.log[0]})`);
+    }
   }
 }
 for (let attempt = 0; attempt < 12 && !passed; attempt++) {
@@ -855,14 +882,19 @@ if (NETWORK === "varr") {
     s = await S(page);
     step(g.how === "kael broken open" || s.dlg === "kael-down/start", `Q2kd Kael broken open (${g.how}; dlg ${s.dlg}; deaths ${g.deaths}; cuts ${g.cuts}; strikes ${g.strikes})`);
     if (s.dlg === "kael-down/start") {
-      await pick(page, /Live\. Take that sentence/);
+      await pick(page, KAEL_FATE === "dead" ? /doctrine dies with the man/ : /Live\. Take that sentence/);
       await closeTalk(page);
     }
     s = await S(page);
     const pye = await actorAt("rel1");
     const siphon = (s.journal || []).some((j) => /^siphon:/.test(j));
-    step(s.flags.kaelFate === "spared" && s.flags.knowsSiphon === true && s.flags.citadelOpen === true && siphon && !s.combat,
-      `Q2ke spare Kael → siphon / citadelOpen (kaelFate ${s.flags.kaelFate}; knowsSiphon ${s.flags.knowsSiphon}; citadelOpen ${s.flags.citadelOpen}; siphonJ ${siphon}; duel ${s.flags.duel}; rel1 hostile ${pye?.hostile}; combat ${s.combat})`);
+    if (KAEL_FATE === "dead") {
+      const kk = await actorAt("kael");
+      const sj = await page.evaluate(() => window.__mend.getState().data.journal?.find((j) => j.id === "siphon")?.text ?? "");
+      step(s.flags.kaelFate === "dead" && kk && kk.alive === false && /You killed Kael/.test(sj), `Q2ke† kill Kael (kaelFate ${s.flags.kaelFate}; kael alive ${kk?.alive}; siphon "${sj.slice(0, 60)}")`);
+    }
+    step(s.flags.kaelFate === (KAEL_FATE === "dead" ? "dead" : "spared") && s.flags.knowsSiphon === true && s.flags.citadelOpen === true && siphon && !s.combat,
+      `Q2ke ${KAEL_FATE} Kael → siphon / citadelOpen (kaelFate ${s.flags.kaelFate}; knowsSiphon ${s.flags.knowsSiphon}; citadelOpen ${s.flags.citadelOpen}; siphonJ ${siphon}; duel ${s.flags.duel}; rel1 hostile ${pye?.hostile}; combat ${s.combat})`);
     if (KAEL === "duel") {
       step(s.flags.duel === true && g.rosterAtStart === "kael", `Q2kf RelSec waved off (duel ${s.flags.duel}; fight roster ${g.rosterAtStart}; rel1 alive ${pye?.alive})`);
     }
@@ -970,6 +1002,19 @@ step(rustTap.ok && s.x === 33 && s.y === 6, `B1 real taps along the road to besi
 s = await mouthStep("road", "ArrowRight");
 step(s.map === "rust" && s.panel === "none", `B2 Rust cut → Rust Districts (${s.map} ${s.x},${s.y}; panel ${s.panel})`);
 
+if (CINDER_LEAVE) {
+  s = await S(page);
+  const hc = await page.evaluate(() => { const d = window.__mend.getState().data; return { heat: Boolean(d.flags.gearLive || d.flags.tenementWarm || d.flags.guildWarm), fear: d.actors.cinder?.bond?.fear }; });
+  step(/^cinder-heat\//.test(s.dlg || ""), `B2c Rust cut raises cinder-heat (dlg ${s.dlg}; rustHeat ${hc.heat}; bellowsLive ${s.flags.bellowsLive}; fear ${hc.fear})`);
+  if (/^cinder-heat\//.test(s.dlg || "")) await pick(page, CINDER_LEAVE === "leave" ? /won't take you into that noise/ : /I'm going in/);
+  await closeTalk(page);
+  await walk(page, 32, 8);
+  await page.waitForTimeout(300);
+  s = await S(page);
+  const c = await page.evaluate(() => { const d = window.__mend.getState().data; const a = d.actors.cinder; return { companion: a.companion, map: a.mapId, x: a.x, y: a.y, q: d.journal?.find((j) => j.id === "moth-return")?.status ?? null, said: d.flags.cinderLeftSaid }; });
+  step(s.flags.cinderLeft === true && c.companion === false && c.map === "sinks" && c.x === 30 && c.y === 3 && (CINDER_LEAVE === "leave" || s.flags.cinderRisk === true),
+    `B2d Cinder leaves the shadow (${CINDER_LEAVE}; cinderLeft ${s.flags.cinderLeft}; cinderRisk ${s.flags.cinderRisk}; companion ${c.companion}; at ${c.map} ${c.x},${c.y}; said ${c.said}; journal moth-return ${c.q}; log ${s.log.slice(0, 2).join(" / ")})`);
+}
 // B3 Ives briefing opens the Citadel (dialogue.ts ives/welcome → citadelOpen). No Kael fight needed.
 let t = await talkTo("ives");
 step(/ives/.test(t.s.dlg || ""), `B3 Talk Ives (${t.how}; ${t.s.dlg})`);
@@ -980,7 +1025,7 @@ s = await S(page);
 step(s.flags.citadelOpen === true && s.flags.guildBriefed === true && !s.dlg, `B3b Ives welcome → citadelOpen (${s.flags.citadelOpen}; guildBriefed ${s.flags.guildBriefed}; journal ${s.journal?.filter((j) => /guild/.test(j)).join(",")})`);
 await shot(page, `${tag}-01-ives-citadel-open`);
 // Kael duel spends Focus on Unmend. The guild bench is the natural rest before the Citadel cell.
-if (KAEL !== "0" && process.env.NET_REST !== "0") {
+if ((KAEL !== "0" || CINDER_LEAVE) && process.env.NET_REST !== "0") {
   const r = await auditAt("guildbench");
   const ok = r.ok && (await useSpecial(/Rest and sort the ledger/));
   if ((await S(page)).panel !== "none") await key(page, "Escape");
@@ -993,6 +1038,25 @@ await walk(page, 33, 8);
 s = await mouthStep("rust", "ArrowRight");
 step(s.map === "road" && s.panel === "none", `B4 Rust Stack mouth → Stack Road (${s.map} ${s.x},${s.y})`);
 
+if (CINDER_LEAVE) {
+  // The second choosing: back to the Sinks, seat the reed, stand by her perch.
+  await walk(page, 3, 7);
+  s = await mouthStep("road", "ArrowLeft");
+  step(s.map === "sinks", `B4c Sinks mouth → The Sinks (${s.map} ${s.x},${s.y}; dlg ${s.dlg})`);
+  await closeTalk(page);
+  const rb = await auditAt("bellows");
+  const seated = rb.ok && (await useSpecial(/Seat the reed/));
+  if ((await S(page)).panel !== "none") await key(page, "Escape");
+  await walk(page, 28, 3);
+  await page.waitForTimeout(400);
+  s = await S(page);
+  const c = await page.evaluate(() => { const d = window.__mend.getState().data; const a = d.actors.cinder; return { companion: a.companion, map: a.mapId, focus: d.focus, q: d.journal?.find((j) => j.id === "moth-return")?.status ?? null, p: `${d.player.x},${d.player.y}` }; });
+  step(seated && s.flags.bellowsLive !== false && s.flags.cinderBack === true && !s.flags.cinderLeft && c.companion === true,
+    `B4d Seat the reed → Cinder steps back on (bellowsLive ${s.flags.bellowsLive}; cinderBack ${s.flags.cinderBack}; cinderLeft ${s.flags.cinderLeft}; companion ${c.companion}; at ${c.p}; focus ${c.focus}; journal moth-return ${c.q}; log ${s.log.slice(0, 3).join(" / ")})`);
+  await walk(page, 24, 18);
+  s = await mouthStep("sinks", "ArrowRight");
+  step(s.map === "road", `B4e Stack mouth → Stack Road with Cinder (${s.map} ${s.x},${s.y}; dlg ${s.dlg})`);
+}
 // —— Tundra walk (road 8,15) → The Brass Tundra ——
 await walk(page, 8, 14);
 s = await S(page);
@@ -1349,7 +1413,28 @@ const specials = await page.$$eval("button", (bs) => bs.map((b) => b.innerText.r
 console.log("   crucible specials:", specials);
 // Seize needs comprehension 8 (or Continuity, which only the Sovereign fight after the Citadel grants).
 console.log("   at the crucible:", JSON.stringify(await page.evaluate(() => { const d = window.__mend.getState().data; return { level: d.level, xp: d.xp, mind: d.player.attrs.mind, audit: d.player.skills.audit, comp: 1 + Math.floor(d.player.attrs.mind / 3) + Math.floor(d.player.skills.audit / 40) + (d.level - 1), continuity: d.disciplines.includes("continuity"), skillPoints: d.skillPoints }; })));
-if (CRUCIBLE === "sever") {
+const compNow = () => page.evaluate(() => { const d = window.__mend.getState().data; return { level: d.level, mind: d.player.attrs.mind, audit: d.player.skills.audit, comp: 1 + Math.floor(d.player.attrs.mind / 3) + Math.floor(d.player.skills.audit / 40) + (d.level - 1), pts: d.skillPoints, continuity: d.disciplines.includes("continuity") }; });
+if (CRUCIBLE === "seize") {
+  await key(page, "Escape");
+  const c0 = await compNow();
+  let clicks = 0;
+  if (c0.comp < 8 && c0.pts > 0) {
+    await hud(page, "Self");
+    const plus = page.getByRole("button", { name: "Improve Audit" });
+    for (let i = 0; i < 30 && (await compNow()).comp < 8 && (await plus.isEnabled().catch(() => false)); i++) { await plus.click(); clicks++; await page.waitForTimeout(40); }
+    await key(page, "Escape");
+  }
+  const c1 = await compNow();
+  step(c1.comp >= 8 || c1.continuity, `C7z comprehension 8 on the sheet before the crucible (level ${c1.level}; mind ${c1.mind}; audit ${c0.audit}→${c1.audit}; comp ${c0.comp}→${c1.comp}; points ${c0.pts}→${c1.pts}; clicks ${clicks})`);
+  await hud(page, "Menu"); await page.getByRole("button", { name: /Save slot 1/ }).click(); await page.waitForTimeout(200); await key(page, "Escape");
+  await auditAt("crucible");
+  const hp0 = (await S(page)).hp;
+  await useSpecial(/Seize the rank engine/i);
+  s = await S(page);
+  fate = s.flags.citadelFate ?? null;
+  step(fate === "seize" && !s.combat && s.flags.spireOpen === true && s.hp === hp0 && !/handwriting this small/.test(s.log.join(" ")), `C7q Seize the rank engine (fate ${fate}; hp ${hp0}→${s.hp}; spireOpen ${s.flags.spireOpen}; log ${s.log.slice(0, 2).join(" / ")})`);
+  await shot(page, `${tag}-08q-seize`);
+} else if (CRUCIBLE === "sever") {
   // Sever with shaftOpen unset: "The floor notices the dark." → Guard Senn + Guard Oll.
   // Sever with shaftOpen: no guard fight; Spire opens quietly.
   const shaft = (await S(page)).flags.shaftOpen;
@@ -1513,10 +1598,12 @@ await shot(page, `${tag}-12-epilogue`);
 const epiLines = await page.evaluate(() => window.__mend.getState().data.epilogue ?? []);
 if (endingWant === "impose") step(/You wrote the shape/.test(epiLines[0] ?? ""), `E1b impose epilogue opens with the written shape (${(epiLines[0] ?? "").slice(0, 80)})`);
 if (SPIRE === "fight-leave") step(/holes|refused|left|baseline/i.test(epiLines.join(" ")), `E1b-leave fight→Leave the holes epilogue (${(epiLines[0] ?? "").slice(0, 100)})`);
+if (CRUCIBLE === "seize") step(epiLines.some((l) => /You are the standard now/.test(l)), `E1q epilogue remembers the seized rank engine`);
 if (CRUCIBLE === "sever") step(epiLines.some((l) => /sever|siphon|dark/i.test(l)), `E1c epilogue remembers the severed siphon`);
 if (exposed) step(epiLines.some((l) => /ceremony heard the diagram/.test(l)), `E1f epilogue remembers the ceremony (expose)`);
 if (TUNDRA === "cut") step(epiLines.some((l) => /glaze was cut|hollow went cold|harder bill/i.test(l)), `E1d epilogue remembers iceCut`);
 if (LAMP === "break") step(true, `E1e lamp-break path reached epilogue`);
+if (KAEL !== "0") step(KAEL_FATE === "dead" ? epiLines.some((l) => /Kael's death as a fall of stone/.test(l)) && !epiLines.some((l) => /Kael lives/.test(l)) : epiLines.some((l) => /Kael lives/.test(l)), `E1k epilogue remembers Kael ${KAEL_FATE}`);
 step(epiLines.length >= 3, `E2 epilogue carries the ledger (${epiLines.length} lines): ${epiLines.slice(0, 3).join(" | ").slice(0, 240)}`);
 if (s.phase === "epilogue") {
   await page.getByRole("button", { name: "Return to the title" }).click();
