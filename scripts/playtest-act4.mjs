@@ -753,6 +753,11 @@ async function mouthStep(fromMap, arrow) {
       const f = (await S(page)).flags;
       cinderBeats.push(`${convo}@${fromMap}→${convo === "cinder-dark" ? f.cinderDarkOk : f.cinderSpireOk}`);
       await fileLevel(page);
+      // Silas is still standing on the mouth. Another Arrow walks off it; a tap on the mouth tile he stands on
+      // departs (store clickTile → depart), which is what a player does after she steps.
+      await page.evaluate(() => { const G = window.__mend.getState(); G.clickTile(G.data.player.x, G.data.player.y); });
+      for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== fromMap || s.dlg) break; await page.waitForTimeout(120); }
+      if (s.map !== fromMap || s.dlg) return s;
       continue;
     }
     if (s.map !== fromMap || s.dlg) return s;
