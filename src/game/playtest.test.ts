@@ -1169,4 +1169,25 @@ describe("playtest 2026-10-15", () => {
     assert.equal(D().dialogue, null);
   });
 
+  it("a recruited Cinder can walk with Silas past her perch (bug 34)", () => {
+    // Played: CINDER=1 — feed the moth plate scrap at the bellows, "Hold still." → she chose the shadow,
+    // then every walk out of the upper Sinks threw "toward is not a function" (nudgeCreature) and Silas froze.
+    const d = D();
+    d.inventory.push({ id: "scrap", qty: 1 });
+    d.flags.act1 = true; // the plate line is answered (the scrap came from Varr's coupling)
+    d.flags.checkpointSpoke = true;
+    d.player.x = 29;
+    d.player.y = 3;
+    d.dialogue = { convo: "cinder", node: "start" };
+    pick(/plate scrap/);
+    pick(/Hold still/);
+    assert.equal(D().actors.cinder.companion, true);
+    G().clickTile(24, 18);
+    assert.ok(D().path.length > 0, "a path out of the upper Sinks");
+    for (let n = 0; n < 300 && D().path.length && !D().dialogue; n++) G().step();
+    assert.deepEqual([D().player.x, D().player.y], [24, 18]);
+    const moth = D().actors.cinder;
+    assert.ok(moth.companion && moth.mapId === "sinks" && dist(moth, D().player) <= 3, `moth kept up (${moth.x},${moth.y})`);
+  });
+
 });

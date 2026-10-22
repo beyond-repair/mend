@@ -1648,25 +1648,23 @@ function nudgeCreature(d, ox, oy) {
     return;
   const step = Number(d.flags.mothStep ?? 0) + 1;
   d.flags.mothStep = step;
-  const toward =
-    ((tx, ty) => {
-      const dx = Math.sign(tx - moth.x);
-      const dy = Math.sign(ty - moth.y);
-      const opts = [
-        [moth.x + dx, moth.y + dy],
-        [moth.x + dx, moth.y],
-        [moth.x, moth.y + dy],
-      ];
-      for (const [x, y] of opts) {
-        if (x === d.player.x && y === d.player.y) continue;
-        if (walkable(d, x, y, moth.id)) {
-          moth.x = x;
-          moth.y = y;
-          return;
-        }
+  const toward = (tx, ty) => {
+    const dx = Math.sign(tx - moth.x);
+    const dy = Math.sign(ty - moth.y);
+    const opts = [
+      [moth.x + dx, moth.y + dy],
+      [moth.x + dx, moth.y],
+      [moth.x, moth.y + dy],
+    ];
+    for (const [x, y] of opts) {
+      if (x === d.player.x && y === d.player.y) continue;
+      if (walkable(d, x, y, moth.id)) {
+        moth.x = x;
+        moth.y = y;
+        return;
       }
-    },
-    "toward");
+    }
+  };
   if (
     (d.mapId === "road" || d.mapId === "tundra") &&
     d.flags.roadDark &&
