@@ -702,3 +702,19 @@ Notes (not changed): the Audit panel covers the map, so the target is only visib
 
 **Status: IN PROGRESS** for Acts IV–VI. The release (no-fight) ending is now hand-verified. Remaining: hand check of bug 38 in the Sovereign fight, a hand walk Citadel → Spire without Map travel, and the open design calls above.
 
+
+### Hand check — bug 38 inside the Sovereign fight (on `5627f34`)
+
+A person played from a Spire save (harness `DUMP_AT=V3`, `SEED=4 SPIRE=fight-leave`), mouse and keyboard only. Path: Continue → Talk to the Sovereign → "Then I'll read you while you move." → fight. The only seam cut was the Echo's **Power coupling** (round 4; log "Echo construct: Power coupling severed, Arm mount unavailable"). The Sovereign was never touched.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Bug 38: no Stand down while the Sovereign's baton is live | **PASS** | Rounds 4–5 after the cut: action bar was Audit / Strike / Brace / End turn only; "Stand down" absent from the page while the Sovereign showed "Officer's baton → you". |
+| Fight outcome | died (1) | HP 52 → 31 before first control, then ~9–11 per round; Tool haft severed by round 3. No difficulty change tried. Win path not reached by hand (covered by act4 fight-leave 61/61, re-run this pass). |
+
+New friction found (not yet fixed):
+- **H7 (MED):** in a two-enemy fight, Audit opens on the adjacent/nearest hostile with no way to pick the target. Clicking the Echo on the map is a Strike (3 AP), and initiative-bar portraits do nothing when clicked. The tester could only Audit the Echo after moving next to it.
+- **H8 (LOW):** the Echo's intent line kept reading "Piston arm → you · needs Power coupling — no longer that shape" for one round after the coupling was cut, then switched to "Bare hands → you". Stale intent text for a round.
+- H6 (Sovereign fight difficulty at level 3) observed again; still a design call.
+
+**Status: IN PROGRESS** for Acts IV–VI. Bug 38 is now hand-verified. Remaining: H7 Audit target choice, H8 stale intent line, a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls.
