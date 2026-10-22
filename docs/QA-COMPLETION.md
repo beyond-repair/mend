@@ -641,3 +641,45 @@ LOW note, not changed and not played: after the second choosing, `cinderLeftSaid
 - **KAEL=both** (Kael + Pye) balance: user design call, unchanged (about 0–7% at the file this path reaches).
 - Design calls unchanged: mid-fight auto ledger thin HP; **checkpoint fight variance** (16–41 deaths per run this pass; two runs hit the 40 cap); Sovereign / Sever / ceremony guard balance; Kael + Pye balance; whether Seize should be reachable from the Recommended file.
 - A full hand pass of Acts IV–VI without the harness.
+
+## Hand pass — Citadel crucible → Spire (IN PROGRESS) — 2026-10-22 ~2:00 AM ET
+
+**Status: IN PROGRESS. The release ending has not yet been hand-played to the epilogue.** A person played (not the harness) from a High Citadel save made just before the crucible: a Recommended (mind 8) file going from level 2 to 3. The run went crucible (Splice) → Spire → Sovereign decline → Sovereign + Echo fight attempts. The fixes below are on `700521c`. Harness and unit regression is green, but nobody has replayed this stretch by hand since the fixes.
+
+### Hand findings and verdicts
+
+| # | Finding | Verdict | Why |
+| --- | --- | --- | --- |
+| H1 | After "Not while the graph is a lie. I'll circle." the tester did not find the non-fight ending. They kept re-talking to the Sovereign, decided the fight was mandatory, and died 4 times. | **Fixed (bug 35)** | Nothing in the game pointed at the Unissued baseline (spireheart). The circle reply wrote no log line, the Spire had no first-arrival line, the `no-baseline` quest text named no place, and plates draw no machine tags. |
+| H2 | HUD Audit / Q in the High Citadel kept walking to the **Infirmary buffer** by Ime instead of the crucible. Tapping the crucible art or the stair graphic did nothing. | **Fixed (bug 36)** | Targeting bug plus a missing plate tag. See below. |
+| H3 | Menu → Return to the title → Continue showed "Comprehension deepens" (level 3) again. | **Fixed (bug 37)** | A genuine re-fire. Dismissing the modal never reached the autosave. |
+| H4 | "Stand down — their weapons are already dark" appeared once only the Echo's Power coupling was cut, while the Sovereign's baton was still live. A 55% roll failed and the next one passed. The fight ended with the Sovereign undefeated, back in `sovereign-pre`. | **Fixed (bug 38)** | The offer should need every hostile's hand empty. The Sovereign has no weapon seam, so she counted as "dark" by default. |
+| H5 | The save had 20 unspent skill points and 2 Ways. | **Noted, not changed** | The HUD does not signal unspent points. They show only in the Self panel header ("Skill points N · Ways N") and the level-up modal. No badge was added because the rules forbid a new system. |
+| H6 | The Sovereign fight at level 3 is very hard: 11–32 HP per round, and a tool severed every round. | **Design call (open)** | Already an open user call (Sovereign balance). Not rebalanced. |
+
+### Bugs fixed (commit `700521c`)
+
+| # | Bug | Cause | Fix | Test |
+| --- | --- | --- | --- | --- |
+| 35 | **MED: the release ending was undiscoverable after declining the Sovereign.** | "I'll circle" was a bare `end()` that logged nothing. The only route to "Leave the holes" without the fight is Audit Unissued baseline → Read what is holding → Leave the holes (harness V4). | Both "I'll circle" replies (`start`, `sat`) now log: *"The Sovereign lets you go. South, down the drop, the unissued baseline is still holding. It can be read without a fight."* The line is in the same voice as other direction hints (e.g. "A grate north of the sludge drops behind the checkpoint."). | `playtest`: "'I'll circle' at the Sovereign points at the unissued baseline (bug 35)"; act4 V2b now shows the line |
+| 36 | **HIGH: Audit / Q in the High Citadel never chose the crucible.** From the save tile (13,5), which is two tiles from the crucible, Audit walked 22 steps to the buffer. | `auditNearest` prefers a remote "broken" machine. The buffer's `parent` (Siphon child) is severed by design and stays severed after Charge the cell, so it outranked the intact, unread crucible forever. Lamps and orrery behave the same way. Separately, the citadel is a painted plate: it paints the crucible up the stair, but the machine tile is the floor at (12,7). Plates drew no tag for machines, so no visible thing marked the real tile. | (1) Among remote machines, Audit now ranks unread-broken, then unread, then read-broken, then the rest. A machine is "read" once its seams carry a confidence. The beside-first rules from bugs 24 and 28 are unchanged. (2) On plate maps a machine within 2 tiles gets the same brass name tag that drawn maps and mouths already get. The crucible tile now reads **Crucible core**, and a tap there walks to it and audits it (that `clickTile` path already worked). | `playtest`: "Audit in the High Citadel walks to the unread crucible…(bug 36)". Store check on the hand save: Audit from (13,5), (16,8), and (32,18) now targets `crucible`. Browser screenshot shows the tag. |
+| 37 | **LOW: level-up modal re-fired after Continue.** | `ackLevel` cleared `pendingLevel` in memory only. The autosave written at the level-up kept `pendingLevel: true`, so Continue → `load("auto")` reopened it. | `ackLevel` goes through `commit`, so the dismissal is autosaved. | `playtest`: "dismissing the level-up reaches the autosave…(bug 37)" |
+| 38 | **MED: Stand down was offered with the Sovereign's baton live.** | `weaponsDark` only looked for a live `effect: "weapon"` seam. The Sovereign (and Kael) carry a baton with no weapon seam, so they passed by default. | A hostile counts as dark only if `weaponOf(a)` is fists, meaning its weapon seam is cut or it carries nothing. Fights with seams (checkpoint rifles, lamp shade knife, Echo arm mount) behave as before. | `playtest`: "Stand down is not offered while the Sovereign's baton is live (bug 38)" |
+
+### Regression (tip after `700521c`, own dev server on :8090)
+
+| Run | Result |
+| --- | --- |
+| `npm test` | **196 + 55 + 80 PASS** (+4 new playtest tests). `npm run typecheck` is clean. |
+| act4 `SEED=4` default (decline → Unissued baseline → Leave the holes) | **59/59 PASS** |
+| act4 `SEED=4 SPIRE=fight-leave` | **61/61 PASS** (V2b shows the new circle hint; fight → sovereign-down in 7 rounds) |
+| Act III `SEED=4` (`playtest-act3.mjs`) | **47/47 PASS** |
+| Act I loop `SEED=4` (`playtest-loop.mjs`) | **23/23 PASS** |
+
+Z0 page/console errors: 0 on every run.
+
+### Still open
+
+- **Hand-play the release ending to the epilogue** (decline → Unissued baseline → Read what is holding → Leave the holes). The hint, the Audit target, and the plate tag also need a hand re-check.
+- Sovereign fight balance at level 3 (H6), plus the earlier design calls (KAEL=both, checkpoint variance, mid-fight auto-ledger HP, Seize from the Recommended file).
+- Unspent-points HUD signal (H5): a design question, not changed.
