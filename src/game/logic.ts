@@ -260,8 +260,13 @@ function publish(d, nodes, before, quiet, clean = false) {
           owner.id !== "player" &&
           d.player.mapId === owner.mapId &&
           dist(d.player, owner) <= 1
-        )
+        ) {
+          // Name the scald, or the HP just drops while Focus empties on the same cut (H10).
+          const was = d.player.hp;
           applyHp(d, "player", 3, true);
+          const lost = was - d.player.hp;
+          if (lost > 0) addLog(d, `The steam scalds you too. (-${lost})`);
+        }
       }
       if (d.phase !== "play") return;
     }
@@ -3075,7 +3080,9 @@ function openingLine(d, a, plan) {
   }
   if (plan.kind === "repair") return `Repair \u2192 ${plan.nodeName}`;
   if (plan.kind === "brace") return "Brace in place";
-  return `Cut \u2192 ${plan.nodeName}`;
+  // A foe only ever cuts Silas's own parts (planFits reads d.player.nodes): say so, or
+  // "Cut → Tool haft" reads like the foe's own part (H10).
+  return `Cut \u2192 your ${plan.nodeName}`;
 }
 function planFits(d, a, plan) {
   if (!a.alive) return false;
@@ -3107,7 +3114,7 @@ function planMiss(d, a, plan) {
   if (planFits(d, a, plan)) return "";
   if (plan.kind === "cut") {
     const seam2 = d.player.nodes.find((n) => n.name === plan.nodeName);
-    if (!seam2 || !nodeLive(d.player.nodes, seam2)) return `${plan.nodeName} is gone`;
+    if (!seam2 || !nodeLive(d.player.nodes, seam2)) return `your ${plan.nodeName} is gone`;
     return "out of reach";
   }
   if (plan.kind === "strike" || plan.kind === "close") {

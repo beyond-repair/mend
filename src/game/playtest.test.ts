@@ -1393,7 +1393,7 @@ describe("playtest 2026-10-15", () => {
     for (const n of echo.nodes) { n.revealed = true; n.confidence = "confident"; }
     freezeIntents(d);
     const before = boardIntents(d).find((r) => r.id === "sovereign");
-    assert.equal(before?.line, `Cut → ${haft.name}`);
+    assert.equal(before?.line, `Cut → your ${haft.name}`);
     assert.equal(before?.live, true);
     assert.equal(before?.why, "");
     // The aimed-Audit walk: one step east, beside the Echo, two from the Sovereign.
@@ -1410,14 +1410,50 @@ describe("playtest 2026-10-15", () => {
     assert.ok(!haft.severed, "nobody touched the haft");
     const rows = boardIntents(d);
     const s = rows.find((r) => r.id === "sovereign");
-    assert.equal(s?.line, `Cut → ${haft.name}`, "the Sovereign keeps its committed cut: no re-plan for a cut on someone else");
+    assert.equal(s?.line, `Cut → your ${haft.name}`, "the Sovereign keeps its committed cut: no re-plan for a cut on someone else");
     assert.equal(s?.live, false);
     assert.equal(s?.why, "out of reach", "the line says why, and does not imply the haft was lost");
     const e = rows.find((r) => r.id === "echo");
-    assert.equal(e?.line, `Cut → ${haft.name}`, "the Echo, now beside Silas, re-read its opening (H8)");
+    assert.equal(e?.line, `Cut → your ${haft.name}`, "the Echo, now beside Silas, re-read its opening (H8)");
     assert.equal(e?.live, true);
     // Once the haft really is gone, the line says that instead.
     haft.severed = true;
-    assert.equal(boardIntents(d).find((r) => r.id === "sovereign")?.why, `${haft.name} is gone`);
+    assert.equal(boardIntents(d).find((r) => r.id === "sovereign")?.why, `your ${haft.name} is gone`);
+  });
+
+  it("a foe's cut names Silas's part as yours, and the coupling steam names its scald (H10)", () => {
+    // Hand pass: "Cut → Tool haft" read like the foe's own haft, and Silas lost 3 HP with no line
+    // when the coupling cut emptied Focus. The 3 HP is the steam from the Echo's dead weapon mount.
+    const d = spireFight();
+    const sov = d.actors.sovereign;
+    const echo = d.actors.echo;
+    const haft = d.player.nodes.find((n) => n.effect === "weapon")!;
+    d.player.x = 9; d.player.y = 7;
+    sov.x = 8; sov.y = 6;
+    echo.x = 10; echo.y = 8;
+    for (const n of echo.nodes) { n.revealed = true; n.confidence = "confident"; }
+    d.verbs = { ...(d.verbs ?? {}), cut: 0 };
+    freezeIntents(d);
+    const line = boardIntents(d).find((r) => r.id === "sovereign")?.line ?? "";
+    assert.equal(line, `Cut → your ${haft.name}`);
+    assert.ok(!/→ (?!your )Tool haft/.test(line));
+    let hpBefore = 0;
+    for (let i = 0; i < 15 && !echo.nodes.find((n) => n.id === "coupling")!.severed; i++) {
+      d.player.ap = 20;
+      d.focus = 40;
+      d.player.hp = d.player.maxHp;
+      d.player.stunned = false;
+      d.player.guarding = false;
+      d.phase = "play";
+      hpBefore = d.player.hp;
+      d.log = [];
+      unmendNode(d, { kind: "actor", id: "echo" }, "coupling");
+    }
+    assert.ok(echo.nodes.find((n) => n.id === "coupling")!.severed, "coupling cut");
+    const lost = hpBefore - d.player.hp;
+    assert.equal(lost, 3, "the dead mount's steam takes 3 from an unarmoured Silas beside it");
+    const text = d.log.join(" | ");
+    assert.match(text, /Steam kicks out of the dead mount\./);
+    assert.match(text, /The steam scalds you too\. \(-3\)/, "the HP loss is named in the log");
   });
 });
