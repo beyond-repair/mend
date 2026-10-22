@@ -367,7 +367,8 @@ function sever(d, nodes, n, by) {
   const before = liveMap(nodes);
   n.severed = true;
   n.integrity = 0;
-  if (by) addLog(d, `${by} cuts ${n.name}.`);
+  // Name whose part it was, as the intent line does (H10): "cuts Tool haft" read like the foe's own (H13).
+  if (by) addLog(d, `${by} cuts ${nodes === d.player.nodes ? "your " : ""}${n.name}.`);
   const clean = !by && (d.verbs?.cut ?? 0) >= 4;
   publish(d, nodes, before, void 0, clean);
   noteGraphChange(d, nodes, n, "cut", by);
@@ -3785,7 +3786,7 @@ function mendNode(d, target, nodeId) {
     addLog(d, "Not enough action.");
     return;
   }
-  const cost = Math.max(2, 4 + n.density - (d.perks?.includes("steady-mend") ? 2 : 0));
+  const cost = mendFocusCost(d, n);
   const over = n.density > comp(d);
   if (d.focus < cost && !over) {
     addLog(d, "Focus is too thin.");
@@ -3902,6 +3903,13 @@ function mendNode(d, target, nodeId) {
   bump(3);
   reconcileWorld(d);
 }
+// Focus a cut asks for. Above 4 Focus a cut still goes when Focus is short and takes what is left.
+function cutFocusCost(n) {
+  return 6 + n.density;
+}
+function mendFocusCost(d, n) {
+  return Math.max(2, 4 + n.density - (d.perks?.includes("steady-mend") ? 2 : 0));
+}
 function unmendNode(d, target, nodeId) {
   const nodes = auditTargetNodes(d, target);
   const n = nodes.find((x) => x.id === nodeId);
@@ -3933,12 +3941,13 @@ function unmendNode(d, target, nodeId) {
   const conf = confidenceOf(n);
   const felt = conf === "confident" ? Math.max(1, n.density - 1) : n.density;
   const over = felt > comp(d);
-  const cost = 6 + n.density;
+  const cost = cutFocusCost(n);
   if (d.focus < Math.min(cost, focusMax(d)) && !over && d.focus < 4) {
     addLog(d, "Focus is too thin.");
     return;
   }
   if (inFight) d.player.ap -= 4;
+  const focusBefore = d.focus;
   if (n.decoy) {
     d.focus = Math.max(0, d.focus - 4);
     addLog(d, "That seam was a costume. The backlash finds your teeth.");
@@ -3966,6 +3975,15 @@ function unmendNode(d, target, nodeId) {
     play("over");
     if (d.phase !== "play") return;
   } else d.focus = Math.max(0, d.focus - cost);
+  // A cut can empty Focus (it drains rather than refusing above 4), and nothing on screen said why (H12).
+  const spent = focusBefore - d.focus;
+  if (inFight && spent > 0)
+    addLog(
+      d,
+      over || spent >= cost
+        ? `The cut spends ${spent} Focus.`
+        : `The cut spends ${spent} Focus, all you had. It wanted ${cost}.`,
+    );
   const rolled = rollD100();
   const shown = clamp(chance, 10, 94);
   if (rolled > shown) {
@@ -7775,6 +7793,8 @@ function endPlayerTurn(d) {
 }
 export {
   LENS_NAME,
+  cutFocusCost,
+  mendFocusCost,
   PRACTICE_VERBS,
   VERB_LENS,
   actorAt,

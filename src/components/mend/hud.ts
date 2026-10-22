@@ -40,3 +40,26 @@ export function hudShowsCaption(kind: string): boolean {
 
 /** Menu quit control: returns to the title (same as epilogue). The panel X only closes the menu. */
 export const MENU_QUIT_LABEL = "Return to the title";
+
+/**
+ * The entries `next` gained over `prev`, oldest first. The game log is newest-first (`addLog` unshifts)
+ * and capped, so the new entries are the head of `next` that sits in front of `prev`'s head.
+ * One fight step writes several lines at once (a cut, its steam, a foe's cut, a miss); the HUD used to
+ * show only `log[0]`, so everything but the last line of a batch was never on screen (H11, H13).
+ */
+export function freshLines(prev: readonly string[], next: readonly string[]): string[] {
+  if (prev === next) return [];
+  if (!prev.length) return [...next].reverse();
+  const fits = (k: number) => {
+    const span = Math.min(prev.length, next.length - k);
+    for (let i = 0; i < span; i++) if (next[k + i] !== prev[i]) return false;
+    return span > 0;
+  };
+  // Below the cap the log only grows at the head, so the length gap is the batch size. This also
+  // keeps a repeated line ("Not enough action." twice) from reading as nothing new.
+  const gap = next.length - prev.length;
+  if (gap >= 0 && fits(gap)) return next.slice(0, gap).reverse();
+  // At the cap the oldest entries fall off the end: find where prev's head now sits.
+  for (let k = 0; k < next.length; k++) if (fits(k)) return next.slice(0, k).reverse();
+  return [...next].reverse();
+}

@@ -3,10 +3,11 @@ import { BookOpen, X } from "lucide-react";
 import { ITEMS } from "@/game/catalog";
 import { CONVOS } from "@/game/dialogue";
 import { checkChance, comprehension, DOMAIN_NAME, FACTION_NAME, PERKS, SKILL_LIST, xpForLevel } from "@/game/formulas";
-import { becoming, carryMax, carryWeight, confidenceOf, districtYield, factionFacts, forecast, habitLine, LENS_NAME, lensReads, nodeLive, PRACTICE_VERBS, practiceBand, seamState, tendencies } from "@/game/logic";
+import { becoming, carryMax, carryWeight, confidenceOf, cutFocusCost, districtYield, factionFacts, forecast, habitLine, LENS_NAME, lensReads, mendFocusCost, nodeLive, PRACTICE_VERBS, practiceBand, seamState, tendencies } from "@/game/logic";
 import { companyLines } from "@/game/companions";
 import { MAPS, REGIONS } from "@/game/maps";
 import { MENU_QUIT_LABEL } from "@/components/mend/hud";
+import { useLogBatch } from "@/components/mend/logTail";
 import { comp, regionOpen, useGame, visibleReplies } from "@/game/store";
 import type { BaselineMark, Data, Deed, DistrictReading, Fate, GNode, Verb } from "@/game/types";
 
@@ -59,11 +60,13 @@ export function AuditPanel() {
   const machine = d.audit?.kind === "machine" ? d.machines[d.audit.id] : null;
   const c = comp(d);
   const [armed, setArmed] = useState<string | null>(null);
+  // The dock covers the world frame, so in a fight the cut's own lines (steam, scald, Focus) show here (H11).
+  const batch = useLogBatch(d.log, 8);
 
   return (
     <Shell title={`Audit · ${targetName(d)}`} dock>
       <p className="mb-2 text-sm text-mist">What is holding, and what is not. A seam heavier than you can read will burn if you cut it anyway.</p>
-      {selected && <SeamRead nodes={nodes} n={selected} c={c} fighting={Boolean(d.combat)} />}
+      {selected && <SeamRead d={d} nodes={nodes} n={selected} c={c} fighting={Boolean(d.combat)} />}
       <div className="mb-3 flex flex-wrap gap-2">
         <button type="button" className="min-h-11 bg-brass px-4 font-semibold text-soot" onClick={mend}>
           Mend
@@ -89,6 +92,15 @@ export function AuditPanel() {
           </button>
         )}
       </div>
+      {d.combat && batch.lines.length > 0 && (
+        <div className="mb-3 border-l-2 border-brass-dim pl-2 text-xs" data-fight-log>
+          {batch.lines.map((l, i) => (
+            <p key={`${batch.stamp}-${i}`} className={i === batch.lines.length - 1 ? "text-parchment" : "text-mist"}>
+              {l}
+            </p>
+          ))}
+        </div>
+      )}
       <div className="relative mb-2 h-52 border border-brass-dim bg-soot sm:h-60">
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden>
           {nodes.map((n) =>
@@ -169,7 +181,7 @@ function confidenceWord(n: GNode) {
   return "Unread";
 }
 
-function SeamRead({ nodes, n, c, fighting }: { nodes: GNode[]; n: GNode; c: number; fighting: boolean }) {
+function SeamRead({ d, nodes, n, c, fighting }: { d: Data; nodes: GNode[]; n: GNode; c: number; fighting: boolean }) {
   if (!n.revealed) {
     return <p className="mb-3 text-sm">Unread. The relationship is still scrambled. Chalk, or another reading, can name it. A cut cannot.</p>;
   }
@@ -241,9 +253,19 @@ function SeamRead({ nodes, n, c, fighting }: { nodes: GNode[]; n: GNode; c: numb
       {n.integrity >= 40 && !nodeLive(nodes, n) && !n.severed && (
         <p className="mt-2 text-mist">Whole, and still dark. A dead parent already shut this off.</p>
       )}
-      {fighting ? <p className="mt-2 text-mist">Unmend spends 4 action. Mend spends 3.</p> : null}
+      <p className="mt-2 text-mist">{spendLine(d, n, fighting)}</p>
     </div>
   );
+}
+
+// What a cut and a mend take, Focus included: a cut that emptied Focus read as unexplained (H12).
+function spendLine(d: Data, n: GNode, fighting: boolean) {
+  const cut = cutFocusCost(n);
+  const mend = mendFocusCost(d, n);
+  const base = fighting
+    ? `Unmend spends 4 action and ${cut} Focus. Mend spends 3 action and ${mend} Focus.`
+    : `Unmend spends ${cut} Focus. Mend spends ${mend} Focus.`;
+  return d.focus < cut && d.focus >= 4 ? `${base} You have ${d.focus}: a cut takes all of it.` : base;
 }
 
 function Meter({ label, n }: { label: string; n: number }) {

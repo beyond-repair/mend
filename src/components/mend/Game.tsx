@@ -18,6 +18,7 @@ import {
   ToolsPanel,
 } from "./Panels";
 import { WorldCanvas } from "./WorldCanvas";
+import { useLogBatch } from "./logTail";
 import { HUD_LABELS, hudShowsCaption } from "./hud";
 
 export function Game() {
@@ -230,7 +231,34 @@ function LogChip({ quiet = false }: { quiet?: boolean }) {
     timer.current = window.setTimeout(() => setOn(false), 3800);
   }, [log, line]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
-  if (quiet || !on || !line) return null;
+  // In a fight one step writes a batch (a cut, its steam and scald, a foe's cut, a miss). Showing only
+  // log[0] for 3.8s left the rest of the batch off screen (H11, H13): hold the whole batch until the
+  // next step writes something.
+  // After a read (4s + 1.2s a line) it folds to the last two lines so it does not sit over the board.
+  const fighting = useGame((s) => Boolean(s.data.combat));
+  const batch = useLogBatch(log, 8);
+  const [folded, setFolded] = useState(0);
+  useEffect(() => {
+    if (!batch.stamp) return;
+    const t = window.setTimeout(() => setFolded(batch.stamp), 4000 + 1200 * batch.lines.length);
+    return () => window.clearTimeout(t);
+  }, [batch]);
+  if (quiet) return null;
+  if (fighting && batch.lines.length) {
+    const shown = folded === batch.stamp ? batch.lines.slice(-2) : batch.lines;
+    return (
+      <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(80%,20rem)]" data-fight-log>
+        <div className="scrap">
+          {shown.map((l, i) => (
+            <p key={`${batch.stamp}-${i}`} className={i === shown.length - 1 ? "" : "text-parchment/75"}>
+              {l}
+            </p>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (!on || !line) return null;
   return (
     <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(72%,18rem)]">
       <p className="scrap">{line}</p>
@@ -565,17 +593,22 @@ function seamWord(n: { effect: string }) {
 function knownFaults(d: Data) {
   if (!d.combat) return "";
   const bits: string[] = [];
-  const note = (a: Actor, who: string) => {
+  // Who cut it, when a foe did: a severed part with no source read as if a miss had cut it (H13).
+  const cutBy = (ownerId: string, nodeId: string) => {
+    const hit = [...(d.combat?.changes ?? [])].reverse().find((c) => c.ownerId === ownerId && c.nodeId === nodeId && c.verb === "cut");
+    return hit && hit.by !== "player" ? ` by ${hit.by}` : "";
+  };
+  const note = (a: Actor, who: string, ownerId: string) => {
     const dark = a.nodes.filter(
       (n) => n.revealed && !nodeLive(a.nodes, n) && (n.severed || n.effect === "weapon" || n.effect === "motive" || n.effect === "armor"),
     );
-    if (dark.length) bits.push(`${who}: ${dark.map((n) => `${n.name} ${n.severed ? "severed" : seamWord(n)}`).slice(0, 2).join(", ")}`);
+    if (dark.length) bits.push(`${who}: ${dark.map((n) => `${n.name} ${n.severed ? `severed${cutBy(ownerId, n.id)}` : seamWord(n)}`).slice(0, 2).join(", ")}`);
   };
-  note(d.player, "You");
+  note(d.player, "You", "player");
   for (const id of d.combat.order) {
     if (id === "player") continue;
     const a = d.actors[id];
-    if (a?.alive) note(a, a.name);
+    if (a?.alive) note(a, a.name, a.id);
   }
   return bits.join(" · ");
 }

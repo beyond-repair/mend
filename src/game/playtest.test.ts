@@ -15,7 +15,7 @@ const mem = new Map<string, string>();
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex, hasStoredLedger } = await import("./store.ts");
 const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS, LOCKED_DOORS, tileAt, WALKABLE } = await import("./maps.ts");
-const { regionOpen, openAudit, reconcileWorld, depart, pathTo, checkVision, dist, startCombat, weaponsDark, freezeIntents, boardIntents, unmendNode } = await import("./logic.ts");
+const { regionOpen, openAudit, reconcileWorld, depart, pathTo, checkVision, dist, startCombat, weaponsDark, freezeIntents, boardIntents, unmendNode, cutFocusCost, endPlayerTurn, strike } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
 const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
 (globalThis as unknown as { Image: unknown }).Image = class {
@@ -28,7 +28,7 @@ const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road
   }
 };
 const stage = await import("../components/mend/stage.ts");
-const { HUD_LABELS, HUD_ART_HAS_WORD, hudShowsCaption, MENU_QUIT_LABEL } = await import("../components/mend/hud.ts");
+const { HUD_LABELS, HUD_ART_HAS_WORD, hudShowsCaption, MENU_QUIT_LABEL, freshLines } = await import("../components/mend/hud.ts");
 
 const G = () => useGame.getState();
 const D = () => G().data;
@@ -1455,5 +1455,97 @@ describe("playtest 2026-10-15", () => {
     const text = d.log.join(" | ");
     assert.match(text, /Steam kicks out of the dead mount\./);
     assert.match(text, /The steam scalds you too\. \(-3\)/, "the HP loss is named in the log");
+  });
+
+  it("a fight step's whole log batch reaches the HUD, oldest first (H11)", () => {
+    // Hand pass: "Steam kicks out of the dead mount." and the scald never showed. The HUD drew only log[0]
+    // for 3.8s, and one cut writes five or six lines. freshLines is what the fight chip and Audit dock show.
+    assert.deepEqual(freshLines(["b", "a"], ["d", "c", "b", "a"]), ["c", "d"]);
+    assert.deepEqual(freshLines(["b", "a"], ["b", "a"]), []);
+    assert.deepEqual(freshLines([], ["b", "a"]), ["a", "b"]);
+    assert.deepEqual(freshLines(["x"], ["x", "x"]), ["x"], "a repeated line is still new");
+    // At the 40-line cap the oldest lines fall off the end.
+    const prev = Array.from({ length: 40 }, (_, i) => `l${39 - i}`);
+    const next = ["n1", "n0", ...prev.slice(0, 38)];
+    assert.deepEqual(freshLines(prev, next), ["n0", "n1"]);
+    const d = spireFight();
+    const echo = d.actors.echo;
+    for (const n of echo.nodes) { n.revealed = true; n.confidence = "confident"; }
+    d.player.x = 9; d.player.y = 7;
+    echo.x = 10; echo.y = 8;
+    d.verbs = { ...(d.verbs ?? {}), cut: 0 };
+    let shown: string[] = [];
+    for (let i = 0; i < 15 && !echo.nodes.find((n) => n.id === "coupling")!.severed; i++) {
+      d.player.ap = 20; d.focus = 40; d.player.hp = d.player.maxHp; d.player.stunned = false; d.phase = "play";
+      const before = [...d.log];
+      unmendNode(d, { kind: "actor", id: "echo" }, "coupling");
+      shown = freshLines(before, d.log);
+    }
+    assert.ok(shown.includes("Steam kicks out of the dead mount."), shown.join(" | "));
+    assert.ok(shown.some((l) => /^The steam scalds you too\. \(-\d+\)$/.test(l)), shown.join(" | "));
+    assert.ok(shown.indexOf("Power coupling severed.") < shown.indexOf("Steam kicks out of the dead mount."), "oldest first");
+  });
+
+  it("a cut that empties Focus says what it spent (H12)", () => {
+    // Hand pass: Focus 8 → 0 on the coupling cut with nothing on screen. A cut asks 6 + density (11 for the
+    // Echo's coupling) and, above 4 Focus, takes what is left rather than refusing. Balance unchanged.
+    const d = spireFight();
+    const echo = d.actors.echo;
+    const coupling = echo.nodes.find((n) => n.id === "coupling")!;
+    for (const n of echo.nodes) { n.revealed = true; n.confidence = "confident"; }
+    assert.equal(cutFocusCost(coupling), 11);
+    d.player.x = 9; d.player.y = 7;
+    echo.x = 10; echo.y = 8;
+    d.player.ap = 9;
+    d.focus = 8;
+    d.log = [];
+    unmendNode(d, { kind: "actor", id: "echo" }, "coupling");
+    assert.equal(d.focus, 0, "the cut drains Focus to 0, as before");
+    assert.ok(d.log.includes("The cut spends 8 Focus, all you had. It wanted 11."), d.log.join(" | "));
+    // With Focus to spare, the line names the full cost.
+    d.player.ap = 9;
+    d.focus = 30;
+    d.log = [];
+    coupling.severed = false;
+    coupling.integrity = 100;
+    unmendNode(d, { kind: "actor", id: "echo" }, "coupling");
+    assert.equal(d.focus, 19);
+    assert.ok(d.log.includes("The cut spends 11 Focus."), d.log.join(" | "));
+  });
+
+  it("a foe's cut on Silas's haft names the foe, and a miss severs nothing (H13)", () => {
+    // Hand pass: the Tool haft was severed between rounds while the last line on screen was the Sovereign's
+    // miss. The miss path never touches a graph; the Echo's committed "Cut → your Tool haft" did it, and the
+    // log said "Echo construct cuts Tool haft." off screen (H11). It now says "your", and the fault line names it.
+    const d = spireFight();
+    const sov = d.actors.sovereign;
+    const echo = d.actors.echo;
+    const haft = d.player.nodes.find((n) => n.effect === "weapon")!;
+    // A Sovereign miss: no part of Silas changes.
+    const intact = JSON.stringify(d.player.nodes);
+    const roll = Math.random;
+    Math.random = () => 0.99;
+    try {
+      sov.ap = 6;
+      assert.equal(strike(d, sov, d.player), true);
+    } finally {
+      Math.random = roll;
+    }
+    assert.match(d.log[0], /The Epistemic Sovereign misses Silas Vance\. \(100 vs \d+\)/);
+    assert.equal(JSON.stringify(d.player.nodes), intact, "a miss severs nothing");
+    // The Echo beside Silas commits to the haft and cuts it on its turn.
+    d.player.x = 9; d.player.y = 7;
+    sov.x = 5; sov.y = 3;
+    echo.x = 10; echo.y = 8;
+    d.combat!.order = ["player", "echo", "sovereign"];
+    d.combat!.index = 0;
+    freezeIntents(d);
+    assert.equal(boardIntents(d).find((r) => r.id === "echo")?.line, `Cut → your ${haft.name}`);
+    d.log = [];
+    endPlayerTurn(d);
+    assert.ok(haft.severed, "the Echo cut the haft");
+    assert.ok(d.log.includes(`Echo construct cuts your ${haft.name}.`), d.log.join(" | "));
+    const change = d.combat?.changes?.find((c) => c.ownerId === "player" && c.nodeId === haft.id);
+    assert.equal(change?.by, "Echo construct", "the change record keeps the source for the fault line");
   });
 });
