@@ -903,3 +903,35 @@ Played from `http://localhost:8080/__hand-load-v3.html` (Continue → Talk → "
 - Note: the loader page needed a second Continue click before it moved on.
 
 **Status: IN PROGRESS** for Acts IV–VI. H1–H14 are closed. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, the open design calls (including Sovereign damage), and the cosmetic turn-order chip truncation.
+
+### H15–H17 — Citadel → Spire hand walk: exits off the frame, frozen Citadel backdrop, Plate warden (2026-10-22 ~8:40 AM ET)
+
+The hand walk from `__hand-load.html` (C7 save) failed. From Vane's floor in the High Citadel, the tester pressed ArrowRight about 70 times, could not tell where Silas was or where the exit was, and a blind tap lower-right started a Plate warden fight.
+
+**New hand save, C10:** `DUMP_AT=C10` in `scripts/playtest-act4.mjs` dumps right after "C10 Save → reload → Continue". At that point the crucible is answered (`citadelFate redirect`, `spireOpen`), and the dump is taken just before "Back down: Tundra stair". The files are `public/__hand-c10.json` and `public/__hand-load-c10.html` (local only, excluded from git like the other hand saves). On load and Continue, Silas is in the High Citadel at **13,5** with HP 44/46 and Focus 6. There is no fight, no panel and no dialogue.
+
+- **H15 — FIXED, pending hand check: an exit off the frame was invisible.** Every usable mouth already has a brass diamond and a name tag. On a plate, though, both are only drawn while the mouth projects onto the 440×510 stage. From 13,5 the Tundra stair (33,18) projects about 240px below the stage. The Brass Tundra's Stack mouth (2,5) is off the left edge from the Ranking stair landing (24,5). The Stack Road's Spire mouth (28,15) is off the right edge from the Tundra walk landing (8,14). None of the three gave any hint until Silas was within about 6 tiles. **Fix:** an off-frame usable mouth (not `nearOnly`) now draws the **same brass diamond and tag at the frame edge**, on the line from Silas toward the mouth, with an arrow showing the way ("Tundra stair ↓", "← Stack mouth", "Spire mouth →"). Pins on the same edge are spread apart: the Stack Road shows six exits east, and none of them overlap. A tap on a pinned tag takes that mouth on foot, the same as a tap on an on-frame tag (`stage.ts` `edgePin` / `spreadPins` / `offFramePins`, `WorldCanvas.tsx`). No coordinates and no new HUD.
+- **H16 — FIXED, pending hand check: the Citadel backdrop did not move.** Silas's feet are held at a fixed screen spot, and the plate pans under him. The square citadel plate at zoom 1.2 had only about 86px X and 16px Y of slack, so it clamped at once. From 13,5 → 20,5 → 24,12, `ox` stayed at -86 and `oy` moved 0 → -16. Walking showed nothing, and neither did bumping the wall at 21,5. This is the same defect the Stack Road had before its plate was widened. **Fix:** the citadel plate is now `zoom 2, fx 0.4, fy 0.56`, and every leg of the walk down pans it. A bump into a wall still gives no message. That matches every other map, and it is not changed.
+- **H17 — NOT A BUG (design, reported): the Plate warden.** `warden1` is a deliberate optional fight in the north-east corner of the orrery hall (30,5). It is hostile and aggro with vision 3, it is kept off the tundra-stair routes on purpose (bug 26, test "primary routes … stay outside hostile vision"), and nothing in Act V stands it down. Outside a fight, a tap on a body does **not** strike: it walks toward the body to talk. The fight starts because that walk enters the warden's vision 3 (Manhattan distance only, walls ignored). Inside a fight, a tap on a hostile is a strike by design. No ordinary fight has a leave or stand-down button. `slipEncounter` is test-only and `noteEscape` is never called. Fights end when the foes are downed, cut out of their orders, or stood down by dialogue. The C7 and C10 saves have the prybar equipped. Not changed.
+
+**On-foot route from the C10 save (arrows only, no Map):**
+1. High Citadel 13,5: ↓×3 → 13,8; →×11 → 24,8 (the Frost orrery is at 26,8); ↓×8 → 24,16 (do not press ↓ again, because Road lamp glass at 24,18 opens its audit); →×6 → 30,16; ↓×2 → 30,18; →×3 onto the **Tundra stair (33,18)**. Or tap the pinned "Tundra stair ↓" tag.
+2. Brass Tundra, arrive at 24,5: ←×22 along row 5 onto the **Stack mouth (2,5)**.
+3. Stack Road, arrive at 8,14: ↑×1 → 8,13; →×20 → 28,13; ↓×1 → 28,14; ↓×1 onto the **Spire mouth (28,15)**. Stay on row 13, because row 14 crosses the Yard stair (22,14), and arrowing onto it takes Silas into The Switch.
+4. Void Spire, arrive at 24,8.
+
+On this save, nothing along the route is hostile within its vision (Lamp shade not hostile, `roadDark` false). The Plate warden (30,5), Guard Senn (17,13), Guard Oll (12,13), Sentry Quill (8,8) and the Line caller (3,4) are off it.
+
+**Regression:** `playtest.test.ts` adds "High Citadel plate pans while Silas walks Vane's hall toward the tundra stair (H15)" and "an off-frame mouth keeps its brass diamond + tag on the frame edge, pointing the way (H15)". Both fail on the old plate and code. `playtest-act4.mjs` adds C10p (the Tundra stair edge pin is on the canvas from 13,5) and C10q (a tap on that tag walks Silas down and through the stair to the tundra, with no fight).
+
+| Check | Result |
+| --- | --- |
+| `npm test` | 196 + 55 + 90 PASS |
+| `npm run typecheck` | clean |
+| `npm run lint` | 37 problems, same as before (pre-existing) |
+| act4 default (`SEED=4`) | **61/61 PASS** (adds C10p, C10q) |
+| act4 `SPIRE=fight-leave` | **64/64 PASS** |
+| Act III | **47/47 PASS** |
+| Act I loop | **23/23 PASS** |
+
+**Hand check needed (H15/H16 + walk):** go to `http://localhost:8080/__hand-load-c10.html` and click Continue. Check that "Tundra stair ↓" shows at the bottom of the stage. Walk the route above with arrows only, and check that the backdrop moves as you walk. On the Tundra, "← Stack mouth" should show at the left edge. On the Stack Road, "Spire mouth →" should show among the right-edge pins. Arrive in the Void Spire without using the Map.

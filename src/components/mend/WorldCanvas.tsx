@@ -3,7 +3,7 @@ import { bursts, decayFx, floaters, shake } from "@/game/fx";
 import { gait, nodeLive, regionOpen, seamMark, walkable } from "@/game/logic";
 import { LOCKED_DOORS, MAPS, MOUTHS, tileAt, usableMouths } from "@/game/maps";
 import { useGame } from "@/game/store";
-import { hitMouthLabel, hitShutDoor, layoutStage, mouthPresence, presence, projectTile, stageNow } from "@/components/mend/stage";
+import { hitMouthLabel, offFramePins, hitShutDoor, layoutStage, mouthPresence, presence, projectTile, stageNow } from "@/components/mend/stage";
 import type { Actor, Data } from "@/game/types";
 
 const TW = 78;
@@ -1288,18 +1288,38 @@ export function WorldCanvas() {
       }
       // Usable mouths get the same brass name tags as machines, so the Stack mouth and the Ward stair are not only diamonds.
       // nearOnly side stairs skip the distant tag (chevron only until close).
+      const offFrame: { sx: number; sy: number; label: string; dist: number }[] = [];
       for (const mouth of mouths) {
         const dist = Math.abs(mouth.x - d.player.x) + Math.abs(mouth.y - d.player.y);
         if (mouth.nearOnly && dist > 2) continue;
         const p = project(mouth.x, mouth.y);
         const seen = stageNow().plate ? mouthPresence(p.sx, p.sy) : 1;
-        if (stageNow().plate && seen <= 0.04) continue;
+        if (stageNow().plate && seen <= 0.04) {
+          // Off the frame: hold the same brass diamond + tag at the frame edge, on the line toward
+          // the mouth, so the way out is never invisible (H15: High Citadel tundra stair).
+          if (!mouth.nearOnly) offFrame.push({ sx: p.sx, sy: p.sy, label: mouth.label, dist });
+          continue;
+        }
         tags.push({
           z: (mouth.x + mouth.y) * 10 + 8,
           run: () => {
             ctx.save();
             if (stageNow().plate) ctx.globalAlpha = seen;
             label(ctx, p.sx, p.sy + (stageNow().plate ? 16 : 26), mouth.label, "#d4b483");
+            ctx.restore();
+          },
+        });
+      }
+      // Off the frame: hold the same brass diamond + tag at the frame edge, on the line toward the
+      // mouth, so the way out is never invisible (H15: High Citadel tundra stair from Vane's floor).
+      for (const pin of offFramePins(stageNow().feet, offFrame, w, h)) {
+        tags.push({
+          z: 9000,
+          run: () => {
+            ctx.save();
+            ctx.globalAlpha = 0.8;
+            drawMouth(ctx, pin.sx, pin.sy - 8, now);
+            label(ctx, pin.sx, pin.sy + 16, pin.label, "#d4b483");
             ctx.restore();
           },
         });
@@ -1531,12 +1551,26 @@ export function WorldCanvas() {
       {
         const mouths = usableMouths(d.mapId, (need) => regionOpen(d, need));
         let labelHit: { x: number; y: number; dd: number } | null = null;
+        // An off-frame mouth's edge pin answers a tap on its tag like the mouth's own tag (H15).
+        const offFrame = plate
+          ? mouths
+              .filter((m) => !m.nearOnly)
+              .map((m) => ({ m, dist: Math.abs(m.x - d.player.x) + Math.abs(m.y - d.player.y), label: m.label, ...projectTile(rect.width, rect.height, d.player.x, d.player.y, m.x, m.y, zoom, TW, TH) }))
+              .filter((m) => mouthPresence(m.sx, m.sy) <= 0.04)
+          : [];
+        const pinned = new Map(offFramePins(stageNow().feet, offFrame, rect.width, rect.height).map((pin) => [pin.m, pin]));
         for (const mouth of mouths) {
           const dist = Math.abs(mouth.x - d.player.x) + Math.abs(mouth.y - d.player.y);
           if (mouth.nearOnly && dist > 2) continue;
-          const p = projectTile(rect.width, rect.height, d.player.x, d.player.y, mouth.x, mouth.y, zoom, TW, TH);
-          if (plate && mouthPresence(p.sx, p.sy) <= 0.04) continue;
-          if (!hitMouthLabel(mx, my, p.sx, p.sy, mouth.label, Boolean(plate))) continue;
+          let p = projectTile(rect.width, rect.height, d.player.x, d.player.y, mouth.x, mouth.y, zoom, TW, TH);
+          let text = mouth.label;
+          if (plate && mouthPresence(p.sx, p.sy) <= 0.04) {
+            const pin = pinned.get(mouth);
+            if (!pin) continue;
+            p = { sx: pin.sx, sy: pin.sy };
+            text = pin.label;
+          }
+          if (!hitMouthLabel(mx, my, p.sx, p.sy, text, Boolean(plate))) continue;
           const ly = p.sy + (plate ? 16 : 26);
           const dd = (p.sx - mx) ** 2 + (ly - my) ** 2;
           if (!labelHit || dd < labelHit.dd) labelHit = { x: mouth.x, y: mouth.y, dd };

@@ -21,7 +21,9 @@ const V = "?v=8";
 const PLATES: Record<string, Shot> = {
   quarry: { src: `/game/plates/canyon.jpg${V}`, zoom: 1.22, fx: 0.46, fy: 0.62 },
   tundra: { src: `/game/plates/tundra.jpg${V}`, zoom: 1.28, fx: 0.5, fy: 0.7 },
-  citadel: { src: `/game/plates/citadel.jpg${V}`, zoom: 1.2, fx: 0.48, fy: 0.66 },
+  // Like the road: at zoom 1.2 the square plate had ~86px X / ~16px Y slack, so the backdrop sat still
+  // while Silas walked Vane's hall to the tundra stair and the screen gave no sign he moved (H15).
+  citadel: { src: `/game/plates/citadel.jpg${V}`, zoom: 2, fx: 0.4, fy: 0.56 },
   spire: { src: `/game/plates/spire.jpg${V}`, zoom: 1.24, fx: 0.5, fy: 0.58 },
   pane: { src: `/game/plates/pane.jpg${V}`, zoom: 1.18, fx: 0.5, fy: 0.64 },
   haven: { src: `/game/plates/haven.jpg${V}`, zoom: 1.16, fx: 0.46, fy: 0.62 },
@@ -162,6 +164,83 @@ export function mouthPresence(sx: number, sy: number) {
   const top = (sy - h * 0.01) / (h * 0.1);
   const bottom = (h * 0.92 - sy) / (h * 0.14);
   return Math.max(0, Math.min(1, left, right, top, bottom));
+}
+
+/** Inset box (fractions of the canvas) an off-screen mouth's edge pin is held inside; mouthPresence is 1 there. */
+export const PIN = { left: 0.1, right: 0.9, top: 0.1, bottom: 0.86 };
+
+/**
+ * A usable mouth that is off the frame on a plate used to have no hint at all: the High Citadel
+ * tundra stair (33,18) sits ~240px below a 510px stage from Vane's floor, so a hand walk could not
+ * tell which way the exit lay (H15). Return where the same brass diamond + tag should sit instead:
+ * on the line from Silas's feet toward the mouth, pulled in to the PIN box. Null when the mouth
+ * itself is already on the frame (its own diamond shows).
+ */
+export function edgePin(feet: Point, sx: number, sy: number, w: number, h: number): Point | null {
+  if (mouthPresence(sx, sy) > 0.04) return null;
+  const left = w * PIN.left;
+  const right = w * PIN.right;
+  const top = h * PIN.top;
+  const bottom = h * PIN.bottom;
+  const fx = Math.max(left, Math.min(right, feet.sx));
+  const fy = Math.max(top, Math.min(bottom, feet.sy));
+  const dx = sx - fx;
+  const dy = sy - fy;
+  let t = 1;
+  if (dx > 0) t = Math.min(t, (right - fx) / dx);
+  if (dx < 0) t = Math.min(t, (left - fx) / dx);
+  if (dy > 0) t = Math.min(t, (bottom - fy) / dy);
+  if (dy < 0) t = Math.min(t, (top - fy) / dy);
+  return { sx: fx + dx * t, sy: fy + dy * t };
+}
+
+/**
+ * Several off-frame mouths can pin to the same stretch of edge (the Stack Road has six exits east of the
+ * Tundra walk). Nudge later pins along the edge so each diamond + tag stays readable. Pins are placed in
+ * the order given (nearest mouth first); a pin with no free slot keeps its spot.
+ */
+export function spreadPins<T extends Point & { label: string }>(pins: T[], h: number): T[] {
+  const placed: { left: number; right: number; top: number; bottom: number }[] = [];
+  const boxOf = (sx: number, sy: number, text: string) => {
+    const half = Math.max(22, text.length * 3.2);
+    return { left: sx - half, right: sx + half, top: sy - 18, bottom: sy + 19 };
+  };
+  const hits = (b: { left: number; right: number; top: number; bottom: number }) =>
+    placed.some((o) => b.left < o.right && b.right > o.left && b.top < o.bottom && b.bottom > o.top);
+  return pins.map((pin) => {
+    const step = 38;
+    for (const k of [0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6]) {
+      const sy = pin.sy + k * step;
+      if (sy < h * PIN.top || sy > h * PIN.bottom) continue;
+      const box = boxOf(pin.sx, sy, pin.label);
+      if (hits(box)) continue;
+      placed.push(box);
+      return { ...pin, sy };
+    }
+    placed.push(boxOf(pin.sx, pin.sy, pin.label));
+    return pin;
+  });
+}
+
+/**
+ * Edge pins for every usable, off-frame mouth: edgePin each, nearest first, then spreadPins. Shared by
+ * the draw and the tap so a tap on a pinned tag takes the mouth it names. `mouths` are projected
+ * (sx, sy) with their Manhattan distance from Silas; nearOnly side stairs should be left out by the caller.
+ */
+export function offFramePins<T extends { sx: number; sy: number; label: string; dist: number }>(feet: Point, mouths: T[], w: number, h: number) {
+  const pins: (T & { at: Point })[] = [];
+  for (const m of [...mouths].sort((a, b) => a.dist - b.dist)) {
+    const at = edgePin(feet, m.sx, m.sy, w, h);
+    if (at) pins.push({ ...m, at });
+  }
+  // The tag points the way (screen direction from Silas) so a pin on painted stairs is not read as the stair itself.
+  const way = (m: T) => {
+    const dx = m.sx - feet.sx;
+    const dy = m.sy - feet.sy;
+    if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? `${m.label} →` : `← ${m.label}`;
+    return dy > 0 ? `${m.label} ↓` : `${m.label} ↑`;
+  };
+  return spreadPins(pins.map((m) => ({ ...m, sx: m.at.sx, sy: m.at.sy, label: way(m) })), h);
 }
 
 export function onDeck(sx: number, sy: number) {

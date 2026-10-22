@@ -304,6 +304,59 @@ describe("playtest 2026-10-15", () => {
     assert.ok(ward.sx < w * 0.88, `from 16,5 Ward is not rim-clipped (${Math.round(ward.sx)} / ${w})`);
   });
 
+  it("High Citadel plate pans while Silas walks Vane's hall toward the tundra stair (H15)", () => {
+    // At zoom 1.2 the square citadel plate had ~86px X / ~16px Y slack: from Vane's floor (13,5) the
+    // backdrop never moved while Silas walked east/south, and his feet are fixed, so a hand walk could not tell he moved.
+    const ctx = { drawImage() {} } as unknown as CanvasRenderingContext2D;
+    const w = 440;
+    const h = 510;
+    const at = (x: number, y: number) => {
+      stage.layoutStage(ctx, w, h, x, y, "citadel");
+      return { ox: stage.stageNow().ox, oy: stage.stageNow().oy };
+    };
+    const route: [number, number][] = [[13, 5], [13, 8], [24, 8], [24, 16], [30, 16], [30, 18], [32, 18]];
+    for (let i = 1; i < route.length; i++) {
+      const a = at(...route[i - 1]!);
+      const b = at(...route[i]!);
+      const moved = Math.hypot(b.ox - a.ox, b.oy - a.oy);
+      assert.ok(moved > 20, `citadel ${route[i - 1]} → ${route[i]} pans the backdrop (${moved.toFixed(0)}px)`);
+    }
+    const e0 = at(13, 5);
+    const e3 = at(16, 5);
+    assert.ok(e3.ox < e0.ox - 40, `three east steps from Vane's floor move the plate (${e0.ox.toFixed(0)} → ${e3.ox.toFixed(0)})`);
+  });
+
+  it("an off-frame mouth keeps its brass diamond + tag on the frame edge, pointing the way (H15)", () => {
+    const ctx = { drawImage() {} } as unknown as CanvasRenderingContext2D;
+    const w = 440;
+    const h = 510;
+    // High Citadel, Vane's floor (13,5) → Tundra stair (33,18): the stair projects below the stage.
+    stage.layoutStage(ctx, w, h, 13, 5, "citadel");
+    const feet = stage.stageNow().feet;
+    const p = stage.projectTile(w, h, 13, 5, 33, 18, 1, 64, 32);
+    assert.ok(stage.mouthPresence(p.sx, p.sy) <= 0.04, `sanity: the Tundra stair is off the frame from 13,5 (${Math.round(p.sx)},${Math.round(p.sy)})`);
+    const [pin] = stage.offFramePins(feet, [{ sx: p.sx, sy: p.sy, label: "Tundra stair", dist: 33 }], w, h);
+    assert.ok(pin, "an off-frame mouth gets an edge pin");
+    assert.ok(pin.sx > 0 && pin.sx < w && pin.sy > h * 0.5 && pin.sy + 19 < h, `pin on the lower frame (${Math.round(pin.sx)},${Math.round(pin.sy)})`);
+    assert.equal(pin.label, "Tundra stair ↓", "the tag points the way");
+    // Same direction as the mouth from Silas's feet.
+    assert.ok(Math.sign(pin.sx - feet.sx) === Math.sign(p.sx - feet.sx), "pin sits on the line toward the mouth");
+    // On-frame mouths are not pinned (their own diamond shows).
+    const near = stage.projectTile(w, h, 13, 5, 14, 6, 1, 64, 32);
+    assert.equal(stage.edgePin(feet, near.sx, near.sy, w, h), null);
+    // Stack Road arrival (8,14): six exits east pile onto one edge; spreadPins keeps every tag apart.
+    stage.layoutStage(ctx, w, h, 8, 14, "road");
+    const rf = stage.stageNow().feet;
+    const off = MOUTHS.filter((m) => m.map === "road" && !m.nearOnly)
+      .map((m) => ({ label: m.label, dist: Math.abs(m.x - 8) + Math.abs(m.y - 14), ...stage.projectTile(w, h, 8, 14, m.x, m.y, 1, 64, 32) }))
+      .filter((m) => stage.mouthPresence(m.sx, m.sy) <= 0.04);
+    const pins = stage.offFramePins(rf, off, w, h);
+    assert.ok(pins.some((q) => /^Spire mouth/.test(q.label)), `Spire mouth pinned from the Tundra walk landing (${pins.map((q) => q.label).join(", ")})`);
+    for (let i = 0; i < pins.length; i++)
+      for (let j = i + 1; j < pins.length; j++)
+        assert.ok(Math.abs(pins[i]!.sy - pins[j]!.sy) >= 37 || Math.abs(pins[i]!.sx - pins[j]!.sx) > 80, `${pins[i]!.label} and ${pins[j]!.label} do not overlap`);
+  });
+
   it("closing Lark mid-road does not push a second arrive log line", () => {
     // LogChip remount-after-talk is covered by playtest-loop L9c'. Here: store must not re-run arrive.
     useGame.setState((s) => ({

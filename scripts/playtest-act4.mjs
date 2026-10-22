@@ -827,7 +827,7 @@ async function useSpecial(re) {
   await b.first().click(); await page.waitForTimeout(300); await fileLevel(page);
   return true;
 }
-// DUMP=/tmp/x DUMP_AT=C7|V3 writes localStorage (slot 1 + auto) for scratch probes of side branches.
+// DUMP=/tmp/x DUMP_AT=C7|C10|V3 writes localStorage (slot 1 + auto) for scratch probes of side branches.
 async function dumpAt(label) {
   if (!process.env.DUMP || (process.env.DUMP_AT ?? "V3") !== label) return;
   if (label !== "V3") { await hud(page, "Menu"); await page.getByRole("button", { name: /slot ?1/i }).first().click(); await page.waitForTimeout(200); await key(page, "Escape"); }
@@ -1523,10 +1523,39 @@ step(/Brass Tundra/i.test(mapTxt) && /High Citadel/i.test(mapTxt) && /Void Spire
 await key(page, "Escape");
 await saveContinue("C10", ["citadelFate", "spireOpen", "bufferCharged", "seenCitadel", "citadelOpen", "tundraWalked"]);
 await shot(page, `${tag}-09-citadel-continued`);
+// C10 hand save: Citadel answered, saved and continued, standing before the walk down (no fight, no panel).
+await dumpAt("C10");
+
+await fileLevel(page);
+// C10p (H15) From the continued Citadel spot the Tundra stair is off the 440px frame. Its brass diamond + tag must
+// still be on the canvas (edge pin pointing the way), and a tap on that tag walks Silas down to the stair on foot.
+const pinProbe = () => page.evaluate(async () => {
+  const url = performance.getEntriesByType("resource").map((e) => e.name).find((n) => n.includes("/src/components/mend/stage.ts"));
+  const st = await import(url);
+  const d = window.__mend.getState().data;
+  const c = document.querySelector("canvas").getBoundingClientRect();
+  const p = st.projectTile(c.width, c.height, d.player.x, d.player.y, 33, 18, 1, 64, 32);
+  const seen = st.mouthPresence(p.sx, p.sy);
+  const pin = st.offFramePins(st.stageNow().feet, seen <= 0.04 ? [{ sx: p.sx, sy: p.sy, label: "Tundra stair", dist: Math.abs(33 - d.player.x) + Math.abs(18 - d.player.y) }] : [], c.width, c.height)[0];
+  return { l: c.left, t: c.top, w: c.width, h: c.height, seen, pin: pin && { sx: pin.sx, sy: pin.sy, label: pin.label }, at: `${d.player.x},${d.player.y}` };
+});
+{
+  const pp = await pinProbe();
+  const onCanvas = pp.pin ? pp.pin.sx > 0 && pp.pin.sx < pp.w && pp.pin.sy > 0 && pp.pin.sy + 19 < pp.h : pp.seen > 0.5;
+  step(onCanvas, `C10p Tundra stair marked from ${pp.at} (own diamond seen ${pp.seen.toFixed(2)}; edge pin ${pp.pin ? `${pp.pin.label} at ${Math.round(pp.pin.sx)},${Math.round(pp.pin.sy)}` : "none"} on ${Math.round(pp.w)}x${Math.round(pp.h)})`);
+  if (pp.pin) {
+    await page.mouse.click(pp.l + pp.pin.sx, pp.t + pp.pin.sy + 11);
+    for (let i = 0; i < 200; i++) { s = await S(page); if (s.map !== "citadel" || s.combat || s.dlg || (!s.path && i > 3)) break; await page.waitForTimeout(100); }
+    step(s.map === "tundra" && !s.combat, `C10q tap the pinned "Tundra stair" tag → walks down and takes the stair on foot (${s.map} ${s.x},${s.y}; combat ${s.combat}; dlg ${s.dlg})`);
+  }
+}
 
 // —— Back down: Tundra stair → tundra → Stack mouth → road → Spire mouth ——
-await walk(page, 32, 18);
-s = await mouthStep("citadel", "ArrowRight");
+s = await S(page);
+if (s.map === "citadel") {
+  await walk(page, 32, 18);
+  s = await mouthStep("citadel", "ArrowRight");
+}
 step(s.map === "tundra" && !s.combat && s.panel === "none", `C11 Tundra stair → Brass Tundra (${s.map} ${s.x},${s.y}; combat ${s.combat})`);
 await walk(page, 3, 5);
 s = await mouthStep("tundra", "ArrowLeft");
