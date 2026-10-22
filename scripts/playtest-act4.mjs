@@ -17,6 +17,12 @@
 //       Engineering talk-past; resolve it (cut rifles → Stand down) so Varr keeps the plate stair
 //       (checkpointLead=varr → plateStair). Then detour to the Quarry: Hask clears the riggers, Cut the brake
 //       (quarryStone clear) → stoneMoving → citadelSupplied, so Sarn has the "Stone reached the stores." beat.
+//   KAEL=0 (default) | duel | both   — requires NETWORK=varr (Quarry detour). After Hask clears the riggers,
+//     talk to Kael at (13,5) before Cut the brake.
+//     duel (or KAEL=1): "The riggers walk. You and I finish this." → private geometry (duel flag filters rel1)
+//       → Engage → peel armor → prybar → kael-down → spare ("Live. Take that sentence…").
+//     both: "Then show me the layers." → Kael + Striker Pye together → same down/spare. Tactic stands on Kael
+//       (Pye has no weapon seam; downConvo ends the fight, and Pye steps out once Kael is not holding).
 //   SPIRE=decline | impose | fight | fight-leave
 //     fight: Sovereign + Echo → sovereign-down → Write the shape (impose)
 //     fight-leave: same fight → Leave the holes (release)
@@ -122,8 +128,25 @@ const SARN = process.env.SARN ?? "skip";
 const SHAFT = process.env.SHAFT === "1" || process.env.SHAFT === "open";
 const VANE = process.env.VANE ?? "machine";
 const NETWORK = process.env.NETWORK ?? "talk";
+const _kaelRaw = (process.env.KAEL ?? "0").toLowerCase();
+const KAEL = _kaelRaw === "1" || _kaelRaw === "true" ? "duel" : (_kaelRaw === "duel" || _kaelRaw === "both" ? _kaelRaw : "0");
+if (KAEL !== "0" && NETWORK !== "varr") {
+  console.error("KAEL requires NETWORK=varr (Quarry detour after the checkpoint fight)");
+  process.exit(2);
+}
+// CINDER=1 (requires NETWORK=varr): Varr's "Strip the coupling" leaves plate scrap; feed the reed moth at the
+// Sinks bellows (30,3) and let her choose the shadow. Her mouth refusals (cinder-dark / cinder-spire) are answered
+// "Wait until she steps." wherever a mouth raises them.
+const CINDER = process.env.CINDER === "1";
+if (CINDER && NETWORK !== "varr") {
+  console.error("CINDER requires NETWORK=varr (plate scrap from the checkpoint)");
+  process.exit(2);
+}
+const cinderBeats = [];
 const tagBits = [];
 if (NETWORK !== "talk") tagBits.push(`net-${NETWORK}`);
+if (KAEL !== "0") tagBits.push(`kael-${KAEL}`);
+if (CINDER) tagBits.push("cinder");
 if (VANE !== "machine") tagBits.push(`vane-${VANE}`);
 if (CRUCIBLE !== "splice") tagBits.push(CRUCIBLE);
 if (SHAFT) tagBits.push("shaft");
@@ -132,7 +155,7 @@ if (LAMP !== "audit") tagBits.push(`lamp-${LAMP}`);
 if (SARN !== "skip") tagBits.push(`sarn-${SARN}`);
 if (SPIRE !== "decline") tagBits.push(SPIRE);
 const tag = process.env.TAG ?? (tagBits.length ? `act4-${tagBits.join("-")}` : "act4");
-console.log(`act4 env NETWORK=${NETWORK} VANE=${VANE} CRUCIBLE=${CRUCIBLE} SHAFT=${SHAFT} TUNDRA=${TUNDRA} LAMP=${LAMP} SARN=${SARN} SPIRE=${SPIRE} tag=${tag}`);
+console.log(`act4 env NETWORK=${NETWORK} KAEL=${KAEL} CINDER=${CINDER} VANE=${VANE} CRUCIBLE=${CRUCIBLE} SHAFT=${SHAFT} TUNDRA=${TUNDRA} LAMP=${LAMP} SARN=${SARN} SPIRE=${SPIRE} tag=${tag}`);
 const out = [];
 const step = (ok, msg) => { out.push(`${ok ? "PASS" : "FAIL"} ${msg}`); console.log(`${ok ? "PASS" : "FAIL"} ${msg}`); };
 const { browser, page, errors } = await open();
@@ -446,6 +469,93 @@ async function checkpointFight(reload, { maxDeaths = 40 } = {}) {
   const st = await S(page);
   return { won: !st.combat && st.phase === "play", how, deaths, loads, cuts, strikes, rounds, notes, yields };
 }
+async function kaelFight(reload, { maxDeaths = 40 } = {}) {
+  // Peel Kael's layered armor (ceramic / frame / mesh) then prybar him to kael-down.
+  // He reseats opened plates; keep cutting. Matrix (spell) is optional once matrixKnown / audit reveals it.
+  // KAEL=both: drop Striker Pye first (his kit has no weapon seam — bash through armor), then peel Kael alone.
+  // Pye leaves on his turn once Kael is not holding (downConvo / fate); do not wait on that while he is still hitting.
+  const notes = []; let deaths = 0, loads = 0, cuts = 0, strikes = 0, rounds = 0, how = "none";
+  let rosterAtStart = null;
+  for (let turn = 0; turn < 500; turn++) {
+    const st = await untilMyTurnOrDone();
+    if (st.phase === "dead") {
+      deaths++;
+      if (deaths > maxDeaths) { how = "too many deaths"; break; }
+      await deathReload("kael");
+      await reload(); loads++;
+      if (loads > 2) {
+        const strain = await strainStory();
+        notes.push(`death ${deaths} → slot1 (strain ${strain ?? "field"})`);
+      } else {
+        notes.push(`death ${deaths} → slot1`);
+      }
+      continue;
+    }
+    if (st.dlg === "kael-down/start") { how = "kael broken open"; break; }
+    if (!st.combat) { how = /broken open|rumor|step out/.test(st.log.join(" ")) ? "ended-soft" : "ended"; break; }
+    rounds = (await page.evaluate(() => window.__mend.getState().data.combat?.round)) ?? rounds;
+    if (rosterAtStart === null) {
+      rosterAtStart = (await foes()).map((f) => f.id).sort().join(",");
+      notes.push(`roster ${rosterAtStart || "(none yet)"}`);
+    }
+    if (process.env.FIGHT_TRACE) {
+      const t = await page.evaluate(() => {
+        const d = window.__mend.getState().data;
+        const k = d.actors.kael;
+        const armor = k.nodes.filter((n) => n.effect === "armor").map((n) => `${n.id}:${n.severed ? "sev" : n.integrity}${n.revealed ? "" : "?"}`).join(",");
+        return { r: d.combat?.round, hp: d.player.hp, ap: d.player.ap, focus: d.focus, khp: k.hp, armor, order: d.combat?.order?.join(","), log: d.log.slice(0, 5).reverse() };
+      });
+      console.log(`   [kael] r${t.r} hp ${t.hp} ap ${t.ap} focus ${t.focus} kael ${t.khp} armor[${t.armor}] order ${t.order}\n      ${t.log.join("\n      ")}`);
+    }
+    await bandageIfLow(KAEL === "both" ? 0.7 : 0.55);
+    const k = await actorAt("kael");
+    const pye = await actorAt("rel1");
+    let p = await S(page);
+    // Stand on Kael in both modes: Pye's kit has no weapon seam, and once Kael is down (downConvo) or not
+    // holding, Pye steps out on his own turn. KAEL_PYE=1 tries clearing Pye first (loses far more often).
+    const prioritizePye = process.env.KAEL_PYE === "1" && KAEL === "both" && pye?.hostile && pye?.alive;
+    const target = prioritizePye ? pye : ((k?.hostile && k?.alive) ? k : (await foes()).sort((a, b) => cheb(a, p) - cheb(b, p))[0]);
+    if (target && cheb(target, p) > 1) {
+      const spots = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]].map(([dx, dy]) => ({ x: target.x + dx, y: target.y + dy })).sort((a, b) => cheb(a, p) - cheb(b, p));
+      for (const q of spots) { await tapAt(q.x, q.y); if ((await S(page)).path) break; }
+      await settle(8000);
+    }
+    p = await S(page);
+    // Cut armor (and spell if revealed) while in reach of the priority target.
+    if ((await myTurn()) && p.ap >= 1) {
+      const wantId = prioritizePye ? "rel1" : (k?.hostile && k?.alive ? "kael" : null);
+      const foeNear = wantId
+        ? (await foes()).find((f) => f.id === wantId && cheb(f, p) <= 1)
+        : (await foes()).sort((a, b) => cheb(a, p) - cheb(b, p)).find((f) => cheb(f, p) <= 1);
+      if (foeNear) {
+        const c = await cutWeaponInReach(["armor", "spell", "weapon"]);
+        if (c.ok) { cuts++; notes.push(`cut ${c.why}`); }
+        else if (!c.read) notes.push(c.why);
+      }
+    }
+    if ((await S(page)).dlg) continue;
+    // Strike: Pye first when both; else Kael; else anyone in reach.
+    for (let hit = 0; hit < 3 && (await myTurn()) && (await S(page)).ap >= 3; hit++) {
+      p = await S(page);
+      const kk = await actorAt("kael");
+      const py = await actorAt("rel1");
+      let id = null;
+      if (process.env.KAEL_PYE === "1" && KAEL === "both" && py?.hostile && py?.alive && cheb(py, p) <= 1) id = "rel1";
+      else if (kk?.hostile && kk?.alive && cheb(kk, p) <= 1) id = "kael";
+      else {
+        const f = (await foes()).sort((a, b) => cheb(a, p) - cheb(b, p)).find((x) => cheb(x, p) <= 1);
+        if (f) id = f.id;
+      }
+      if (!id) break;
+      if (await tapFoe(id)) strikes++; else break;
+      if ((await S(page)).dlg) break;
+    }
+    if ((await S(page)).dlg) continue;
+    await endOrBrace();
+  }
+  const st = await S(page);
+  return { won: st.dlg === "kael-down/start" || (!st.combat && st.phase === "play" && (st.flags.kaelFate || how === "kael broken open")), how, deaths, loads, cuts, strikes, rounds, notes, rosterAtStart };
+}
 async function engageSovereign() {
   const sv = await actorAt("sovereign");
   await walk(page, sv.x + 1, sv.y + 1);
@@ -571,6 +681,19 @@ if (NETWORK === "varr") {
   // The fight leaves Silas thin, and Cut the brake drops the slab on whoever is beside the crane
   // (always Silas: the special needs him beside it). Sleep it off before leaving the Sinks.
   if (passed && process.env.NET_REST !== "0") { await rest("A0y"); await rest("A0y'"); }
+  if (passed && CINDER) {
+    const scrap = await page.evaluate(() => window.__mend.getState().data.inventory.find((r) => r.id === "scrap")?.qty ?? 0);
+    const tc = await talkTo("cinder");
+    s = await S(page);
+    const crs = await replies(page);
+    step(/^cinder\//.test(s.dlg || "") && scrap >= 1 && crs.some((x) => /plate scrap/.test(x)), `A0c Talk Cinder at the bellows with plate scrap (${tc.how}; ${s.dlg}; scrap ${scrap}; ${crs.join(" / ")})`);
+    await pick(page, /plate scrap/);
+    await pick(page, /Hold still/);
+    await closeTalk(page);
+    s = await S(page);
+    const moth = await page.evaluate(() => { const c = window.__mend.getState().data.actors.cinder; return c && { companion: c.companion, map: c.mapId }; });
+    step(s.flags.cinderFed === true && s.flags.cinderChose === true && moth?.companion === true && !s.combat, `A0c' Cinder fed and chose the shadow (cinderFed ${s.flags.cinderFed}; cinderChose ${s.flags.cinderChose}; companion ${moth?.companion}; log ${s.log[0]})`);
+  }
 }
 for (let attempt = 0; attempt < 12 && !passed; attempt++) {
   await fileLevel(page);
@@ -623,6 +746,15 @@ async function mouthStep(fromMap, arrow) {
   for (let attempt = 0; attempt < 3; attempt++) {
     await page.keyboard.press(arrow);
     for (let i = 0; i < 25; i++) { s = await S(page); if (s.map !== fromMap || s.dlg) break; await page.waitForTimeout(120); }
+    if (/^cinder-(dark|spire)\//.test(s.dlg || "")) {
+      const convo = s.dlg.split("/")[0];
+      await pick(page, /Wait until she steps/);
+      await closeTalk(page);
+      const f = (await S(page)).flags;
+      cinderBeats.push(`${convo}@${fromMap}→${convo === "cinder-dark" ? f.cinderDarkOk : f.cinderSpireOk}`);
+      await fileLevel(page);
+      continue;
+    }
     if (s.map !== fromMap || s.dlg) return s;
     await fileLevel(page);
   }
@@ -671,6 +803,124 @@ if (NETWORK === "varr") {
   await closeTalk(page);
   s = await S(page);
   step(Boolean(s.flags.workersClear) && !s.combat, `Q2v Hask clears the riggers (workersClear ${s.flags.workersClear}; ${th.how}; ${hr.join(" / ")})`);
+  await dumpAt("Q2v");
+  if (KAEL !== "0") {
+    // Rest + file so a death reloads a full ledger beside the pit, not the thin mid-fight auto.
+    if (process.env.NET_REST !== "0") {
+      // Tobin's bench is back in the Sinks; on the Quarry there is no rest machine. Bandages + focus from
+      // the post-checkpoint rests are what we have. File slot 1 here as the Kael save.
+    }
+    await hud(page, "Menu"); await page.getByRole("button", { name: /Save slot 1/ }).click(); await page.waitForTimeout(200); await key(page, "Escape");
+    const tk = await talkTo("kael");
+    s = await S(page);
+    step(/kael-pre/.test(s.dlg || ""), `Q2k Talk Kael (${tk.how}; ${s.dlg}; at ${s.x},${s.y})`);
+    if (KAEL === "duel") {
+      await pick(page, /riggers walk/);
+      {
+        const st = await S(page);
+        const waved = /private geometry|waves the striker/i.test(st.log.join(" "));
+        step(st.flags.duel === true, `Q2k' duel line (duel ${st.flags.duel}; waved ${waved}; log ${st.log[0]}; dlg ${st.dlg})`);
+      }
+    } else {
+      await pick(page, /show me the layers/);
+    }
+    // fight node → Engage
+    const beforeEngage = await S(page);
+    if (/kael-pre\/fight/.test(beforeEngage.dlg || "")) await pick(page, /Engage/);
+    else if ((await replies(page)).some((x) => /Engage/.test(x))) await pick(page, /Engage/);
+    s = await S(page);
+    const roster = (await foes()).map((f) => f.id).sort().join(",");
+    const duelOk = KAEL === "duel" ? (s.flags.duel === true && !/rel1/.test(roster)) : true;
+    const bothOk = KAEL === "both" ? /kael/.test(roster) && /rel1/.test(roster) : true;
+    step(s.combat && /kael/.test(roster) && duelOk && bothOk, `Q2k'' Engage Kael (combat ${s.combat}; roster ${roster}; duel ${s.flags.duel}; mode ${KAEL})`);
+    const reloadKael = async () => {
+      await hud(page, "Menu");
+      await page.getByRole("button", { name: /^slot1 ·/ }).first().click();
+      await page.waitForTimeout(400);
+      if ((await S(page)).panel !== "none") await key(page, "Escape");
+      const t2 = await talkTo("kael");
+      if (!/kael-pre/.test((await S(page)).dlg || "")) throw new Error(`reload Kael talk failed (${t2.how}; ${(await S(page)).dlg})`);
+      if (KAEL === "duel") await pick(page, /riggers walk/);
+      else await pick(page, /show me the layers/);
+      if ((await replies(page)).some((x) => /Engage/.test(x))) await pick(page, /Engage/);
+      else if (/kael-pre\/fight/.test((await S(page)).dlg || "")) await pick(page, /Engage/);
+    };
+    const g = await kaelFight(reloadKael, { maxDeaths: Number(process.env.KAEL_DEATHS ?? 40) });
+    console.log(`   [kael] ${g.how}; deaths ${g.deaths}; loads ${g.loads}; cuts ${g.cuts}; strikes ${g.strikes}; roster ${g.rosterAtStart}; notes ${g.notes.slice(-4).join(" / ")}`);
+    s = await S(page);
+    step(g.how === "kael broken open" || s.dlg === "kael-down/start", `Q2kd Kael broken open (${g.how}; dlg ${s.dlg}; deaths ${g.deaths}; cuts ${g.cuts}; strikes ${g.strikes})`);
+    if (s.dlg === "kael-down/start") {
+      await pick(page, /Live\. Take that sentence/);
+      await closeTalk(page);
+    }
+    s = await S(page);
+    const pye = await actorAt("rel1");
+    const siphon = (s.journal || []).some((j) => /^siphon:/.test(j));
+    step(s.flags.kaelFate === "spared" && s.flags.knowsSiphon === true && s.flags.citadelOpen === true && siphon && !s.combat,
+      `Q2ke spare Kael → siphon / citadelOpen (kaelFate ${s.flags.kaelFate}; knowsSiphon ${s.flags.knowsSiphon}; citadelOpen ${s.flags.citadelOpen}; siphonJ ${siphon}; duel ${s.flags.duel}; rel1 hostile ${pye?.hostile}; combat ${s.combat})`);
+    if (KAEL === "duel") {
+      step(s.flags.duel === true && g.rosterAtStart === "kael", `Q2kf RelSec waved off (duel ${s.flags.duel}; fight roster ${g.rosterAtStart}; rel1 alive ${pye?.alive})`);
+    }
+    if (KAEL === "both") {
+      step(/kael/.test(g.rosterAtStart || "") && /rel1/.test(g.rosterAtStart || ""), `Q2kf' both opened with RelSec (fight roster ${g.rosterAtStart})`);
+    }
+    if (!(g.how === "kael broken open" || s.flags.kaelFate)) {
+      // Failed fight: do not walk the brake/rest path on a dead or mid-combat ledger (stage null crash).
+      step(false, `Q2kg abort post-Kael path (${g.how}; phase ${s.phase}; hp ${s.hp}; combat ${s.combat})`);
+      await shot(page, `${tag}-00-kael-fail`);
+      await dumpAt("Q2ke-fail");
+      const fails = out.filter((l) => l.startsWith("FAIL")).length;
+      step(false, `Z0 Kael path aborted (${out.length} checks; ${fails} FAIL; ${g.how})`);
+      if (errors.length) console.log(errors.slice(0, 8).join("\n"));
+      writeFileSync(`${SHOTS}/${tag}.txt`, out.join("\n") + "\n");
+      await browser.close();
+      process.exit(1);
+    } else {
+    // Cut the brake drops the slab on Silas. Bandage what we have; if still thin, detour to
+    // Rust guild bench (legitimate rest), then return to the Quarry for the brake.
+    for (let i = 0; i < 6; i++) {
+      const st = await page.evaluate(() => { const d = window.__mend.getState().data; return { hp: d.player.hp, max: d.player.maxHp, n: d.inventory.find((r) => r.id === "bandage")?.qty ?? 0 }; });
+      if (st.hp >= st.max * 0.85 || st.n < 1) break;
+      await hud(page, "Pack");
+      const row = page.locator("li", { hasText: "Brass bandage" }).getByRole("button", { name: "Use" });
+      if (await row.count()) await row.first().click();
+      await page.waitForTimeout(150);
+      await key(page, "Escape");
+    }
+    let preBrake = await page.evaluate(() => { const d = window.__mend.getState().data; return { hp: d.player.hp, max: d.player.maxHp, n: d.inventory.find((r) => r.id === "bandage")?.qty ?? 0, focus: d.focus }; });
+    if (preBrake.hp <= 16 && process.env.NET_REST !== "0") {
+      await walk(page, 32, 8);
+      s = await mouthStep("quarry", "ArrowRight");
+      step(s.map === "road", `Q2kg' thin after Kael → Stack mouth to road (hp ${preBrake.hp}; ${s.map} ${s.x},${s.y})`);
+      const rustTapPre = await tapWalk(page, 33, 6, [34, 6]);
+      s = await mouthStep("road", "ArrowRight");
+      step(s.map === "rust", `Q2kg'' Rust cut for guild rest (${rustTapPre.taps} taps; ${s.map})`);
+      const rb = await auditAt("guildbench");
+      const rested = rb.ok && (await useSpecial(/Rest and sort the ledger/));
+      if ((await S(page)).panel !== "none") await key(page, "Escape");
+      preBrake = await page.evaluate(() => { const d = window.__mend.getState().data; return { hp: d.player.hp, max: d.player.maxHp, n: d.inventory.find((r) => r.id === "bandage")?.qty ?? 0, focus: d.focus }; });
+      step(rested && preBrake.hp > 16, `Q2kg3 Guild bench rest before brake (hp ${preBrake.hp}/${preBrake.max}; focus ${preBrake.focus})`);
+      await walk(page, 33, 8);
+      s = await mouthStep("rust", "ArrowRight");
+      await walk(page, 33, 4);
+      s = await mouthStep("road", "ArrowRight");
+      step(s.map === "quarry", `Q2kg4 back to Quarry for the brake (${s.map} ${s.x},${s.y})`);
+    } else {
+      step(true, `Q2kg HP before Cut the brake (hp ${preBrake.hp}/${preBrake.max}; bandages ${preBrake.n}; focus ${preBrake.focus})`);
+    }
+    await hud(page, "Menu"); await page.getByRole("button", { name: /Save slot 1/ }).click(); await page.waitForTimeout(200); await key(page, "Escape");
+    await shot(page, `${tag}-00-kael-down`);
+    await dumpAt("Q2ke");
+    if (process.env.STOP_AFTER === "kael" || process.env.STOP_AFTER === "Q2ke") {
+      const fails = out.filter((l) => l.startsWith("FAIL")).length;
+      step(errors.length === 0 && fails === 0, `Z0 STOP_AFTER=kael (${out.length} checks; ${fails} FAIL; page/console errors ${errors.length})`);
+      if (errors.length) console.log(errors.slice(0, 8).join("\n"));
+      writeFileSync(`${SHOTS}/${tag}.txt`, out.join("\n") + "\n");
+      await browser.close();
+      process.exit(fails || errors.length ? 1 : 0);
+    }
+    } // end else: Kael broken open
+  }
   await walk(page, 11, 4);
   const rc = await auditAt("crane");
   const cut = await useSpecial(/Cut the brake/i);
@@ -678,6 +928,30 @@ if (NETWORK === "varr") {
   s = await S(page);
   step(rc.ok && cut && s.flags.quarryStone === "clear" && s.flags.stoneMoving === true && !s.combat, `Q3v Cut the brake → stone moves on the Varr-held stair (quarryStone ${s.flags.quarryStone}; stoneMoving ${s.flags.stoneMoving}; citadelSupplied ${s.flags.citadelSupplied}; log ${s.log[0]})`);
   await dumpAt("Q3v");
+  // Slab crush can floor Silas if the Kael duel left him thin. Reload the post-Kael slot and re-cut.
+  if ((await S(page)).phase === "dead") {
+    console.log("   [brake] slab floored Silas → slot1 → re-cut");
+    await hud(page, "Menu");
+    await page.getByRole("button", { name: /^slot1 ·/ }).first().click();
+    await page.waitForTimeout(400);
+    if ((await S(page)).panel !== "none") await key(page, "Escape");
+    for (let i = 0; i < 6; i++) {
+      const st = await page.evaluate(() => { const d = window.__mend.getState().data; return { hp: d.player.hp, max: d.player.maxHp, n: d.inventory.find((r) => r.id === "bandage")?.qty ?? 0 }; });
+      if (st.hp >= st.max * 0.85 || st.n < 1) break;
+      await hud(page, "Pack");
+      const row = page.locator("li", { hasText: "Brass bandage" }).getByRole("button", { name: "Use" });
+      if (await row.count()) await row.first().click();
+      await page.waitForTimeout(150);
+      await key(page, "Escape");
+    }
+    await walk(page, 11, 4);
+    const rc2 = await auditAt("crane");
+    const cut2 = await useSpecial(/Cut the brake/i);
+    if ((await S(page)).panel === "audit") await key(page, "Escape");
+    s = await S(page);
+    step(rc2.ok && cut2 && s.flags.quarryStone === "clear" && s.phase === "play", `Q3v' re-cut after slab death (phase ${s.phase}; hp ${s.hp}; stoneMoving ${s.flags.stoneMoving})`);
+  }
+  await fileLevel(page);
   await walk(page, 32, 8);
   s = await mouthStep("quarry", "ArrowRight");
   const q4 = await page.evaluate(() => { const d = window.__mend.getState().data; return { combat: d.combat?.order?.join(","), dlg: d.dialogue && `${d.dialogue.convo}/${d.dialogue.node}`, log: d.log.slice(0, 3).join(" / ") }; });
@@ -700,6 +974,14 @@ await closeTalk(page);
 s = await S(page);
 step(s.flags.citadelOpen === true && s.flags.guildBriefed === true && !s.dlg, `B3b Ives welcome → citadelOpen (${s.flags.citadelOpen}; guildBriefed ${s.flags.guildBriefed}; journal ${s.journal?.filter((j) => /guild/.test(j)).join(",")})`);
 await shot(page, `${tag}-01-ives-citadel-open`);
+// Kael duel spends Focus on Unmend. The guild bench is the natural rest before the Citadel cell.
+if (KAEL !== "0" && process.env.NET_REST !== "0") {
+  const r = await auditAt("guildbench");
+  const ok = r.ok && (await useSpecial(/Rest and sort the ledger/));
+  if ((await S(page)).panel !== "none") await key(page, "Escape");
+  const st = await page.evaluate(() => { const d = window.__mend.getState().data; return { hp: d.player.hp, max: d.player.maxHp, focus: d.focus }; });
+  step(ok && st.focus >= 4, `B3c rest at the Guild bench after Kael (hp ${st.hp}/${st.max}; focus ${st.focus})`);
+}
 
 // B4 Back to the road via the Rust Stack mouth (34,8)
 await walk(page, 33, 8);
@@ -1166,6 +1448,10 @@ step(s.x === 28 && s.y === 14 && !s.combat, `V0 walk the road to beside Spire mo
 s = await mouthStep("road", "ArrowDown");
 const vArrive = /You arrive at The Void Spire/.test(s.log.join(" | "));
 step(s.map === "spire" && vArrive && s.panel === "none", `V1 Spire mouth → The Void Spire (${s.map} ${s.x},${s.y}; arrive ${vArrive}; panel ${s.panel}; log ${s.log.slice(0, 3).join(" / ")})`);
+if (CINDER) {
+  const moth = await page.evaluate(() => { const c = window.__mend.getState().data.actors.cinder; return c && { companion: c.companion, map: c.mapId, alive: c.alive }; });
+  step(s.flags.cinderSpireOk === true && moth?.companion === true && moth?.map === "spire" && cinderBeats.some((b) => /^cinder-spire@road→true/.test(b)), `V1c Cinder waited at the Spire mouth and came in (cinderSpireOk ${s.flags.cinderSpireOk}; companion ${moth?.companion}; map ${moth?.map}; beats ${cinderBeats.join(",") || "none"})`);
+}
 await shot(page, `${tag}-10-spire-arrive`);
 await noCombat("V1b");
 
