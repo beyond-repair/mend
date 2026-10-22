@@ -804,3 +804,24 @@ New notes (not fixed, LOW):
 - Sovereign damage is still heavy (24 HP opening exchange); left as an open design call, not changed.
 
 **Status: IN PROGRESS** for Acts IV–VI. H7, H8, H9 hand-verified. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, H10 wording, and the open design calls (including Sovereign damage).
+
+### H10 — FIXED in code (556f03b), pending hand check (2026-10-22 ~6:05 AM ET)
+
+**Wording.** A foe's cut only ever targets Silas's own parts (`planFits` reads `d.player.nodes`), so `openingLine` in `src/game/logic.ts` now reads **"Cut → your Tool haft"**. `planMiss` matches: **"— your Tool haft is gone"**. The other H9 reasons are unchanged: "— out of reach", "— the target is down", "· needs Power coupling" (the foe's own support part), and "— no longer that shape" as the fallback. Strikes and closes still read "→ you" or the other body's name. A foe's own repair still reads "Repair → <its part>".
+
+**The 3 HP at Focus 0 was not the over-read burn.** That burn ("You cut past your depth.") costs (density − comprehension) × 4 and stuns. The 3 HP is an existing mechanic in `publish`: when a cut kills a foe's **weapon mount** and the cut is not clean (clean needs 4+ practised cuts), "Steam kicks out of the dead mount." Every body beside the mount takes the steam: other actors take 4, and Silas takes 3 (armour-reduced). In the hand pass, Silas was standing beside the Echo when he cut its Power coupling (which feeds the Arm mount), so the steam hit him. Focus reaching 0 on the same action was just the cut's normal cost (6 + density). This is intended, so nothing about the rule changed. The log now adds one line after the steam line: **"The steam scalds you too. (-3)"** (the number is the real HP lost after armour or brace).
+
+Test: `playtest.test.ts` "a foe's cut names Silas's part as yours, and the coupling steam names its scald (H10)". The H9 test was updated to the new wording.
+
+| Run (dev server :8090, headless Chrome, `SEED=4`) | Result |
+| --- | --- |
+| `npm test` | 196 + 55 + 85 PASS (game suite 84 → 85) |
+| `npm run typecheck` | clean |
+| act4 default | **59/59 PASS** |
+| act4 `SPIRE=fight-leave` | **61/61 PASS** (sovereign-down in 6 rounds, 0 deaths) |
+| Act III | **47/47 PASS** |
+| Act I loop | **23/23 PASS** |
+
+**Hand check needed (H10):** start at `http://localhost:8080/__hand-load-v3.html`. It lands on the title, so click Continue, then Talk → "Then I'll read you while you move." At round 1 the Sovereign line reads "Cut → your Tool haft". Touch the Echo's face, then Audit: the Sovereign line reads "Cut → your Tool haft — out of reach". Unmend Power coupling (retry while AP ≥ 4). When it severs, the log shows "Steam kicks out of the dead mount." and then "The steam scalds you too. (-3)", and Silas's HP drops by exactly that amount. The Echo line re-reads "Cut → your Tool haft". If the Echo cuts the haft in round 2, any leftover Sovereign cut line reads "— your Tool haft is gone".
+
+**Status: IN PROGRESS** for Acts IV–VI. H10 is fixed in code and needs a hand check. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage).
