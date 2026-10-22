@@ -170,14 +170,21 @@ export function mouthPresence(sx: number, sy: number) {
 export const PIN = { left: 0.1, right: 0.9, top: 0.1, bottom: 0.86 };
 
 /**
+ * Below this own-frame presence a usable mouth is held as an edge pin instead of a fading tag. A tag
+ * in the edge fade used to sit dimmed under the pins on the same edge (Stack Road, Yard stair vs the
+ * Tundra walk / Spire mouth pins, hand walk 2026-10-22, H15c).
+ */
+export const PIN_BELOW = 0.5;
+
+/**
  * A usable mouth that is off the frame on a plate used to have no hint at all: the High Citadel
  * tundra stair (33,18) sits ~240px below a 510px stage from Vane's floor, so a hand walk could not
  * tell which way the exit lay (H15). Return where the same brass diamond + tag should sit instead:
  * on the line from Silas's feet toward the mouth, pulled in to the PIN box. Null when the mouth
- * itself is already on the frame (its own diamond shows).
+ * itself is clearly on the frame (its own diamond shows).
  */
 export function edgePin(feet: Point, sx: number, sy: number, w: number, h: number): Point | null {
-  if (mouthPresence(sx, sy) > 0.04) return null;
+  if (mouthPresence(sx, sy) >= PIN_BELOW) return null;
   const left = w * PIN.left;
   const right = w * PIN.right;
   const top = h * PIN.top;
@@ -194,30 +201,40 @@ export function edgePin(feet: Point, sx: number, sy: number, w: number, h: numbe
   return { sx: fx + dx * t, sy: fy + dy * t };
 }
 
+/** Screen box of a mouth's brass diamond + tag (diamond at sy-8, tag at sy+16), shared by pins and on-frame tags. */
+export function tagBox(sx: number, sy: number, text: string) {
+  const half = Math.max(22, text.length * 3.2);
+  return { left: sx - half, right: sx + half, top: sy - 18, bottom: sy + 19 };
+}
+
+type Box = { left: number; right: number; top: number; bottom: number };
+const overlaps = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
 /**
  * Several off-frame mouths can pin to the same stretch of edge (the Stack Road has six exits east of the
- * Tundra walk). Nudge later pins along the edge so each diamond + tag stays readable. Pins are placed in
- * the order given (nearest mouth first); a pin with no free slot keeps its spot.
+ * Tundra walk). Nudge later pins along the edge so each diamond + tag stays readable, clear of the pins
+ * already placed and of the on-frame tags in `taken`. Pins are placed in the order given (nearest mouth
+ * first). When a whole edge column is full the pin steps one tag-width in toward the centre.
  */
-export function spreadPins<T extends Point & { label: string }>(pins: T[], h: number): T[] {
-  const placed: { left: number; right: number; top: number; bottom: number }[] = [];
-  const boxOf = (sx: number, sy: number, text: string) => {
-    const half = Math.max(22, text.length * 3.2);
-    return { left: sx - half, right: sx + half, top: sy - 18, bottom: sy + 19 };
-  };
-  const hits = (b: { left: number; right: number; top: number; bottom: number }) =>
-    placed.some((o) => b.left < o.right && b.right > o.left && b.top < o.bottom && b.bottom > o.top);
+export function spreadPins<T extends Point & { label: string }>(pins: T[], w: number, h: number, taken: (Point & { label: string })[] = []): T[] {
+  const placed: Box[] = taken.map((t) => tagBox(t.sx, t.sy, t.label));
+  const step = 38;
+  const ks = [0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6, -7, 7, -8, 8];
   return pins.map((pin) => {
-    const step = 38;
-    for (const k of [0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6]) {
-      const sy = pin.sy + k * step;
-      if (sy < h * PIN.top || sy > h * PIN.bottom) continue;
-      const box = boxOf(pin.sx, sy, pin.label);
-      if (hits(box)) continue;
-      placed.push(box);
-      return { ...pin, sy };
+    const inward = pin.sx > w / 2 ? -1 : 1;
+    const wide = tagBox(0, 0, pin.label).right * 2 + 6;
+    for (let col = 0; col < 4; col++) {
+      const sx = pin.sx + inward * col * wide;
+      for (const k of ks) {
+        const sy = pin.sy + k * step;
+        if (sy < h * PIN.top || sy > h * PIN.bottom) continue;
+        const box = tagBox(sx, sy, pin.label);
+        if (placed.some((o) => overlaps(box, o))) continue;
+        placed.push(box);
+        return { ...pin, sx, sy };
+      }
     }
-    placed.push(boxOf(pin.sx, pin.sy, pin.label));
+    placed.push(tagBox(pin.sx, pin.sy, pin.label));
     return pin;
   });
 }
@@ -226,8 +243,15 @@ export function spreadPins<T extends Point & { label: string }>(pins: T[], h: nu
  * Edge pins for every usable, off-frame mouth: edgePin each, nearest first, then spreadPins. Shared by
  * the draw and the tap so a tap on a pinned tag takes the mouth it names. `mouths` are projected
  * (sx, sy) with their Manhattan distance from Silas; nearOnly side stairs should be left out by the caller.
+ * `taken` are the on-frame tags the pins must stay clear of.
  */
-export function offFramePins<T extends { sx: number; sy: number; label: string; dist: number }>(feet: Point, mouths: T[], w: number, h: number) {
+export function offFramePins<T extends { sx: number; sy: number; label: string; dist: number }>(
+  feet: Point,
+  mouths: T[],
+  w: number,
+  h: number,
+  taken: (Point & { label: string })[] = [],
+) {
   const pins: (T & { at: Point })[] = [];
   for (const m of [...mouths].sort((a, b) => a.dist - b.dist)) {
     const at = edgePin(feet, m.sx, m.sy, w, h);
@@ -240,7 +264,39 @@ export function offFramePins<T extends { sx: number; sy: number; label: string; 
     if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? `${m.label} →` : `← ${m.label}`;
     return dy > 0 ? `${m.label} ↓` : `${m.label} ↑`;
   };
-  return spreadPins(pins.map((m) => ({ ...m, sx: m.at.sx, sy: m.at.sy, label: way(m) })), h);
+  return spreadPins(pins.map((m) => ({ ...m, sx: m.at.sx, sy: m.at.sy, label: way(m) })), w, h, taken);
+}
+
+export type MouthTag<M> = { m: M; sx: number; sy: number; label: string; alpha: number; pinned: boolean };
+
+/**
+ * Every brass mouth tag the frame shows, for the draw and the tap alike: on-frame mouths at their own
+ * tile (fading in the edge band), and mouths under PIN_BELOW as full-strength edge pins spread clear of
+ * each other and of the on-frame tags. nearOnly side stairs show only within 2 tiles and are never pinned.
+ */
+export function mouthTags<M extends { x: number; y: number; label: string; nearOnly?: boolean }>(
+  mouths: M[],
+  px: number,
+  py: number,
+  project: (x: number, y: number) => Point,
+): MouthTag<M>[] {
+  const on: MouthTag<M>[] = [];
+  const off: (Point & { m: M; label: string; dist: number })[] = [];
+  for (const m of mouths) {
+    const dist = Math.abs(m.x - px) + Math.abs(m.y - py);
+    if (m.nearOnly && dist > 2) continue;
+    const p = project(m.x, m.y);
+    if (!current.plate) {
+      on.push({ m, sx: p.sx, sy: p.sy, label: m.label, alpha: 1, pinned: false });
+      continue;
+    }
+    const seen = mouthPresence(p.sx, p.sy);
+    if (m.nearOnly ? seen > 0.04 : seen >= PIN_BELOW) on.push({ m, sx: p.sx, sy: p.sy, label: m.label, alpha: seen, pinned: false });
+    else if (!m.nearOnly) off.push({ m, sx: p.sx, sy: p.sy, label: m.label, dist });
+  }
+  if (!current.plate) return on;
+  const pins = offFramePins(current.feet, off, current.w, current.h, on);
+  return [...on, ...pins.map((p) => ({ m: p.m, sx: p.sx, sy: p.sy, label: p.label, alpha: 1, pinned: true }))];
 }
 
 export function onDeck(sx: number, sy: number) {

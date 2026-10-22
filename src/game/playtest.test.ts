@@ -357,6 +357,46 @@ describe("playtest 2026-10-15", () => {
         assert.ok(Math.abs(pins[i]!.sy - pins[j]!.sy) >= 37 || Math.abs(pins[i]!.sx - pins[j]!.sx) > 80, `${pins[i]!.label} and ${pins[j]!.label} do not overlap`);
   });
 
+  it("mouth tags on the Stack Road walk never overlap and pins are never dimmed (H15c, hand walk 2026-10-22)", () => {
+    // Hand walk Tundra walk (8,14) → Spire mouth (28,14) on 0097bb9: "Tundra walk" and "Yard stair" sat on top of each
+    // other at the left edge, and the fading Yard stair tag sat dim under the Spire mouth pin. Every tag the frame
+    // shows (on-frame and pinned, the same mouthTags list the draw and the tap use) must stay clear of the others.
+    const ctx = { drawImage() {} } as unknown as CanvasRenderingContext2D;
+    const walks: { map: string; route: [number, number][] }[] = [
+      { map: "road", route: Array.from({ length: 21 }, (_, i) => [8 + i, 14] as [number, number]) },
+      { map: "road", route: [[5, 5], [8, 6], [12, 8], [16, 10], [20, 12], [27, 2], [33, 5]] },
+      { map: "tundra", route: Array.from({ length: 22 }, (_, i) => [24 - i, 5] as [number, number]) },
+      { map: "citadel", route: [[13, 5], [13, 8], [24, 8], [24, 16], [30, 16], [32, 18]] },
+    ];
+    for (const [w, h] of [[440, 410], [440, 510]] as const) {
+      for (const { map, route } of walks) {
+        for (const [x, y] of route) {
+          stage.layoutStage(ctx, w, h, x, y, map);
+          if (!stage.stageNow().plate) continue;
+          const tags = stage.mouthTags(usableMouths(map, () => true), x, y, (tx, ty) => stage.projectTile(w, h, x, y, tx, ty, 1, 64, 32));
+          for (const t of tags) {
+            if (t.pinned) assert.equal(t.alpha, 1, `${map} ${x},${y}: pin ${t.label} at full strength`);
+            else if (!t.m.nearOnly) assert.ok(t.alpha >= stage.PIN_BELOW, `${map} ${x},${y}: ${t.label} is not left fading (${t.alpha.toFixed(2)})`);
+          }
+          for (let i = 0; i < tags.length; i++)
+            for (let j = i + 1; j < tags.length; j++) {
+              const a = stage.tagBox(tags[i]!.sx, tags[i]!.sy, tags[i]!.label);
+              const b = stage.tagBox(tags[j]!.sx, tags[j]!.sy, tags[j]!.label);
+              if (!tags[i]!.pinned && !tags[j]!.pinned) continue; // two painted mouths are where the plate put them
+              const hit = a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+              assert.ok(!hit, `${map} ${x},${y} @${w}x${h}: ${tags[i]!.label} and ${tags[j]!.label} do not overlap`);
+            }
+          // Every pin stays on the canvas.
+          for (const t of tags.filter((q) => q.pinned)) assert.ok(t.sx > 0 && t.sx < w && t.sy - 18 > 0 && t.sy + 19 < h, `${map} ${x},${y}: ${t.label} on the frame`);
+        }
+      }
+    }
+    // The exact hand-walk moment: Tundra arrival (24,5) pins the Stack mouth on the left edge, pointing west.
+    stage.layoutStage(ctx, 440, 410, 24, 5, "tundra");
+    const stack = stage.mouthTags(usableMouths("tundra", () => true), 24, 5, (tx, ty) => stage.projectTile(440, 410, 24, 5, tx, ty, 1, 64, 32)).find((t) => t.m.label === "Stack mouth");
+    assert.ok(stack?.pinned && stack.label === "← Stack mouth" && stack.sx < 60, `Tundra 24,5: ${stack?.label} pinned left (${Math.round(stack?.sx ?? -1)})`);
+  });
+
   it("closing Lark mid-road does not push a second arrive log line", () => {
     // LogChip remount-after-talk is covered by playtest-loop L9c'. Here: store must not re-run arrive.
     useGame.setState((s) => ({

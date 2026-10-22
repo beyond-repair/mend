@@ -935,3 +935,46 @@ On this save, nothing along the route is hostile within its vision (Lamp shade n
 | Act I loop | **23/23 PASS** |
 
 **Hand check needed (H15/H16 + walk):** go to `http://localhost:8080/__hand-load-c10.html` and click Continue. Check that "Tundra stair ↓" shows at the bottom of the stage. Walk the route above with arrows only, and check that the backdrop moves as you walk. On the Tundra, "← Stack mouth" should show at the left edge. On the Stack Road, "Spire mouth →" should show among the right-edge pins. Arrive in the Void Spire without using the Map.
+
+### Citadel → Spire hand walk PASS; H15 edge pins made legible and kept apart; turn-order names wrap (2026-10-22 ~8:22–9:00 AM ET)
+
+**Hand walk on 0097bb9 (`:8080`, C10 save, arrow keys only, no Map), ~8:22 AM ET:** High Citadel 13,5 → "You arrive at The Brass Tundra." → "You arrive at The Stack Road." → **THE VOID SPIRE** (level-up modal "Comprehension deepens. You are level 3.", HP 52/54). No fights, no soft-lock, no collision trouble, and the Road lamp glass was never stepped on.
+
+- **Walk Citadel → Tundra → Stack Road → Spire without Map travel: HAND-VERIFIED PASS.**
+- **H16: HAND-VERIFIED PASS.** The Citadel backdrop visibly shifts on every leg.
+- **H17: NOT A BUG** (unchanged; the Plate warden fight is a deliberate optional fight, see above).
+- **H15: mixed by hand → triaged in the harness at 1280×800 (`:8090`, same C10 save, same moments), fixed below, pending one hand look.**
+
+`:8080` and `:8090` are both `vite dev` from `/workspace/mend-rc`, and both served 0097bb9's `stage.ts` (the pin code) at the time of the walk, so the hand walk saw the real pins.
+
+- **(a) Citadel 13,5 after Continue.** The Tundra stair (33,18) is off the frame (own presence 0.00; it projects at about 381,691 on the 440×410 stage). A pin *was* drawn: diamond + "Tundra stair ↓" at 250,352, near the bottom of the view. That is the "small in-world label near the bottom" the tester saw. It read as an ordinary in-world tag because the arrow glyph is not in Source Sans: the ↓ fell back to a hairline about 4px tall (seen zoomed in the screenshot), and the whole pin was drawn at 80% alpha. **Real, LOW: the pin was there but did not read as a pin.**
+- **(b) Tundra 24,5 on arrival.** The Ranking stair (26,5) is on the frame two tiles away, so its tag is not pinned (that is the label near Silas; the tester's "Hunting stair"). The Stack mouth (2,5) is off the left edge, and a pin *was* drawn: "← Stack mouth" at 44,142 on the left edge. Same cause as (a): a hairline arrow and an 80% tag over the bright ice, easy to miss. **Same LOW issue; no missing pin.**
+- **(c) Stack Road left-edge pile-up. Real.** Probed every tile of the 8,14 → 28,14 walk. At 13–14,14 the fading on-frame "Yard stair" tag (alpha 0.37–0.62) sat under the "Spire mouth →" pin. At 26–27,14 the on-frame "Yard stair" (alpha 0.92–1) sat on the "← Tundra walk" pin (before shot: "Tundra walk" / "Yard stair" printed into each other at the left edge). Cause: `spreadPins` only kept pins apart from *other pins*. On-frame tags in the edge-fade band were neither pinned nor avoided, and they drew dimmed right where the pins sit.
+- **(d) Tap a pinned label.** Covered and PASS. Act4 C10q clicks the pinned "Tundra stair ↓" tag at 13,5 with a real mouse click, and Silas walks down and takes the stair (tundra 24,5, no fight). Also checked at 1280×800 with real mouse clicks on the new pins: "Tundra stair ↓" → tundra 24,5, then "← Stack mouth" → road 8,14.
+
+**Fixes (`stage.ts`, `WorldCanvas.tsx`):**
+- **One tag list for draw and tap.** `mouthTags()` returns every mouth tag the frame shows. Draw and tap both use it, so a tap always lands on what is drawn.
+- **Pins for edge-band mouths too.** A usable mouth whose own presence is under `PIN_BELOW` (0.5) is now held as an edge pin, not left as a fading tag at the edge. Its faint tile diamond is skipped, so there is no second diamond.
+- **Pins avoid on-frame tags.** `spreadPins` now also avoids the on-frame tags (`taken`). When a whole edge column is full, it steps one tag-width in toward the centre instead of overlapping.
+- **Full-strength pins with a drawn arrowhead.** Pins draw at full strength. The arrow is a small brass arrowhead drawn on the canvas beside the name, with the same dark outline as the label (`pinLabel`), so it no longer depends on a font glyph.
+- **Taps on pins.** A tap on a pin's words takes the pinned mouth even when a standable tile lies under the pin. The pin is not at its mouth's tile, so the "prefer the walkable neighbour" rule no longer applies to it.
+
+**Turn-order chips ("PLATE WAR…", "EVALUATOR…", "THE EPISTE…"): fixed, cosmetic.** The name span was `max-w-16 truncate`. It is now `.face-name` (`styles.css`): it wraps on word breaks at up to 4.75rem beside the portrait, keeping the same 9px uppercase tracking. Measured at 440px: "PLATE WARDEN" fits on one line, "EVALUATOR / VANE" and "THE EPISTEMIC / SOVEREIGN" take two lines (21px, inside the 36px portrait). In the harness Sovereign fight, "ECHO CONSTRUCT" also reads whole (V5d). A 4-face row (You, Evaluator Vane, Guard Senn, Guard Oll) and You + Sovereign + Echo + Plate warden both fit 357px without scrolling. A crowded row breaks a word rather than spilling into the next face.
+
+**Regression:**
+- `playtest.test.ts`: "mouth tags on the Stack Road walk never overlap and pins are never dimmed (H15c)". It covers every tile of Road 8→28 on row 14, a Road north loop, Tundra 24→3 on row 5, and the Citadel route, at both 440×410 and 440×510. It checks that pins never overlap any tag, that pins draw at full strength, that no non-nearOnly tag is left fading under 0.5, that every pin is on the canvas, and that "← Stack mouth" is pinned left at Tundra 24,5.
+- act4: C10p now reads the same `mouthTags` list the draw uses.
+- act4: new **V5d** (Sovereign fight) checks that every turn-order name reads whole, with no ellipsis, no nowrap, and no overflow. V5d fails on the old `truncate`.
+
+| Check | Result |
+| --- | --- |
+| `npm test` | 196 + 55 + 91 PASS |
+| `tsc --noEmit` | clean |
+| act4 default (`SEED=4`, `:8090`) | **61/61 PASS** |
+| act4 `SPIRE=fight-leave` (`:8090`) | **65/65 PASS** (adds V5d) |
+| Act III (`:8090`) | **47/47 PASS** |
+| Act I loop (`:8090`) | **23/23 PASS** |
+
+**Hand check still wanted (short):** load `http://localhost:8080/__hand-load-c10.html` and Continue (reload the tab first so the new code is loaded). Check three things. (1) "Tundra stair ▼" shows at the bottom with a solid arrowhead. (2) On the Tundra, "◀ Stack mouth" shows on the left edge. (3) Walking the Stack Road, no two tags print into each other and none is dimmed. Also tap one pinned tag. In any fight, check that the turn-order names read whole.
+
+**Status: IN PROGRESS** for Acts IV–VI. H1–H14, H16 and the Citadel → Tundra → Stack Road → Spire walk without Map travel are hand-verified. H17 is not a bug. Remaining: the H15 follow-up hand look above (pins now full-strength with drawn arrowheads, and kept clear of the on-frame tags), the turn-order name wrap hand look, and the open design calls (Sovereign damage, KAEL=both, checkpoint variance, mid-fight auto-ledger HP, Seize from the Recommended file).

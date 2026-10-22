@@ -589,7 +589,14 @@ async function faultLineSample() {
     return { text: el.textContent, clipped: el.scrollWidth > el.clientWidth + 1 || cs.textOverflow === "ellipsis" || cs.whiteSpace === "nowrap" };
   }));
   for (const r of rows) { faultSeen.rows++; faultSeen.texts.add(r.text); if (r.clipped) faultSeen.clipped.push(r.text); }
+  // Turn-order chips: a name wraps beside its portrait; it is never cut to "THE EPISTE…" and never spills.
+  const chips = await page.evaluate(() => [...document.querySelectorAll(".face-row .face-name")].map((el) => {
+    const cs = getComputedStyle(el);
+    return { text: el.textContent, clipped: el.scrollWidth > el.clientWidth + 1 || cs.textOverflow === "ellipsis" || cs.whiteSpace === "nowrap" };
+  }));
+  for (const c of chips) { chipSeen.names.add(c.text); if (c.clipped) chipSeen.clipped.add(c.text); }
 }
+const chipSeen = { names: new Set(), clipped: new Set() };
 async function sovereignFight() {
   const notes = []; let deaths = 0, loads = 0, strikes = 0, rounds = 0, sinceLoad = 0, auditId = null, pinBtn = false;
   const e = await engageSovereign();
@@ -1536,7 +1543,9 @@ const pinProbe = () => page.evaluate(async () => {
   const c = document.querySelector("canvas").getBoundingClientRect();
   const p = st.projectTile(c.width, c.height, d.player.x, d.player.y, 33, 18, 1, 64, 32);
   const seen = st.mouthPresence(p.sx, p.sy);
-  const pin = st.offFramePins(st.stageNow().feet, seen <= 0.04 ? [{ sx: p.sx, sy: p.sy, label: "Tundra stair", dist: Math.abs(33 - d.player.x) + Math.abs(18 - d.player.y) }] : [], c.width, c.height)[0];
+  // The same tag list the draw and the tap use (mouthTags), not a re-derivation.
+  const stair = { x: 33, y: 18, label: "Tundra stair" };
+  const pin = st.mouthTags([stair], d.player.x, d.player.y, (x, y) => st.projectTile(c.width, c.height, d.player.x, d.player.y, x, y, 1, 64, 32)).find((t) => t.pinned);
   return { l: c.left, t: c.top, w: c.width, h: c.height, seen, pin: pin && { sx: pin.sx, sy: pin.sy, label: pin.label }, at: `${d.player.x},${d.player.y}` };
 });
 {
@@ -1609,6 +1618,7 @@ if (SPIRE === "fight" || SPIRE === "fight-leave") {
   step(sovFight.down && s.dlg === "sovereign-down/start", `V5 Sovereign + Echo fight → sovereign-down (rounds ${sovFight.rounds}; deaths ${sovFight.deaths}; slot loads ${sovFight.loads}; strikes ${sovFight.strikes}; strain ${s.flags.strain ?? "field"}; dlg ${s.dlg}; ${sovFight.notes.slice(-2).join(" / ")})`);
   step(sovFight.continuity && sovFight.pinBtn, `V5b Continuity opened by the fight; Audit on the Sovereign offers Pin seam (continuity ${sovFight.continuity}; audit ${sovFight.auditId}; pin ${sovFight.pinBtn})`);
   step(faultSeen.clipped.length === 0, `V5c H14 fault and intent lines under HP wrap, none cut off (rows sampled ${faultSeen.rows}; clipped ${faultSeen.clipped.length}; ${[...faultSeen.texts].slice(-3).join(" | ") || "none shown"})`);
+  step(chipSeen.names.size > 1 && chipSeen.clipped.size === 0, `V5d turn-order names read whole, none truncated (${[...chipSeen.names].join(", ")}; clipped ${[...chipSeen.clipped].join(", ") || "none"})`);
   await shot(page, `${tag}-11f-sovereign-down`);
   const downRs = await replies(page);
   step(downRs.some((x) => /Write the shape/.test(x)) && downRs.some((x) => /Leave the holes/.test(x)), `V6 sovereign-down offers Write the shape / Leave the holes (${downRs.join(" / ")})`);

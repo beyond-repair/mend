@@ -500,7 +500,7 @@ function PlayScreen() {
                 const inner = (
                   <>
                     {face.portrait ? <img src={face.portrait} alt="" /> : <span className="bezel inline-block h-9 w-7 bg-soot" />}
-                    <span className="max-w-16 truncate">{face.name}</span>
+                    <span className="face-name">{face.name}</span>
                   </>
                 );
                 // In a fight a hostile's face is where you aim Audit; a tap on the body itself strikes (H7).

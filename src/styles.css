@@ -213,6 +213,16 @@
   min-width: 0;
 }
 
+/* Turn-order names wrap onto up to three short lines beside the portrait instead of one truncated line:
+   "PLATE WAR…", "EVALUATOR…", "THE EPISTE…" at 440px. Three 9px lines fit the 36px portrait. */
+.face-name {
+  max-width: 4.75rem;
+  line-height: 1.15;
+  white-space: normal;
+  /* Only a crowded row (5+ faces) squeezes a word; it breaks rather than spilling into the next face. */
+  overflow-wrap: anywhere;
+}
+
 .face-tab.on {
   color: #f3ead7;
   text-shadow: 0 0 8px rgba(212, 180, 131, 0.45);
