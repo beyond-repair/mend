@@ -213,6 +213,7 @@ interface Store {
   strikeNearest: () => void;
   talkNearest: () => void;
   auditNearest: () => void;
+  aimAudit: (id: string) => void;
   selectNode: (id: string) => void;
   mend: () => void;
   unmend: () => void;
@@ -334,6 +335,13 @@ function engagedFoes(d: Data): Actor[] {
   if (!d.combat) return onMap;
   const roster = onMap.filter((a) => d.combat!.order.includes(a.id));
   return roster.length ? roster : onMap;
+}
+
+/** The engaged hostile you aimed Audit at from the turn order, if it is still standing (H7). */
+function aimedFoe(d: Data): Actor | null {
+  const id = d.combat?.aim;
+  if (!id) return null;
+  return engagedFoes(d).find((a) => a.id === id && a.hostile) ?? null;
 }
 
 function openTalk(d: Data, a: Actor, opts?: { force?: boolean }) {
@@ -846,12 +854,26 @@ export const useGame = create<Store>((set, get) => ({
         remoteBroken.length ? remoteBroken :
         pool;
       const machine = ranked.sort((a, b) => steps(a) - steps(b))[0];
-      const person = (d.combat ? engagedFoes(d) : Object.values(d.actors).filter((a) => a.alive && a.mapId === d.mapId))
-        .sort((a, b) => dist(d.player, a) - dist(d.player, b))[0];
+      const foes = (d.combat ? engagedFoes(d) : Object.values(d.actors).filter((a) => a.alive && a.mapId === d.mapId))
+        .sort((a, b) => dist(d.player, a) - dist(d.player, b));
+      // A face touched in the turn order wins over the nearest foe (H7): a tap on a hostile on the map
+      // strikes, so the initiative strip is where you say who Audit should read.
+      const aimed = d.combat ? aimedFoe(d) : null;
+      const person = aimed ?? foes[0];
+      if (d.combat && !aimed && foes.filter((a) => a.hostile).length > 1 && !d.flags.aimHint) {
+        d.flags.aimHint = true;
+        addLog(d, "Touch a face in the turn order to choose who Audit reads.");
+      }
+      if (aimed && dist(d.player, aimed) <= 1) openAudit(d, { kind: "actor", id: aimed.id });
+      else if (aimed) {
+        d.path = pathNear(d, aimed.x, aimed.y) ?? [];
+        d.intent = { type: "audit", id: aimed.id, kind: "actor" };
+        if (!d.path.length) addLog(d, `No clear path to ${aimed.name}.`);
+      }
       // In a fight, Audit is the only way to read a foe (a tap on a hostile strikes). A foe in reach
       // beats the machine Silas is standing beside — Citadel Sever starts the guard fight at the
       // crucible, and Audit used to reopen the crucible every turn (bug 28).
-      if (d.combat && person && dist(d.player, person) <= 1) openAudit(d, { kind: "actor", id: person.id });
+      else if (d.combat && person && dist(d.player, person) <= 1) openAudit(d, { kind: "actor", id: person.id });
       else if (machine && dist(d.player, machine) <= 1) openAudit(d, { kind: "machine", id: machine.id });
       else if (person && person.hostile && dist(d.player, person) <= 1) openAudit(d, { kind: "actor", id: person.id });
       else if (d.combat && person) {
@@ -867,6 +889,19 @@ export const useGame = create<Store>((set, get) => ({
         d.intent = { type: "audit", id: person.id, kind: "actor" };
       } else openAudit(d, { kind: "actor", id: "player" });
     }),
+  aimAudit: (id) =>
+    commit(set, (d) => {
+      if (!d.combat || d.dialogue) return;
+      const foe = engagedFoes(d).find((a) => a.id === id && a.hostile);
+      if (!foe) return;
+      if (d.combat.aim === id) {
+        d.combat.aim = undefined;
+        addLog(d, "Audit reads whoever is nearest again.");
+        return;
+      }
+      d.combat.aim = id;
+      addLog(d, `Audit will read ${foe.name}.`);
+    }, "none"),
   selectNode: (id) => set((s) => ({ data: { ...s.data, uiNode: id } })),
   mend: () =>
     commit(set, (d) => {

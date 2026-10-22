@@ -718,3 +718,26 @@ New friction found (not yet fixed):
 - H6 (Sovereign fight difficulty at level 3) observed again; still a design call.
 
 **Status: IN PROGRESS** for Acts IV–VI. Bug 38 is now hand-verified. Remaining: H7 Audit target choice, H8 stale intent line, a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls.
+
+
+### Fixes — H7 Audit target choice, H8 stale intent line (pending hand verification)
+
+| ID | Fix | Regression |
+| --- | --- | --- |
+| **H7 (MED)** — **FIXED, pending hand verification** | In a fight, each hostile's face in the turn-order strip is now a button. Touch it to aim Audit at that foe: log "Audit will read Echo construct.", and the portrait gets a bright brass ring (`aria-pressed`, label "Echo construct, Audit reads this one"). The next Audit opens on the aimed foe; if it is not in reach, Silas walks to it first (same walk as before) and the panel opens on arrival. Touch the same face again to clear the aim ("Audit reads whoever is nearest again."). If the aimed foe falls, Audit goes back to the nearest. The first unaimed Audit in a fight with more than one hostile logs once: "Touch a face in the turn order to choose who Audit reads." Aiming costs no AP. A tap on a body on the map still strikes, as before. Stored as `combat.aim`; it ends with the fight. | `playtest.test.ts`: "a face in the turn order aims Audit at that hostile (H7)", "an aimed foe that falls lets Audit fall back to the nearest (H7)". Browser check on :8090 from the V3 Spire save: two face buttons (Sovereign, Echo); Echo face → aim set → HUD Audit → walk → "Audit · Echo construct", 0 console errors. |
+| **H8 (LOW)** — **FIXED, pending hand verification** | A cut now re-reads the owner's frozen opening at once (`replanOwner` in `sever`). After the Power coupling is cut, the Echo's line reads "Bare hands → you" in the same turn instead of "Piston arm → you · needs Power coupling — no longer that shape". Only the cut body's opening is re-read. The others stay frozen, and "no longer that shape" still shows when the board changes another way (e.g. you step out of reach). | `playtest.test.ts`: "cutting the Echo's Power coupling re-reads its intent at once (H8)". `pass3.test.ts` rifle test updated: after the chamber cut Varr's line is "Repair → Pressure chamber" (live) instead of the stale rifle line. |
+
+Regression on this change (dev server :8090, headless Chromium, `SEED=4`):
+
+| Run | Result |
+| --- | --- |
+| `npm test` | 196 + 55 + 83 PASS (game suite 80 → 83) |
+| `npm run typecheck` | clean |
+| `npm run lint` | 24 errors / 13 warnings, same as before the change (old, none in the new code) |
+| act4 `SEED=4` default | **59/59 PASS** |
+| act4 `SEED=4 SPIRE=fight-leave` | **61/61 PASS** (V5 fight → sovereign-down in 5 rounds, 0 deaths. Was 7 rounds: a foe whose seam is cut now follows its re-read opening instead of losing the committed action) |
+| Act III `SEED=4` | **47/47 PASS** |
+| Act I loop `SEED=4` | **23/23 PASS** |
+
+**Status: IN PROGRESS** for Acts IV–VI. Remaining: hand check of H7 (aim the Echo from its face, then Audit) and H8 (intent line right after the coupling cut) in the Sovereign fight, a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls.
+

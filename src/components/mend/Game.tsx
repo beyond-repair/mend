@@ -245,6 +245,7 @@ function PlayScreen() {
   const click = useGame((s) => s.clickTile);
   const talk = useGame((s) => s.talkNearest);
   const audit = useGame((s) => s.auditNearest);
+  const aimAudit = useGame((s) => s.aimAudit);
   const strike = useGame((s) => s.strikeNearest);
   const endTurn = useGame((s) => s.endTurn);
   const stand = useGame((s) => s.standDown);
@@ -394,13 +395,16 @@ function PlayScreen() {
   const turnFaces = fighting && d.combat
     ? d.combat.order.map((id, i) => ({
         id: `${id}-${i}`,
+        actorId: id,
         name: id === "player" ? "You" : (d.actors[id]?.name ?? id),
         portrait: id === "player" ? d.player.portrait : d.actors[id]?.portrait,
         on: i === d.combat!.index,
+        foe: Boolean(d.actors[id]?.alive && d.actors[id]?.hostile),
+        aim: d.combat!.aim === id,
       }))
     : [
-        { id: "you", name: "You", portrait: d.player.portrait, on: true },
-        ...nearFaces.map((a) => ({ id: a.id, name: a.name, portrait: a.portrait, on: false })),
+        { id: "you", actorId: "player", name: "You", portrait: d.player.portrait, on: true, foe: false, aim: false },
+        ...nearFaces.map((a) => ({ id: a.id, actorId: a.id, name: a.name, portrait: a.portrait, on: false, foe: false, aim: false })),
       ];
 
   return (
@@ -463,12 +467,33 @@ function PlayScreen() {
               {d.player.stunned ? " · overloaded" : ""}
             </div>
             <div className="face-row mt-1">
-              {turnFaces.map((face) => (
-                <span key={face.id} className={face.on ? "face-tab on" : "face-tab"}>
-                  {face.portrait ? <img src={face.portrait} alt="" /> : <span className="bezel inline-block h-9 w-7 bg-soot" />}
-                  <span className="max-w-16 truncate">{face.name}</span>
-                </span>
-              ))}
+              {turnFaces.map((face) => {
+                const cls = `face-tab${face.on ? " on" : ""}${face.aim ? " aim" : ""}`;
+                const inner = (
+                  <>
+                    {face.portrait ? <img src={face.portrait} alt="" /> : <span className="bezel inline-block h-9 w-7 bg-soot" />}
+                    <span className="max-w-16 truncate">{face.name}</span>
+                  </>
+                );
+                // In a fight a hostile's face is where you aim Audit; a tap on the body itself strikes (H7).
+                return fighting && face.foe ? (
+                  <button
+                    key={face.id}
+                    type="button"
+                    className={`${cls} face-pick`}
+                    aria-pressed={face.aim}
+                    aria-label={face.aim ? `${face.name}, Audit reads this one` : `Aim Audit at ${face.name}`}
+                    title={face.aim ? "Audit reads this one" : "Audit this one"}
+                    onClick={() => aimAudit(face.actorId)}
+                  >
+                    {inner}
+                  </button>
+                ) : (
+                  <span key={face.id} className={cls}>
+                    {inner}
+                  </span>
+                );
+              })}
             </div>
             <div className="hp-track mt-1">
               <div className="hp-fill" style={{ width: `${Math.max(0, (d.player.hp / d.player.maxHp) * 100)}%` }} />

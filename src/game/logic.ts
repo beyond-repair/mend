@@ -366,6 +366,7 @@ function sever(d, nodes, n, by) {
   const clean = !by && (d.verbs?.cut ?? 0) >= 4;
   publish(d, nodes, before, void 0, clean);
   noteGraphChange(d, nodes, n, "cut", by);
+  replanOwner(d, nodes);
   play("unmend");
   flash(d, nodes, "snap");
   bump(7);
@@ -3000,6 +3001,15 @@ function decideOpening(d, a) {
     nodeName: "",
     thenStrike: step,
   };
+}
+// A cut changes what a body can do now, not next round. Re-read the owner's opening so the
+// intent line says what they will actually swing (Echo: Piston arm -> Bare hands, H8).
+function replanOwner(d, nodes) {
+  const plans = d.combat?.plans;
+  if (!plans) return;
+  const a = Object.values(d.actors).find((x) => x.nodes === nodes);
+  if (!a || !plans[a.id] || !a.alive || !a.hostile) return;
+  plans[a.id] = decideOpening(d, a);
 }
 function freezeIntents(d) {
   if (!d.combat) return;

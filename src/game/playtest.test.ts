@@ -15,7 +15,7 @@ const mem = new Map<string, string>();
 
 const { useGame, visibleReplies, crossesCheckpoint, leaveIndex, hasStoredLedger } = await import("./store.ts");
 const { MAPS, MOUTHS, mouthAt, usableMouths, REGIONS, LOCKED_DOORS, tileAt, WALKABLE } = await import("./maps.ts");
-const { regionOpen, openAudit, reconcileWorld, depart, pathTo, checkVision, dist, startCombat, weaponsDark } = await import("./logic.ts");
+const { regionOpen, openAudit, reconcileWorld, depart, pathTo, checkVision, dist, startCombat, weaponsDark, freezeIntents, boardIntents, unmendNode } = await import("./logic.ts");
 // The plate camera loads a painted backdrop; a stub image with the real plate's size is enough to lay it out.
 const PLATE_SIZE: Record<string, [number, number]> = { sinks: [1792, 1008], road: [1408, 1408] };
 (globalThis as unknown as { Image: unknown }).Image = class {
@@ -1275,4 +1275,108 @@ describe("playtest 2026-10-15", () => {
     assert.equal(weaponsDark(d), true, "the Echo's arm mount is dark once its coupling is cut");
   });
 
+  function spireFight() {
+    const d = D();
+    d.phase = "play";
+    d.dialogue = null;
+    d.panel = "none";
+    d.audit = null;
+    d.path = [];
+    d.intent = null;
+    d.mapId = "spire";
+    d.player.mapId = "spire";
+    d.player.x = 8;
+    d.player.y = 7;
+    const sov = d.actors.sovereign;
+    const echo = d.actors.echo;
+    sov.hostile = true;
+    sov.aggro = true;
+    echo.hostile = true;
+    echo.aggro = true;
+    sov.x = 8; sov.y = 6;
+    echo.x = 11; echo.y = 8;
+    startCombat(d, ["sovereign", "echo"]);
+    assert.ok(d.combat, "Spire fight started");
+    d.combat.index = d.combat.order.indexOf("player");
+    d.player.ap = 9;
+    d.player.hp = d.player.maxHp;
+    return d;
+  }
+
+  it("a face in the turn order aims Audit at that hostile (H7)", () => {
+    // Hand pass: in the Sovereign + Echo fight, Audit always opened the adjacent Sovereign. A tap on the Echo
+    // struck it for 3 AP and the initiative portraits did nothing, so the Echo could only be read from beside it.
+    const d = spireFight();
+    assert.ok(dist(d.player, d.actors.sovereign) <= 1 && dist(d.player, d.actors.echo) > 1, "fixture: Sovereign beside, Echo across");
+    G().auditNearest();
+    assert.deepEqual(D().audit, { kind: "actor", id: "sovereign" }, "unaimed, Audit still reads the foe in reach");
+    assert.ok(D().log.includes("Touch a face in the turn order to choose who Audit reads."), "the hint names the turn order");
+    G().closePanel();
+    const ap = D().player.ap;
+    G().aimAudit("echo");
+    assert.equal(D().combat?.aim, "echo");
+    assert.equal(D().log[0], "Audit will read Echo construct.");
+    assert.equal(D().player.ap, ap, "aiming is free");
+    G().auditNearest();
+    assert.notEqual(D().panel, "audit", "the Echo is not in reach yet: Silas walks first");
+    assert.deepEqual(D().intent, { type: "audit", id: "echo", kind: "actor" });
+    assert.ok(D().path.length > 0, "a walk toward the Echo");
+    walkOut();
+    assert.equal(D().panel, "audit");
+    assert.deepEqual(D().audit, { kind: "actor", id: "echo" }, "Audit opened on the aimed Echo, not the Sovereign");
+    G().closePanel();
+    // Beside both, the aim still wins over whoever is nearest.
+    D().actors.sovereign.x = D().player.x;
+    D().actors.sovereign.y = D().player.y - 1;
+    D().player.ap = 9;
+    G().auditNearest();
+    assert.deepEqual(D().audit, { kind: "actor", id: "echo" });
+    G().closePanel();
+    // Touching the same face again clears the aim; non-hostiles and strangers cannot be aimed.
+    G().aimAudit("echo");
+    assert.equal(D().combat?.aim, undefined);
+    G().aimAudit("tobin");
+    assert.equal(D().combat?.aim, undefined);
+    G().aimAudit("player");
+    assert.equal(D().combat?.aim, undefined);
+  });
+
+  it("an aimed foe that falls lets Audit fall back to the nearest (H7)", () => {
+    spireFight();
+    G().aimAudit("echo");
+    D().actors.echo.alive = false;
+    G().auditNearest();
+    assert.deepEqual(D().audit, { kind: "actor", id: "sovereign" });
+  });
+
+  it("cutting the Echo's Power coupling re-reads its intent at once (H8)", () => {
+    // Hand pass: after the cut the line kept "Piston arm → you · needs Power coupling — no longer that shape"
+    // for a full round before it said "Bare hands → you".
+    const d = spireFight();
+    const echo = d.actors.echo;
+    echo.x = d.player.x + 1;
+    echo.y = d.player.y;
+    // Round 3 of the hand pass: the Tool haft was already gone, so the Echo swings instead of cutting.
+    for (const n of d.player.nodes) if (n.effect === "weapon") n.severed = true;
+    for (const n of echo.nodes) { n.revealed = true; n.confidence = "confident"; }
+    freezeIntents(d);
+    const before = boardIntents(d).find((r) => r.id === "echo");
+    assert.match(before?.line ?? "", /^Piston arm → you/);
+    assert.match(before?.line ?? "", /needs Power coupling/);
+    assert.equal(before?.live, true);
+    for (let i = 0; i < 15 && !echo.nodes.find((n) => n.id === "coupling")!.severed; i++) {
+      d.player.ap = 20;
+      d.focus = 40;
+      d.player.stunned = false;
+      d.phase = "play";
+      unmendNode(d, { kind: "actor", id: "echo" }, "coupling");
+    }
+    assert.ok(echo.nodes.find((n) => n.id === "coupling")!.severed, "coupling cut");
+    const after = boardIntents(d).find((r) => r.id === "echo");
+    assert.equal(after?.line, "Bare hands → you", "same turn, the line names what the Echo will actually swing");
+    assert.equal(after?.live, true);
+    // The Sovereign's opening is untouched by a cut on someone else.
+    const sov = boardIntents(d).find((r) => r.id === "sovereign");
+    assert.ok(sov && !/Bare hands/.test(sov.line));
+  });
 });
