@@ -863,4 +863,13 @@ Tests (`playtest.test.ts`): "a fight step's whole log batch reaches the HUD, old
 - Close the dock. The same lines are in the top-left box. After ~10–15 s it folds to the last two.
 - End turn. If the Echo cuts the haft, the top-left box shows "Echo construct cuts your Tool haft." / "Tool haft severed." before the Sovereign's lines. The red line under HP reads "You: Tool haft severed by Echo construct". Focus reads 2 in round 2.
 
-**Status: IN PROGRESS** for Acts IV–VI. H11–H13 are fixed in code and need a hand check. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage: 37 → 13 HP over rounds 1–2 in the headless repro).
+### H11, H12, H13 — HAND CHECK PASS on 0672e01 (2026-10-22 ~6:48 AM ET)
+
+Played on :8080 via `__hand-load-v3.html`, round 1 to round 2, no death.
+- PASS (H11): at fight start the top-left box listed 7 lines, starting "Structural engagement." After the Unmend, it showed the six cut lines in order ("The cut spends 8 Focus, all you had. It wanted 11." → "Power coupling severed." → "Arm mount unavailable." → "Steam kicks out of the dead mount." → "The steam scalds you too. (-3)" → "The cut did not stop at the seam. A child lost function without being cut."). After about 16 s it folded to the last two lines. The Audit panel log kept all six.
+- PASS (H12): the Power coupling read ended "Unmend spends 4 action and 11 Focus. Mend spends 3 action and 9 Focus. You have 8: a cut takes all of it." The header showed Focus 0 after the cut and Focus 2 at round 2. HP went 42 → 39 from the scald.
+- PASS (H13): at end of turn the box showed "Echo construct cuts your Tool haft." and "Tool haft severed." before the Sovereign's lines. The red line under HP read "You: Tool haft severed by Echo construct · Echo construct: Power coupling severed, Arm mount unavailable".
+- NEW (H14, LOW): the red fault line under HP is cut off with "…" on screen, so the foe's part status after the "·" can't be read at 440px.
+- NOTE: after its coupling was cut, the Echo still made its committed haft cut. That matches the replan logic (only the arm mount is lost, not the construct). Balance note again: the Sovereign hit for 10 each round (52 → 42 → 29 HP by round 2, counting the scald).
+
+**Status: IN PROGRESS** for Acts IV–VI. H11–H13 are hand-verified. Remaining: H14 (truncated fault line), a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage).
