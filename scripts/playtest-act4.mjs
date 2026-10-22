@@ -580,6 +580,16 @@ async function engageSovereign() {
   await page.waitForTimeout(200);
   return { ok: (await S(page)).combat, rs };
 }
+// H14: the red fault line under HP was one truncated line, so the foe's part status was cut off with "…" at 440px.
+// Each fault row must show all of its text: no ellipsis, no nowrap, nothing wider than its box.
+const faultSeen = { rows: 0, clipped: [], texts: new Set() };
+async function faultLineSample() {
+  const rows = await page.evaluate(() => [...document.querySelectorAll(".fault-line, .intent-line")].map((el) => {
+    const cs = getComputedStyle(el);
+    return { text: el.textContent, clipped: el.scrollWidth > el.clientWidth + 1 || cs.textOverflow === "ellipsis" || cs.whiteSpace === "nowrap" };
+  }));
+  for (const r of rows) { faultSeen.rows++; faultSeen.texts.add(r.text); if (r.clipped) faultSeen.clipped.push(r.text); }
+}
 async function sovereignFight() {
   const notes = []; let deaths = 0, loads = 0, strikes = 0, rounds = 0, sinceLoad = 0, auditId = null, pinBtn = false;
   const e = await engageSovereign();
@@ -607,6 +617,7 @@ async function sovereignFight() {
     }
     if (!st.combat) { notes.push(`combat ended without down (${st.log[0]})`); break; }
     rounds++;
+    await faultLineSample();
     await bandageIfLow();
     const p = await S(page);
     const sv = await actorAt("sovereign");
@@ -1568,6 +1579,7 @@ if (SPIRE === "fight" || SPIRE === "fight-leave") {
   s = await S(page);
   step(sovFight.down && s.dlg === "sovereign-down/start", `V5 Sovereign + Echo fight → sovereign-down (rounds ${sovFight.rounds}; deaths ${sovFight.deaths}; slot loads ${sovFight.loads}; strikes ${sovFight.strikes}; strain ${s.flags.strain ?? "field"}; dlg ${s.dlg}; ${sovFight.notes.slice(-2).join(" / ")})`);
   step(sovFight.continuity && sovFight.pinBtn, `V5b Continuity opened by the fight; Audit on the Sovereign offers Pin seam (continuity ${sovFight.continuity}; audit ${sovFight.auditId}; pin ${sovFight.pinBtn})`);
+  step(faultSeen.clipped.length === 0, `V5c H14 fault and intent lines under HP wrap, none cut off (rows sampled ${faultSeen.rows}; clipped ${faultSeen.clipped.length}; ${[...faultSeen.texts].slice(-3).join(" | ") || "none shown"})`);
   await shot(page, `${tag}-11f-sovereign-down`);
   const downRs = await replies(page);
   step(downRs.some((x) => /Write the shape/.test(x)) && downRs.some((x) => /Leave the holes/.test(x)), `V6 sovereign-down offers Write the shape / Leave the holes (${downRs.join(" / ")})`);

@@ -414,7 +414,7 @@ function PlayScreen() {
   const map = MAPS[d.mapId];
   const noStrike = fighting && (!myTurn || d.player.ap < 3);
   const noBrace = fighting && (!myTurn || d.player.ap < 1);
-  const faultLine = fighting ? knownFaults(d) : "";
+  const faultLines = fighting ? knownFaults(d) : [];
   const intents = fighting && myTurn ? boardIntents(d) : [];
   const canYield = fighting && myTurn && weaponsDark(d);
   const nearFaces = Object.values(d.actors)
@@ -531,9 +531,15 @@ function PlayScreen() {
               {fighting ? (myTurn ? ` · your action · AP ${d.player.ap}${d.player.ap < 1 ? " · end the turn" : ""}` : " · their action") : ""}
               {fighting ? ` · ${weaponOf(d.player).name}` : ""}
             </div>
-            {fighting && faultLine && <div className="truncate text-xs text-rust">{faultLine}</div>}
+            {/* One wrapped line per side: a single truncated line hid the foe's part status at 440px (H14). Intent rows wrap too. */}
+            {fighting &&
+              faultLines.map((line) => (
+                <div key={line} className="fault-line break-words text-xs text-rust">
+                  {line}
+                </div>
+              ))}
             {intents.map((row) => (
-              <div key={row.id} className={`truncate text-xs ${row.live ? "text-brass" : "text-mist"}`}>
+              <div key={row.id} className={`intent-line break-words text-xs ${row.live ? "text-brass" : "text-mist"}`}>
                 {row.name}: {row.line}
                 {row.live ? "" : ` — ${row.why}`}
               </div>
@@ -590,8 +596,8 @@ function seamWord(n: { effect: string }) {
   return "disabled";
 }
 
-function knownFaults(d: Data) {
-  if (!d.combat) return "";
+function knownFaults(d: Data): string[] {
+  if (!d.combat) return [];
   const bits: string[] = [];
   // Who cut it, when a foe did: a severed part with no source read as if a miss had cut it (H13).
   const cutBy = (ownerId: string, nodeId: string) => {
@@ -610,7 +616,7 @@ function knownFaults(d: Data) {
     const a = d.actors[id];
     if (a?.alive) note(a, a.name, a.id);
   }
-  return bits.join(" · ");
+  return bits;
 }
 
 const HUD_ART: Record<string, string> = {
