@@ -741,3 +741,21 @@ Regression on this change (dev server :8090, headless Chromium, `SEED=4`):
 
 **Status: IN PROGRESS** for Acts IV–VI. Remaining: hand check of H7 (aim the Echo from its face, then Audit) and H8 (intent line right after the coupling cut) in the Sovereign fight, a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls.
 
+
+### Hand check — H7, H8 on 2d6f2b5 (:8080, V3 Spire save, 2026-10-22 ~4:29 AM ET)
+
+The V3 loader lands in explore mode after the Sovereign's offer ("The Sovereign lets you go…"). The tester opened the fight with Talk → "Then I'll read you while you move." (Round 1, 8 AP).
+
+| Check | Result |
+| --- | --- |
+| **H7** Echo face → aim | **PASS.** Log "Audit will read Echo construct.", face highlighted. |
+| **H7** HUD Audit opens on aimed foe | **PASS.** Panel "Audit · Echo construct" (Power coupling → Arm mount). Echo was already in reach, so the walk-to was not seen by hand (covered by the :8090 browser check). |
+| **H7** same face again clears | **PASS.** Log "Audit reads whoever is nearest again.", highlight dims. |
+| **H7** map tap still strikes | **PASS.** "Silas Vance hits The Epistemic Sovereign with bare hands", AP 8 → 5. |
+| **H8** no stale line after cut | **PASS.** Before the cut the Echo's line read "Movement → you" (this save's opening, not Piston arm). After Unmend Power coupling, in the same turn, the Echo line read "Cut → Tool haft" with no "no longer that shape". Round 2 read "Bare hands → you". |
+
+New notes from this pass:
+- **H9 (LOW, to triage):** right after the Echo's coupling cut, the Sovereign's line read "Cut → Tool haft — no longer that shape", though none of its parts were cut. Possibly correct (both foes had committed the same cut on Silas's Tool haft, and the board changed), but the wording reads oddly. Needs a look at whether a sibling re-plan should mark the other foe stale.
+- **Balance note:** Silas went 40 → 11 HP in one enemy round in Round 3 after losing the Tool haft, then died after Set Brace + End ("Baseline lost", "Open the last ledger" / "Title" shown, no freeze). Feeds the open design call on Sovereign difficulty; not changed here.
+
+**Status: IN PROGRESS** for Acts IV–VI. H7 and H8 are hand-verified. Remaining: triage H9, a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage).
