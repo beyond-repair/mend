@@ -834,3 +834,33 @@ Test: `playtest.test.ts` "a foe's cut names Silas's part as yours, and the coupl
 - OPEN (H12, LOW): Focus went 8 → 0 right after the sever with no on-screen reason, then recovered to 2 in round 2.
 - OPEN (H13, LOW): the Tool haft was severed between round 1 and round 2, but the log/UI did not make clear who cut it. The Sovereign's attack logged as a miss ("70 vs 67").
 - NOT TESTED: "— your Tool haft is gone". By round 2 both foes had replanned to "Officer's baton → you" and "Bare hands → you".
+
+### H11, H12, H13 — FIXED in code (8c1ec27), pending hand check (2026-10-22 ~6:50 AM ET)
+
+**H11 (log lines never on screen): real bug, UI only.** The fight HUD never showed the combat log. The only log surface was `LogChip` in `Game.tsx`, which drew `log[0]` (the newest line) for 3.8 s. One cut writes 5–6 lines ("Power coupling severed." → "Arm mount unavailable." → "Steam kicks out of the dead mount." → "The steam scalds you too. (-3)" → "The cut did not stop at the seam…"), so only the last one could ever show. The cut is also made from the Audit dock (72dvh), which covers most of the world frame where the chip sits. **Fix:** `freshLines` (`hud.ts`) finds the lines that one step added. In a fight the chip shows that whole batch, oldest first, up to 8 lines, with the newest in full white. It stays up until the next step writes something. After a read (4 s + 1.2 s per line) it folds to the last 2 lines. The Audit dock (`Panels.tsx`, fight only) shows the same batch under Mend/Unmend for the cut made from it. Outside a fight the chip works as before (Act I L9c checks still pass).
+**Narrow column: not a bug.** The play shell is `max-w-[440px]` by design (portrait plate layout, same on every screen). Measured in headless Chrome at 1024×768, DPR 1: window 1024 px, shell 440 px, centred. The "~235 px" in the report is the hand tester's screenshot scaling (desktop 1920×1200, screenshots scaled down), not a CSS fault. Left unchanged.
+
+**H12 (Focus 8 → 0): intended, now explained.** `unmendNode` costs `6 + density` Focus (`cutFocusCost`). The Echo's Power coupling is density 5, so the cut costs 11. At 4 Focus or more, a cut still goes ahead when Focus is short and takes what is left. Focus then gets +2 at the start of Silas's turn (`refreshTurn`), which is the 0 → 2 seen. Balance is unchanged. **Fix:** in a fight, the log says what the cut spent: "The cut spends 8 Focus, all you had. It wanted 11." (or "The cut spends 11 Focus."). The seam read in Audit now says "Unmend spends 4 action and 11 Focus. Mend spends 3 action and 9 Focus." When Focus is short it adds "You have N: a cut takes all of it." The old line was "Unmend spends 4 action. Mend spends 3."
+
+**H13 (who cut the haft): legit, now named.** The miss path in `strike` only logs and returns, and it never touches a graph. The haft was cut by the **Echo construct**. Once its coupling was cut, the Echo replanned to "Cut → your Tool haft" (tier 2, adjacent) and ran that committed cut on its turn (`followPlan` → `sever(…, "Echo construct")`). Turn order was Sovereign, Silas, Echo, so the Echo's cut landed at the end of round 1. In round 2 the Sovereign's committed haft cut no longer fit ("loses the action they had committed to"), and it swung the baton and missed. The log already said "Echo construct cuts Tool haft." but that line never reached the screen (H11). Reproduced in a headless run of this exact flow. **Fix:** a foe's cut on Silas's part now reads "**Echo construct cuts your Tool haft.**" (`sever`). The red fault line under the HP bar reads "**You: Tool haft severed by Echo construct**", taken from `combat.changes[].by`.
+
+Tests (`playtest.test.ts`): "a fight step's whole log batch reaches the HUD, oldest first (H11)", "a cut that empties Focus says what it spent (H12)", "a foe's cut on Silas's haft names the foe, and a miss severs nothing (H13)".
+
+| Run (dev server :8090, headless Chrome, `SEED=4`) | Result |
+| --- | --- |
+| `npm test` | 196 + 55 + 88 PASS (game suite 85 → 88) |
+| `npm run typecheck` | clean |
+| `npm run lint` | 37 problems, same as before this change (pre-existing, none new) |
+| act4 default | **59/59 PASS** |
+| act4 `SPIRE=fight-leave` | **61/61 PASS** (sovereign-down in 5 rounds, 0 deaths) |
+| Act III | **47/47 PASS** |
+| Act I loop | **23/23 PASS** |
+
+**Hand check needed (H11–H13):** go to `http://localhost:8080/__hand-load-v3.html`. Click Continue, then Talk → "Then I'll read you while you move."
+- At fight start, the top-left box over the board lists several lines (e.g. "Structural engagement." … "Continuity opens…"), not just one.
+- Tap the Echo face, then Audit. Select Power coupling. The seam read ends "Unmend spends 4 action and 11 Focus. Mend spends 3 action and 9 Focus. You have 8: a cut takes all of it."
+- Unmend → Confirm. Under the Mend/Unmend buttons, a list appears: "The cut spends 8 Focus, all you had. It wanted 11." / "Power coupling severed." / "Arm mount unavailable." / "Steam kicks out of the dead mount." / "The steam scalds you too. (-3)" / "The cut did not stop at the seam…". Header Focus reads 0.
+- Close the dock. The same lines are in the top-left box. After ~10–15 s it folds to the last two.
+- End turn. If the Echo cuts the haft, the top-left box shows "Echo construct cuts your Tool haft." / "Tool haft severed." before the Sovereign's lines. The red line under HP reads "You: Tool haft severed by Echo construct". Focus reads 2 in round 2.
+
+**Status: IN PROGRESS** for Acts IV–VI. H11–H13 are fixed in code and need a hand check. Remaining: a hand walk Citadel → Tundra → Spire without Map travel, and the open design calls (including Sovereign damage: 37 → 13 HP over rounds 1–2 in the headless repro).
