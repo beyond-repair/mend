@@ -172,6 +172,9 @@ function citadel(): GameMap {
   wide[8][21] = "p";
   wide[9][21] = "p";
   wide[6][24] = "^";
+  // The south throat (22–24, 15) used to open onto solid rock at rows 13–14, so the
+  // tundra stair landing (32,18) could not walk to the ranking floor at all.
+  fill(wide, 22, 13, 24, 14, "p");
   const tall = grow(wide, 32, 22);
   tall[15][22] = "p";
   tall[15][23] = "p";
@@ -385,33 +388,45 @@ export interface Mouth {
   /** This step enters a road the lamps can darken. */
   dark?: boolean;
   deny: string;
+  /** Board name for the mouth, drawn under its brass diamond so a first-time player can find the way out. */
+  label: string;
+  /**
+   * Soften findability: no distant brass diamond/label — only a near chevron until Silas is close.
+   * Used for side stairs that distract from the first-act path (Brick stair → Kiln on the lower gantry).
+   */
+  nearOnly?: boolean;
 }
 
 export const MOUTHS: Mouth[] = [
-  { map: "sinks", x: 25, y: 18, to: "road", tx: 5, ty: 5, need: null, deny: "The stack mouth is shut." },
-  { map: "road", x: 2, y: 7, to: "sinks", tx: 24, ty: 18, need: null, deny: "The Sinks mouth is shut." },
-  { map: "road", x: 16, y: 11, to: "kiln", tx: 16, ty: 3, need: null, deny: "The brick stair is shut." },
-  { map: "kiln", x: 16, y: 1, to: "road", tx: 16, ty: 11, need: null, deny: "The stack mouth is shut." },
-  { map: "road", x: 22, y: 14, to: "switch", tx: 14, ty: 3, need: null, deny: "The yard stair is shut." },
-  { map: "switch", x: 14, y: 1, to: "road", tx: 22, ty: 13, need: null, deny: "The stack mouth is shut." },
-  { map: "road", x: 27, y: 1, to: "pane", tx: 16, ty: 17, need: null, deny: "The glass stair is shut." },
-  { map: "pane", x: 16, y: 18, to: "road", tx: 27, ty: 2, need: null, deny: "The stack mouth is shut." },
-  { map: "road", x: 20, y: 1, to: "haven", tx: 33, ty: 6, need: null, deny: "The ward stair is shut." },
-  { map: "haven", x: 34, y: 6, to: "road", tx: 20, ty: 3, need: null, deny: "The stack mouth is shut." },
-  { map: "road", x: 34, y: 4, to: "quarry", tx: 32, ty: 8, need: "act1", deny: "The quarry road wants a signed stair, or a crawl you already used." },
-  { map: "quarry", x: 33, y: 8, to: "road", tx: 33, ty: 4, need: null, deny: "The stack mouth is shut." },
-  { map: "road", x: 34, y: 6, to: "rust", tx: 33, ty: 8, need: "act1", deny: "Rust is past the same signature the quarry wanted." },
-  { map: "rust", x: 34, y: 8, to: "road", tx: 33, ty: 6, need: null, deny: "The stack mouth is shut." },
-  { map: "road", x: 8, y: 15, to: "tundra", tx: 4, ty: 5, need: "citadelOpen", dark: true, deny: "The tundra walk stays sealed until the citadel is actually in play." },
-  { map: "tundra", x: 2, y: 5, to: "road", tx: 8, ty: 14, need: null, deny: "The stack mouth is shut." },
-  { map: "tundra", x: 26, y: 5, to: "citadel", tx: 32, ty: 18, need: null, deny: "The ranking stair is shut." },
-  { map: "citadel", x: 33, y: 18, to: "tundra", tx: 24, ty: 5, need: null, deny: "The tundra stair is shut." },
-  { map: "road", x: 28, y: 15, to: "spire", tx: 24, ty: 8, need: "spireOpen", dark: true, deny: "The Spire has no mouth until the citadel has been answered." },
-  { map: "spire", x: 26, y: 8, to: "road", tx: 28, ty: 14, need: null, deny: "The stack mouth is shut." },
+  { map: "sinks", x: 25, y: 18, to: "road", tx: 5, ty: 5, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
+  { map: "road", x: 2, y: 7, to: "sinks", tx: 24, ty: 18, need: null, deny: "The Sinks mouth is shut.", label: "Sinks mouth" },
+  { map: "road", x: 16, y: 11, to: "kiln", tx: 16, ty: 3, need: null, deny: "The brick stair is shut.", label: "Brick stair", nearOnly: true },
+  { map: "kiln", x: 16, y: 1, to: "road", tx: 16, ty: 11, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
+  { map: "road", x: 22, y: 14, to: "switch", tx: 14, ty: 3, need: null, deny: "The yard stair is shut.", label: "Yard stair" },
+  { map: "switch", x: 14, y: 1, to: "road", tx: 22, ty: 13, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
+  { map: "road", x: 27, y: 1, to: "pane", tx: 16, ty: 17, need: null, deny: "The glass stair is shut.", label: "Glass stair" },
+  { map: "pane", x: 16, y: 18, to: "road", tx: 27, ty: 2, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
+  { map: "road", x: 20, y: 1, to: "haven", tx: 33, ty: 6, need: null, deny: "The ward stair is shut.", label: "Ward stair" },
+  { map: "haven", x: 34, y: 6, to: "road", tx: 20, ty: 3, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
+  { map: "road", x: 34, y: 4, to: "quarry", tx: 32, ty: 8, need: "act1", deny: "The quarry road wants a signed stair, or a crawl you already used.", label: "Quarry road" },
+  { map: "quarry", x: 33, y: 8, to: "road", tx: 33, ty: 4, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
+  { map: "road", x: 34, y: 6, to: "rust", tx: 33, ty: 8, need: "act1", deny: "Rust is past the same signature the quarry wanted.", label: "Rust cut" },
+  { map: "rust", x: 34, y: 8, to: "road", tx: 33, ty: 6, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
+  { map: "road", x: 8, y: 15, to: "tundra", tx: 4, ty: 5, need: "citadelOpen", dark: true, deny: "The tundra walk stays sealed until the citadel is actually in play.", label: "Tundra walk" },
+  { map: "tundra", x: 2, y: 5, to: "road", tx: 8, ty: 14, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
+  { map: "tundra", x: 26, y: 5, to: "citadel", tx: 32, ty: 18, need: null, deny: "The ranking stair is shut.", label: "Ranking stair" },
+  { map: "citadel", x: 33, y: 18, to: "tundra", tx: 24, ty: 5, need: null, deny: "The tundra stair is shut.", label: "Tundra stair" },
+  { map: "road", x: 28, y: 15, to: "spire", tx: 24, ty: 8, need: "spireOpen", dark: true, deny: "The Spire has no mouth until the citadel has been answered.", label: "Spire mouth" },
+  { map: "spire", x: 26, y: 8, to: "road", tx: 28, ty: 14, need: null, deny: "The stack mouth is shut.", label: "Stack mouth" },
 ];
 
 export function mouthAt(mapId: string, x: number, y: number) {
   return MOUTHS.find((m) => m.map === mapId && m.x === x && m.y === y) ?? null;
+}
+
+/** Mouths on a map the player can step through right now (need open or none). */
+export function usableMouths(mapId: string, open: (need: string | null) => boolean) {
+  return MOUTHS.filter((m) => m.map === mapId && open(m.need));
 }
 
 export const EXITS: { map: string; x: number; y: number }[] = MOUTHS.map((m) => ({ map: m.map, x: m.x, y: m.y }));

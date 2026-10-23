@@ -513,10 +513,10 @@ describe("systems, not classes", () => {
     const read = boardIntents(d).find((r) => r.id === "varr");
     assert.match(read?.line ?? "", /needs Pressure chamber/);
     cut(d, "varr", "chamber");
+    // A cut re-reads the owner's opening at once (H8): the line names what Varr will actually do now.
     const after = boardIntents(d).find((r) => r.id === "varr");
-    assert.match(after?.line ?? "", /Steam rifle → you/);
-    assert.match(after?.line ?? "", /needs Pressure chamber/);
-    assert.equal(after?.live, false);
+    assert.equal(after?.line, "Repair → Pressure chamber");
+    assert.equal(after?.live, true);
     assert.equal(weaponsDark(d), true);
     assert.equal(varr.alive, true);
     const lenses = lensReads(d).map((row) => row.id);

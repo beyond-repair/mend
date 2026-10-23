@@ -260,8 +260,13 @@ function publish(d, nodes, before, quiet, clean = false) {
           owner.id !== "player" &&
           d.player.mapId === owner.mapId &&
           dist(d.player, owner) <= 1
-        )
+        ) {
+          // Name the scald, or the HP just drops while Focus empties on the same cut (H10).
+          const was = d.player.hp;
           applyHp(d, "player", 3, true);
+          const lost = was - d.player.hp;
+          if (lost > 0) addLog(d, `The steam scalds you too. (-${lost})`);
+        }
       }
       if (d.phase !== "play") return;
     }
@@ -362,10 +367,12 @@ function sever(d, nodes, n, by) {
   const before = liveMap(nodes);
   n.severed = true;
   n.integrity = 0;
-  if (by) addLog(d, `${by} cuts ${n.name}.`);
+  // Name whose part it was, as the intent line does (H10): "cuts Tool haft" read like the foe's own (H13).
+  if (by) addLog(d, `${by} cuts ${nodes === d.player.nodes ? "your " : ""}${n.name}.`);
   const clean = !by && (d.verbs?.cut ?? 0) >= 4;
   publish(d, nodes, before, void 0, clean);
   noteGraphChange(d, nodes, n, "cut", by);
+  replanOwner(d, nodes);
   play("unmend");
   flash(d, nodes, "snap");
   bump(7);
@@ -703,6 +710,7 @@ function journal(d, id, title, text, status) {
     hit.status = status;
   } else d.journal.unshift({ id, title, text, status });
   if (status === "open") d.pinned = title;
+  else if (d.pinned === title) d.pinned = "";
 }
 function rememberGraph(d, nodes) {
   const owner = graphOwner(d, nodes);
@@ -785,6 +793,8 @@ function movePlayer(d, x, y) {
   const oy = d.player.y;
   d.player.x = x;
   d.player.y = y;
+  // Stepping off the dismiss tile lets the same NPC/door talk again on purpose.
+  if ((x !== ox || y !== oy) && d.flags.dismissAt) delete d.flags.dismissAt;
   if (!d.combat && mates.length) {
     const [first, second] = mates;
     if (first) {
@@ -1308,7 +1318,11 @@ function ensureCast(d) {
 function syncShade(d) {
   const shade = d.actors.shade;
   if (!shade || !shade.alive || d.combat) return;
-  const dark = Boolean(d.flags.roadDark);
+  // A shade that stood down (or left the engagement) stays down. Re-arming it every reconcile
+  // re-engaged Silas on the next step, so the dark road could only be crossed by killing it,
+  // and each stand-down paid out again (bug 30).
+  const settled = didStandDown(d, "shade") || didEscape(d, "shade");
+  const dark = Boolean(d.flags.roadDark) && !settled;
   shade.hostile = dark;
   shade.aggro = dark;
   shade.vision = dark && d.flags.cartPinned ? 6 : dark ? 4 : 0;
@@ -1541,7 +1555,9 @@ function cityRoutines(d) {
   else standAt(d, "teb", "kiln", 8, 14);
   standAt(d, "jun", "kiln", hour === 2 ? 27 : 30, hour === 2 ? 6 : 7);
   if (d.flags.kilnCellar) standAt(d, "nim", "kiln", 7, 18);
-  else standAt(d, "nim", "kiln", 6, 15);
+  // Beside the cut, not in front of it: on (6,15) she was the only orthogonal approach to the door (6,16),
+  // so a keyboard player could never bump it (act2 K28).
+  else standAt(d, "nim", "kiln", 5, 15);
   if (d.flags.vossLeft) standAt(d, "voss", "road", 18, 11);
   else if (d.flags.stampCut) standAt(d, "voss", "kiln", 18, 16);
   else standAt(d, "voss", "kiln", 14, 9);
@@ -1565,7 +1581,8 @@ function cityRoutines(d) {
   if (hour === 3) standAt(d, "rue", "switch", 6, 4);
   else standAt(d, "rue", "switch", 5, 6);
   if (d.flags.switchBay) standAt(d, "ske", "switch", 7, 15);
-  else standAt(d, "ske", "switch", 6, 12);
+  // Beside the bay cut, not on (6,12): that was the only orthogonal approach to the door (6,13), same as Nim (act2 K28).
+  else standAt(d, "ske", "switch", 5, 12);
   const glassClaim = d.machines.panestamp?.nodes.find((n) => n.id === "claim");
   const ness = d.actors.ness;
   if (ness?.alive && (glassClaim?.severed || d.flags.paneCaught) && !ness.hostile) {
@@ -1587,7 +1604,8 @@ function cityRoutines(d) {
   else standAt(d, "ness", "pane", 23, 7);
   if (d.flags.paneCharge) standAt(d, "panemoth", "pane", 14, 10);
   else standAt(d, "panemoth", "pane", 10, 17);
-  if (d.flags.paneCharge) standAt(d, "sol", "road", 27, 2);
+  // Beside the Glass stair, not on its landing (27,2): arriving from the Pane stacked Silas on Sol (act2 P8).
+  if (d.flags.paneCharge) standAt(d, "sol", "road", 28, 2);
   else standAt(d, "sol", "road", 26, 4);
   if (d.flags.paneCharge && d.mapId === "pane" && !d.flags.paneMothOut && d.phase === "play") {
     d.flags.paneMothOut = true;
@@ -1637,25 +1655,23 @@ function nudgeCreature(d, ox, oy) {
     return;
   const step = Number(d.flags.mothStep ?? 0) + 1;
   d.flags.mothStep = step;
-  const toward =
-    ((tx, ty) => {
-      const dx = Math.sign(tx - moth.x);
-      const dy = Math.sign(ty - moth.y);
-      const opts = [
-        [moth.x + dx, moth.y + dy],
-        [moth.x + dx, moth.y],
-        [moth.x, moth.y + dy],
-      ];
-      for (const [x, y] of opts) {
-        if (x === d.player.x && y === d.player.y) continue;
-        if (walkable(d, x, y, moth.id)) {
-          moth.x = x;
-          moth.y = y;
-          return;
-        }
+  const toward = (tx, ty) => {
+    const dx = Math.sign(tx - moth.x);
+    const dy = Math.sign(ty - moth.y);
+    const opts = [
+      [moth.x + dx, moth.y + dy],
+      [moth.x + dx, moth.y],
+      [moth.x, moth.y + dy],
+    ];
+    for (const [x, y] of opts) {
+      if (x === d.player.x && y === d.player.y) continue;
+      if (walkable(d, x, y, moth.id)) {
+        moth.x = x;
+        moth.y = y;
+        return;
       }
-    },
-    "toward");
+    }
+  };
   if (
     (d.mapId === "road" || d.mapId === "tundra") &&
     d.flags.roadDark &&
@@ -2992,6 +3008,15 @@ function decideOpening(d, a) {
     thenStrike: step,
   };
 }
+// A cut changes what a body can do now, not next round. Re-read the owner's opening so the
+// intent line says what they will actually swing (Echo: Piston arm -> Bare hands, H8).
+function replanOwner(d, nodes) {
+  const plans = d.combat?.plans;
+  if (!plans) return;
+  const a = Object.values(d.actors).find((x) => x.nodes === nodes);
+  if (!a || !plans[a.id] || !a.alive || !a.hostile) return;
+  plans[a.id] = decideOpening(d, a);
+}
 function freezeIntents(d) {
   if (!d.combat) return;
   const plans = {};
@@ -3056,7 +3081,9 @@ function openingLine(d, a, plan) {
   }
   if (plan.kind === "repair") return `Repair \u2192 ${plan.nodeName}`;
   if (plan.kind === "brace") return "Brace in place";
-  return `Cut \u2192 ${plan.nodeName}`;
+  // A foe only ever cuts Silas's own parts (planFits reads d.player.nodes): say so, or
+  // "Cut → Tool haft" reads like the foe's own part (H10).
+  return `Cut \u2192 your ${plan.nodeName}`;
 }
 function planFits(d, a, plan) {
   if (!a.alive) return false;
@@ -3081,6 +3108,23 @@ function planFits(d, a, plan) {
   }
   return gait(a) !== "dead";
 }
+// Why a committed opening no longer fits, in the words the intent line shows (H9). A cut whose
+// target part is intact but out of reach is not a lost part: say which, so a step back does not
+// read as if something had been cut. Same tests as planFits, in the same order.
+function planMiss(d, a, plan) {
+  if (planFits(d, a, plan)) return "";
+  if (plan.kind === "cut") {
+    const seam2 = d.player.nodes.find((n) => n.name === plan.nodeName);
+    if (!seam2 || !nodeLive(d.player.nodes, seam2)) return `your ${plan.nodeName} is gone`;
+    return "out of reach";
+  }
+  if (plan.kind === "strike" || plan.kind === "close") {
+    const prey = plan.target === "player" ? d.player : d.actors[plan.target];
+    if (!prey?.alive) return "the target is down";
+    if (plan.kind === "strike" && weaponOf(a).id === plan.weaponId) return "out of reach";
+  }
+  return "no longer that shape";
+}
 function boardIntents(d) {
   if (!d.combat?.plans) return [];
   const rows = [];
@@ -3093,6 +3137,7 @@ function boardIntents(d) {
       name: a.name,
       line: openingLine(d, a, plan),
       live: planFits(d, a, plan),
+      why: planMiss(d, a, plan),
     });
   }
   return rows;
@@ -3148,8 +3193,12 @@ function weaponsDark(d) {
     .map((id) => d.actors[id])
     .filter((a) => a?.alive && a.hostile);
   if (!hostiles.length) return false;
+  // Dark means the hand is empty: weaponOf falls back to fists. A foe with no weapon seam still swings what
+  // it carries (the Sovereign's baton), so it is not dark just because nothing on its graph is labelled weapon (bug 38).
   return hostiles.every(
-    (a) => !a.nodes.some((n) => n.effect === "weapon" && nodeLive(a.nodes, n)),
+    (a) =>
+      !a.nodes.some((n) => n.effect === "weapon" && nodeLive(a.nodes, n)) &&
+      weaponOf(a) === ITEMS.fist,
   );
 }
 function standDown(d) {
@@ -3670,8 +3719,17 @@ function openAudit(d, target) {
   }
   d.audit = target;
   const revealed = nodes.filter((n) => n.revealed);
+  // Prefer a seam that is actually holding the graph up. A severed leaf with no dependents
+  // (Kiln "Borrowed heat", Pane borrow, etc.) is an unused optional parent — selecting it first
+  // makes Mend the wrong verb and hides Seat/Borrow specials behind a Misreconstruction.
   const worst = [...revealed].sort((a, b) => {
-    const score = (n) => (n.severed ? -1e3 : !nodeLive(nodes, n) ? -500 : n.integrity);
+    const score = (n) => {
+      const feeds = nodes.some((c) => c.dependsOn.includes(n.id));
+      if (n.severed && !feeds) return 50;
+      if (n.severed) return -1e3;
+      if (!nodeLive(nodes, n)) return -500;
+      return n.integrity;
+    };
     return score(a) - score(b);
   })[0];
   d.uiNode = worst?.id ?? nodes[0]?.id ?? null;
@@ -3728,7 +3786,7 @@ function mendNode(d, target, nodeId) {
     addLog(d, "Not enough action.");
     return;
   }
-  const cost = Math.max(2, 4 + n.density - (d.perks?.includes("steady-mend") ? 2 : 0));
+  const cost = mendFocusCost(d, n);
   const over = n.density > comp(d);
   if (d.focus < cost && !over) {
     addLog(d, "Focus is too thin.");
@@ -3768,7 +3826,7 @@ function mendNode(d, target, nodeId) {
   const rolled = rollD100();
   if (rolled > clamp(chance, 8, 95)) {
     n.integrity = Math.max(n.integrity, 20);
-    addLog(d, `Misreconstruction. ${n.name} returns wrong. (${rolled})`);
+    addLog(d, `Misreconstruction. ${n.name} returns wrong. (${rolled} vs ${clamp(chance, 8, 95)})`);
     if (target.kind === "machine" && target.id === "pump") {
       d.flags.pumpFate = "flood";
       d.flags.actReady = true;
@@ -3845,6 +3903,13 @@ function mendNode(d, target, nodeId) {
   bump(3);
   reconcileWorld(d);
 }
+// Focus a cut asks for. Above 4 Focus a cut still goes when Focus is short and takes what is left.
+function cutFocusCost(n) {
+  return 6 + n.density;
+}
+function mendFocusCost(d, n) {
+  return Math.max(2, 4 + n.density - (d.perks?.includes("steady-mend") ? 2 : 0));
+}
 function unmendNode(d, target, nodeId) {
   const nodes = auditTargetNodes(d, target);
   const n = nodes.find((x) => x.id === nodeId);
@@ -3876,12 +3941,13 @@ function unmendNode(d, target, nodeId) {
   const conf = confidenceOf(n);
   const felt = conf === "confident" ? Math.max(1, n.density - 1) : n.density;
   const over = felt > comp(d);
-  const cost = 6 + n.density;
+  const cost = cutFocusCost(n);
   if (d.focus < Math.min(cost, focusMax(d)) && !over && d.focus < 4) {
     addLog(d, "Focus is too thin.");
     return;
   }
   if (inFight) d.player.ap -= 4;
+  const focusBefore = d.focus;
   if (n.decoy) {
     d.focus = Math.max(0, d.focus - 4);
     addLog(d, "That seam was a costume. The backlash finds your teeth.");
@@ -3909,6 +3975,15 @@ function unmendNode(d, target, nodeId) {
     play("over");
     if (d.phase !== "play") return;
   } else d.focus = Math.max(0, d.focus - cost);
+  // A cut can empty Focus (it drains rather than refusing above 4), and nothing on screen said why (H12).
+  const spent = focusBefore - d.focus;
+  if (inFight && spent > 0)
+    addLog(
+      d,
+      over || spent >= cost
+        ? `The cut spends ${spent} Focus.`
+        : `The cut spends ${spent} Focus, all you had. It wanted ${cost}.`,
+    );
   const rolled = rollD100();
   const shown = clamp(chance, 10, 94);
   if (rolled > shown) {
@@ -7414,6 +7489,10 @@ function applyEffects(d, effects) {
     else if (e.op === "arrive") arrive(d);
     else if (e.op === "epilogue") {
       d.ending = e.ending;
+      // The Sovereign's "Write the shape." / "Leave the holes." list the epilogue first; once the
+      // phase flips the later flag op is skipped. Record the ending here, same as the Spire heart
+      // special does, so both routes leave the same ledger (bug 31).
+      d.flags.ending = e.ending;
       d.epilogue = buildEpilogue(d, e.ending);
       d.phase = "epilogue";
       d.combat = null;
@@ -7434,6 +7513,7 @@ function arrive(d) {
   d.player.mapId = id;
   d.player.x = typeof lx === "number" ? lx : MAPS[id].entry.x;
   d.player.y = typeof ly === "number" ? ly : MAPS[id].entry.y;
+  clearLanding(d);
   d.pendingMap = null;
   d.path = [];
   d.intent = null;
@@ -7648,6 +7728,27 @@ function depart(d) {
   d.flags.traveled = true;
   arrive(d);
 }
+/**
+ * A routine can park someone on a stair's landing tile while Silas is elsewhere (Sol on the Glass stair
+ * landing once the Pane melt holds; act2 P8). Arriving on top of them stacked two figures on one tile.
+ * Step Silas to the nearest free, non-mouth neighbour instead.
+ */
+function clearLanding(d) {
+  const here = Object.values(d.actors).find(
+    (a) => a.alive && !a.companion && a.mapId === d.mapId && a.x === d.player.x && a.y === d.player.y,
+  );
+  if (!here) return;
+  const ring = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+  for (const [dx, dy] of ring) {
+    const x = d.player.x + dx;
+    const y = d.player.y + dy;
+    if (isExit(d.mapId, x, y)) continue;
+    if (!walkable(d, x, y, "player")) continue;
+    d.player.x = x;
+    d.player.y = y;
+    return;
+  }
+}
 function freshActors() {
   const actors = {};
   for (const s of SPAWNS) actors[s.id] = spawnActor(s);
@@ -7692,6 +7793,8 @@ function endPlayerTurn(d) {
 }
 export {
   LENS_NAME,
+  cutFocusCost,
+  mendFocusCost,
   PRACTICE_VERBS,
   VERB_LENS,
   actorAt,

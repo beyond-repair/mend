@@ -46,7 +46,7 @@ import {
   reconcileWorld,
 } from "./logic";
 import { LOCKED_DOORS, MAPS, REGIONS } from "./maps";
-import type { Actor, Attr, AuditTarget, Data, GNode, Machine, Panel, SkillId } from "./types";
+import type { Actor, Attr, AuditTarget, Data, GNode, Machine, Panel, Reply, SkillId } from "./types";
 
 const SAVE_PREFIX = "mend-save-v1-";
 
@@ -213,6 +213,7 @@ interface Store {
   strikeNearest: () => void;
   talkNearest: () => void;
   auditNearest: () => void;
+  aimAudit: (id: string) => void;
   selectNode: (id: string) => void;
   mend: () => void;
   unmend: () => void;
@@ -244,6 +245,11 @@ function readSlot(id: string): { label: string; when: number; data: Data } | nul
   } catch {
     return null;
   }
+}
+
+/** True when any ledger slot is on disk. Seeds title Continue before React effects run. */
+export function hasStoredLedger(): boolean {
+  return Boolean(readSlot("auto") || readSlot("slot1") || readSlot("slot2"));
 }
 
 function writeSlot(id: string, data: Data) {
@@ -305,7 +311,40 @@ function convoFor(d: Data, a: Actor) {
   return memoryConvo(d, a.id) ?? a.convo;
 }
 
-function openTalk(d: Data, a: Actor) {
+/** Same tile + same convo after Leave: bump/door must not re-open until Silas steps away. */
+function dismissKey(d: Data, convo: string) {
+  return `${convo}@${d.player.x},${d.player.y}`;
+}
+
+function isDismissed(d: Data, convo: string) {
+  return d.flags.dismissAt === dismissKey(d, convo);
+}
+
+function markDismiss(d: Data, convo: string | undefined) {
+  if (convo) d.flags.dismissAt = dismissKey(d, convo);
+}
+
+/**
+ * Hostiles the HUD Strike / Audit keys should aim at. In a fight that is the engagement roster:
+ * a hostile elsewhere on the map (the Citadel sentry during the Sever guard fight) is not in the
+ * turn order, so striking or reading it spent the turn on someone who never answers (bug 29).
+ * Falls back to any hostile on the map when the roster has none.
+ */
+function engagedFoes(d: Data): Actor[] {
+  const onMap = Object.values(d.actors).filter((a) => a.alive && a.hostile && a.mapId === d.mapId);
+  if (!d.combat) return onMap;
+  const roster = onMap.filter((a) => d.combat!.order.includes(a.id));
+  return roster.length ? roster : onMap;
+}
+
+/** The engaged hostile you aimed Audit at from the turn order, if it is still standing (H7). */
+function aimedFoe(d: Data): Actor | null {
+  const id = d.combat?.aim;
+  if (!id) return null;
+  return engagedFoes(d).find((a) => a.id === id && a.hostile) ?? null;
+}
+
+function openTalk(d: Data, a: Actor, opts?: { force?: boolean }) {
   if (!a.alive) return;
   if (d.combat) {
     if (a.hostile) strike(d, d.player, a);
@@ -315,9 +354,23 @@ function openTalk(d: Data, a: Actor) {
     startCombat(d, [a.id]);
     return;
   }
-  d.dialogue = { convo: convoFor(d, a), node: "start" };
+  const convo = convoFor(d, a);
+  // Bump into Wren (or any NPC) right after Leave must not re-open; Talk HUD uses force.
+  if (!opts?.force && isDismissed(d, convo)) return;
+  d.dialogue = { convo, node: "start" };
   d.panel = "none";
   play("talk");
+}
+
+/**
+ * True when walking this path would step onto the south plate (y >= 12 in the Sinks) before the
+ * checkpoint has been dealt with. That step stops Silas at the guard line on purpose, so an Audit
+ * errand must never pick a machine whose route crosses it.
+ */
+export function crossesCheckpoint(d: Data, path: { x: number; y: number }[] | null | undefined) {
+  if (!path || d.mapId !== "sinks" || d.player.y >= 12) return false;
+  if (d.flags.checkpointSpoke || d.flags.act1 || d.flags.usedCrawl) return false;
+  return path.some((p) => p.y >= 12);
 }
 
 function myTurn(d: Data) {
@@ -326,10 +379,10 @@ function myTurn(d: Data) {
 }
 
 export const useGame = create<Store>((set, get) => ({
-  data: initialData(),
+  data: { ...initialData(), hasSave: hasStoredLedger() },
   boot: () => {
-    const has = Boolean(readSlot("auto") || readSlot("slot1") || readSlot("slot2"));
-    set((s) => ({ data: { ...s.data, hasSave: has } }));
+    const has = hasStoredLedger();
+    set((s) => (s.data.hasSave === has ? {} : { data: { ...s.data, hasSave: has } }));
   },
   setIronman: (v) => set((s) => ({ data: { ...s.data, ironman: v } })),
   openCreate: () => set((s) => ({ data: { ...s.data, phase: "create" } })),
@@ -463,7 +516,7 @@ export const useGame = create<Store>((set, get) => ({
   },
   quit: () =>
     set((s) => ({
-      data: { ...initialData(), ironman: false, hasSave: Boolean(readSlot("auto") || readSlot("slot1")) },
+      data: { ...initialData(), ironman: false, hasSave: hasStoredLedger() },
     })),
   closePanel: () => set((s) => ({ data: { ...s.data, panel: "none" } })),
   openPanel: (p) =>
@@ -520,6 +573,8 @@ export const useGame = create<Store>((set, get) => ({
         }
         if (door) {
           if (dist(d.player, door) <= 1) {
+            // Plate-stair / locked door: Leave it. then arrow into the same tile must not loop the sign.
+            if (isDismissed(d, door.convo)) return;
             d.dialogue = { convo: door.convo, node: "start" };
             d.panel = "none";
           } else if (!refuseWalk(d)) {
@@ -533,7 +588,7 @@ export const useGame = create<Store>((set, get) => ({
           }
           return;
         }
-        if (isExit(d.mapId, x, y) && dist(d.player, { x, y }) <= 1 && !d.combat) {
+        if (isExit(d.mapId, x, y) && d.player.x === x && d.player.y === y && !d.combat) {
           depart(d);
           return;
         }
@@ -563,6 +618,9 @@ export const useGame = create<Store>((set, get) => ({
         }
         movePlayer(d, next.x, next.y);
         d.path = d.path.slice(1);
+        // Only the last step of a route goes through a mouth. A long walk on the road used to
+        // cross the Yard stair (22,14) on the way to the Spire mouth and drop Silas into The Switch.
+        const arrived = !d.path.length;
         const tone = d.mapId === "tundra" ? "ice" : d.mapId === "rust" || d.mapId === "quarry" ? "metal" : d.mapId === "haven" ? "timber" : "sinks";
         play("step", tone);
         if (!d.path.length && d.intent) {
@@ -583,10 +641,12 @@ export const useGame = create<Store>((set, get) => ({
               else if (dist(d.player, a) <= (weaponOf(d.player).range ?? 1)) strike(d, d.player, a);
             }
           } else if (intent.type === "door" && dist(d.player, intent) <= 1) {
-            d.dialogue = { convo: intent.convo, node: "start" };
+            if (!isDismissed(d, intent.convo)) {
+              d.dialogue = { convo: intent.convo, node: "start" };
+            }
           }
         }
-        if (d.phase === "play" && !d.combat && isExit(d.mapId, d.player.x, d.player.y)) depart(d);
+        if (arrived && d.phase === "play" && !d.combat && isExit(d.mapId, d.player.x, d.player.y)) depart(d);
         checkVision(d);
         if (!d.path.length) writeSlot("auto", d);
       },
@@ -638,7 +698,10 @@ export const useGame = create<Store>((set, get) => ({
         return;
       }
       if (goto && d.dialogue) d.dialogue.node = goto;
-      else if (reply.end || !goto) d.dialogue = null;
+      else if (reply.end || !goto) {
+        markDismiss(d, from);
+        d.dialogue = null;
+      }
     }),
   endTurn: () => commit(set, (d) => endPlayerTurn(d)),
   brace: () => commit(set, (d) => brace(d)),
@@ -736,9 +799,7 @@ export const useGame = create<Store>((set, get) => ({
     commit(set, (d) => {
       if (!d.combat || !myTurn(d)) return;
       const range = weaponOf(d.player).range ?? 1;
-      const foes = Object.values(d.actors)
-        .filter((a) => a.alive && a.hostile && a.mapId === d.mapId)
-        .sort((a, b) => dist(d.player, a) - dist(d.player, b));
+      const foes = engagedFoes(d).sort((a, b) => dist(d.player, a) - dist(d.player, b));
       const hit = foes.find((a) => dist(d.player, a) <= range);
       if (hit) strike(d, d.player, hit);
       else if (foes[0] && !refuseWalk(d)) {
@@ -753,7 +814,7 @@ export const useGame = create<Store>((set, get) => ({
         .filter((a) => a.alive && a.mapId === d.mapId && !a.companion)
         .sort((a, b) => dist(d.player, a) - dist(d.player, b));
       const near = people.find((a) => dist(d.player, a) <= 1);
-      if (near) openTalk(d, near);
+      if (near) openTalk(d, near, { force: true });
       else if (people[0]) {
         d.path = pathNear(d, people[0].x, people[0].y) ?? [];
         d.intent = { type: "talk", id: people[0].id };
@@ -763,18 +824,63 @@ export const useGame = create<Store>((set, get) => ({
     commit(set, (d) => {
       if (d.dialogue || !myTurn(d)) return;
       const machines = Object.values(d.machines).filter((m) => m.mapId === d.mapId);
-      const broken = machines.filter((m) => m.nodes.some((n) => n.integrity < 50 || n.severed));
-      const machine = (broken.length ? broken : machines).sort((a, b) => dist(d.player, a) - dist(d.player, b))[0];
-      const person = Object.values(d.actors)
-        .filter((a) => a.alive && a.mapId === d.mapId && (d.combat ? a.hostile : true))
-        .sort((a, b) => dist(d.player, a) - dist(d.player, b))[0];
-      if (machine && dist(d.player, machine) <= 1) openAudit(d, { kind: "machine", id: machine.id });
+      // Rank by the walk, not the straight line, and never past the unspoken checkpoint:
+      // that walk would end at the guard line instead of at the machine.
+      const routes = new Map(machines.map((m) => [m.id, pathNear(d, m.x, m.y)] as const));
+      const reachable = machines.filter((m) => {
+        const route = routes.get(m.id);
+        return route !== null && route !== undefined && !crossesCheckpoint(d, route);
+      });
+      const steps = (m: Machine) => routes.get(m.id)?.length ?? 999;
+      const beside = machines.filter((m) => dist(d.player, m) <= 1);
+      const pool = reachable.length ? reachable : beside;
+      const isBroken = (m: Machine) => m.nodes.some((n) => n.integrity < 50 || n.severed);
+      // Prefer a machine Silas is already beside (Act III crane vs distant severed chute).
+      // Only then prefer broken over intact among the remaining pool. Same class as audit flue (bug 20).
+      // A machine Silas has already audited carries a confidence on its seams. A root parent that is cut by
+      // design (the Infirmary buffer's siphon child) stays "broken" forever, so once it has been read it must
+      // not keep pulling Audit across the floor past a machine he has not read yet (High Citadel crucible, bug 36).
+      const unread = (m: Machine) => !m.nodes.some((n) => n.confidence);
+      const besideBroken = beside.filter(isBroken);
+      const remote = pool.filter((m) => dist(d.player, m) > 1);
+      const remoteUnreadBroken = remote.filter((m) => isBroken(m) && unread(m));
+      const remoteUnread = remote.filter(unread);
+      const remoteBroken = remote.filter(isBroken);
+      const ranked =
+        besideBroken.length ? besideBroken :
+        beside.length ? beside :
+        remoteUnreadBroken.length ? remoteUnreadBroken :
+        remoteUnread.length ? remoteUnread :
+        remoteBroken.length ? remoteBroken :
+        pool;
+      const machine = ranked.sort((a, b) => steps(a) - steps(b))[0];
+      const foes = (d.combat ? engagedFoes(d) : Object.values(d.actors).filter((a) => a.alive && a.mapId === d.mapId))
+        .sort((a, b) => dist(d.player, a) - dist(d.player, b));
+      // A face touched in the turn order wins over the nearest foe (H7): a tap on a hostile on the map
+      // strikes, so the initiative strip is where you say who Audit should read.
+      const aimed = d.combat ? aimedFoe(d) : null;
+      const person = aimed ?? foes[0];
+      if (d.combat && !aimed && foes.filter((a) => a.hostile).length > 1 && !d.flags.aimHint) {
+        d.flags.aimHint = true;
+        addLog(d, "Touch a face in the turn order to choose who Audit reads.");
+      }
+      if (aimed && dist(d.player, aimed) <= 1) openAudit(d, { kind: "actor", id: aimed.id });
+      else if (aimed) {
+        d.path = pathNear(d, aimed.x, aimed.y) ?? [];
+        d.intent = { type: "audit", id: aimed.id, kind: "actor" };
+        if (!d.path.length) addLog(d, `No clear path to ${aimed.name}.`);
+      }
+      // In a fight, Audit is the only way to read a foe (a tap on a hostile strikes). A foe in reach
+      // beats the machine Silas is standing beside — Citadel Sever starts the guard fight at the
+      // crucible, and Audit used to reopen the crucible every turn (bug 28).
+      else if (d.combat && person && dist(d.player, person) <= 1) openAudit(d, { kind: "actor", id: person.id });
+      else if (machine && dist(d.player, machine) <= 1) openAudit(d, { kind: "machine", id: machine.id });
       else if (person && person.hostile && dist(d.player, person) <= 1) openAudit(d, { kind: "actor", id: person.id });
       else if (d.combat && person) {
         d.path = pathNear(d, person.x, person.y) ?? [];
         d.intent = { type: "audit", id: person.id, kind: "actor" };
       } else if (machine) {
-        d.path = pathNear(d, machine.x, machine.y) ?? [];
+        d.path = routes.get(machine.id) ?? [];
         d.intent = { type: "audit", id: machine.id, kind: "machine" };
         if (!d.path.length) addLog(d, "No clear path to a machine.");
       } else if (person && dist(d.player, person) <= 1) openAudit(d, { kind: "actor", id: person.id });
@@ -783,6 +889,19 @@ export const useGame = create<Store>((set, get) => ({
         d.intent = { type: "audit", id: person.id, kind: "actor" };
       } else openAudit(d, { kind: "actor", id: "player" });
     }),
+  aimAudit: (id) =>
+    commit(set, (d) => {
+      if (!d.combat || d.dialogue) return;
+      const foe = engagedFoes(d).find((a) => a.id === id && a.hostile);
+      if (!foe) return;
+      if (d.combat.aim === id) {
+        d.combat.aim = undefined;
+        addLog(d, "Audit reads whoever is nearest again.");
+        return;
+      }
+      d.combat.aim = id;
+      addLog(d, `Audit will read ${foe.name}.`);
+    }, "none"),
   selectNode: (id) => set((s) => ({ data: { ...s.data, uiNode: id } })),
   mend: () =>
     commit(set, (d) => {
@@ -855,7 +974,12 @@ export const useGame = create<Store>((set, get) => ({
         addLog(d, "The road does not stay empty.");
       } else arrive(d);
     }),
-  ackLevel: () => set((s) => ({ data: { ...s.data, pendingLevel: false } })),
+  // Dismissing the level-up must reach the autosave too. It used to change memory only, so the autosave
+  // written at the level-up kept pendingLevel and Continue showed "Comprehension deepens" again (bug 37).
+  ackLevel: () =>
+    commit(set, (d) => {
+      d.pendingLevel = false;
+    }),
 }));
 
 export function visibleReplies(d: Data) {
@@ -865,3 +989,21 @@ export function visibleReplies(d: Data) {
 }
 
 export { comp, regionOpen };
+
+/** Bookkeeping a sole leave line may carry and still count as plain: it notes, it never moves, fights, or costs. */
+const QUIET_OPS = new Set(["flag", "log", "journal", "pin", "xp", "item", "scrip"]);
+
+/**
+ * The reply Esc may take on the player's behalf: a plain leave line that ends the talk with no check,
+ * no effects, and no jump. When that line is the only reply on the board (Doss's "Sleep. I won't move
+ * your weather."), quiet bookkeeping such as a met-flag does not stop Esc: it is the same line a click
+ * would take. Real choices (checks, fights, travel, recruits, forced lines) return -1 and stay on the board.
+ */
+export function leaveIndex(d: Data) {
+  const replies = visibleReplies(d);
+  const plain = (r: Reply) => r.end && !r.goto && !r.jump && !r.check;
+  const i = replies.findIndex((r) => plain(r) && !(r.effects && r.effects.length));
+  if (i >= 0 || replies.length !== 1) return i;
+  const only = replies[0];
+  return plain(only) && (only.effects ?? []).every((e) => QUIET_OPS.has(e.op)) ? 0 : -1;
+}
