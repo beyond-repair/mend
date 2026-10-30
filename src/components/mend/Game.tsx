@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { unlockAudio, setAtmosphere, startBed } from "@/game/audio";
 import { ATTR_LIST, allSkills, comprehension, maxHp, SKILL_LIST } from "@/game/formulas";
 import { MAPS } from "@/game/maps";
 import { nodeLive, weaponOf, boardIntents, weaponsDark } from "@/game/logic";
-import { comp, useGame } from "@/game/store";
+import { comp, leaveIndex, useGame } from "@/game/store";
 import type { Actor, Attr, Data, SkillId } from "@/game/types";
 import {
   AuditPanel,
@@ -18,13 +18,18 @@ import {
   ToolsPanel,
 } from "./Panels";
 import { WorldCanvas } from "./WorldCanvas";
+import { useLogBatch } from "./logTail";
+import { HUD_LABELS, hudShowsCaption } from "./hud";
 
 export function Game() {
   const phase = useGame((s) => s.data.phase);
   const uiText = useGame((s) => s.data.flags.uiText);
   const boot = useGame((s) => s.boot);
-  useEffect(() => {
+  // Before paint: seed hasSave from localStorage so Continue is not grey on first load.
+  useLayoutEffect(() => {
     boot();
+  }, [boot]);
+  useEffect(() => {
     if (import.meta.env.DEV) {
       (window as unknown as { __mend?: typeof useGame }).__mend = useGame;
     }
@@ -51,11 +56,20 @@ export function Game() {
 function TitleScreen() {
   const ironman = useGame((s) => s.data.ironman);
   const hasSave = useGame((s) => s.data.hasSave);
+  const boot = useGame((s) => s.boot);
   const setIronman = useGame((s) => s.setIronman);
   const openCreate = useGame((s) => s.openCreate);
   const load = useGame((s) => s.load);
   const openPanel = useGame((s) => s.openPanel);
   const panel = useGame((s) => s.data.panel);
+  // SSR has no localStorage, so hasSave is false on the server HTML. If we render
+  // disabled={!hasSave} there, React hydration will not patch the attribute when the
+  // client has a real save — Continue stays grey forever. Gate disabled until mount.
+  const [titleReady, setTitleReady] = useState(false);
+  useLayoutEffect(() => {
+    boot();
+    setTitleReady(true);
+  }, [boot]);
   return (
     <main className="relative mx-auto flex h-dvh w-full max-w-[440px] flex-col overflow-y-auto">
       <img src="/game/plates/sinks.jpg?v=5" alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
@@ -74,7 +88,12 @@ function TitleScreen() {
         <button type="button" className="min-h-11 bg-brass px-4 font-display text-lg text-soot" onClick={openCreate}>
           New ledger
         </button>
-        <button type="button" className="min-h-11 border border-brass px-4 text-brass" disabled={!hasSave} onClick={() => load("auto")}>
+        <button
+          type="button"
+          className="min-h-11 border border-brass px-4 text-brass"
+          disabled={titleReady && !hasSave}
+          onClick={() => load("auto")}
+        >
           Continue
         </button>
         <label className="mt-2 flex min-h-11 items-center gap-3 text-sm text-mist">
@@ -175,7 +194,8 @@ function CreateScreen() {
 }
 
 function focusLine(d: Data) {
-  if (d.pinned) return d.pinned;
+  // A pin names an open job. Once that job is closed in the ledger, fall back to the room's own line.
+  if (d.pinned && !d.journal.some((j) => j.title === d.pinned && j.status !== "open")) return d.pinned;
   const pump = String(d.flags.pumpFate ?? "");
   if (d.mapId === "sinks") {
     if (pump === "mend" || pump === "wren" || pump === "speech") return "The pump holds";
@@ -190,16 +210,54 @@ function focusLine(d: Data) {
   return "The city";
 }
 
-function LogChip() {
+function LogChip({ quiet = false }: { quiet?: boolean }) {
   const log = useGame((s) => s.data.log);
   const line = log[0] ?? "";
   const [on, setOn] = useState(false);
+  // Every store commit clones `data`, so `log` is a new array on each step even when nothing was written.
+  // Only a real new entry (contents changed) re-raises the chip; otherwise the last line, e.g.
+  // "You arrive at The Stack Road.", popped up again mid-walk.
+  // Stay mounted while talking (`quiet`) so `seen` survives talk open/close — unmounting remounted
+  // with an empty `seen` and re-toasted the arrive line after closing Lark mid-road.
+  const seen = useRef<string[]>([]);
+  const timer = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (!line) return;
+    const prev = seen.current;
+    seen.current = log;
+    const fresh = log.length !== prev.length || log.some((l, i) => l !== prev[i]);
+    if (!line || !fresh) return;
     setOn(true);
-    const t = window.setTimeout(() => setOn(false), 3800);
-    return () => window.clearTimeout(t);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setOn(false), 3800);
   }, [log, line]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  // In a fight one step writes a batch (a cut, its steam and scald, a foe's cut, a miss). Showing only
+  // log[0] for 3.8s left the rest of the batch off screen (H11, H13): hold the whole batch until the
+  // next step writes something.
+  // After a read (4s + 1.2s a line) it folds to the last two lines so it does not sit over the board.
+  const fighting = useGame((s) => Boolean(s.data.combat));
+  const batch = useLogBatch(log, 8);
+  const [folded, setFolded] = useState(0);
+  useEffect(() => {
+    if (!batch.stamp) return;
+    const t = window.setTimeout(() => setFolded(batch.stamp), 4000 + 1200 * batch.lines.length);
+    return () => window.clearTimeout(t);
+  }, [batch]);
+  if (quiet) return null;
+  if (fighting && batch.lines.length) {
+    const shown = folded === batch.stamp ? batch.lines.slice(-2) : batch.lines;
+    return (
+      <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(80%,20rem)]" data-fight-log>
+        <div className="scrap">
+          {shown.map((l, i) => (
+            <p key={`${batch.stamp}-${i}`} className={i === shown.length - 1 ? "" : "text-parchment/75"}>
+              {l}
+            </p>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (!on || !line) return null;
   return (
     <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[min(72%,18rem)]">
@@ -215,12 +273,15 @@ function PlayScreen() {
   const click = useGame((s) => s.clickTile);
   const talk = useGame((s) => s.talkNearest);
   const audit = useGame((s) => s.auditNearest);
+  const aimAudit = useGame((s) => s.aimAudit);
   const strike = useGame((s) => s.strikeNearest);
   const endTurn = useGame((s) => s.endTurn);
   const stand = useGame((s) => s.standDown);
   const brace = useGame((s) => s.brace);
   const zoom = useGame((s) => s.setZoom);
   const close = useGame((s) => s.closePanel);
+  const choose = useGame((s) => s.choose);
+  const ackLevel = useGame((s) => s.ackLevel);
 
   useEffect(() => {
     const pump = String(d.flags.pumpFate ?? "");
@@ -286,16 +347,45 @@ function PlayScreen() {
     return () => cancelAnimationFrame(raf);
   }, [step]);
 
+  const playRef = useRef<HTMLDivElement>(null);
+  const focusPlay = () => {
+    const el = playRef.current;
+    if (!el) return;
+    // Keep OS arrow keys on the play shell after talk/HUD clicks (button focus swallows them in some hosts).
+    if (document.activeElement !== el) el.focus({ preventScroll: true });
+  };
+
+  useEffect(() => {
+    if (!d.dialogue) focusPlay();
+  }, [d.dialogue]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useGame.getState().data;
+      // The level modal (shown once no talk is open) is the top layer: Esc files it, and it holds the walk keys like it holds taps.
+      const levelUp = s.pendingLevel && !s.dialogue;
       if (e.key === "Escape") {
-        close();
+        if (levelUp) ackLevel();
+        else if (s.panel !== "none") close();
+        else if (s.dialogue) {
+          const leave = leaveIndex(s);
+          if (leave >= 0) choose(leave);
+        }
         return;
       }
-      if (s.dialogue || (s.panel !== "none" && s.panel !== "audit")) return;
+      if (levelUp || s.dialogue || (s.panel !== "none" && s.panel !== "audit")) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      const walk =
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "w" ||
+        e.key === "a" ||
+        e.key === "s" ||
+        e.key === "d";
+      if (walk) e.preventDefault();
       const x = s.player.x;
       const y = s.player.y;
       if (e.key === "ArrowUp" || e.key === "w") click(x, y - 1);
@@ -316,7 +406,7 @@ function PlayScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [audit, click, close, endTurn, open, strike, talk]);
+  }, [ackLevel, audit, choose, click, close, endTurn, open, strike, talk]);
 
   const talking = Boolean(d.dialogue);
   const fighting = Boolean(d.combat);
@@ -324,7 +414,7 @@ function PlayScreen() {
   const map = MAPS[d.mapId];
   const noStrike = fighting && (!myTurn || d.player.ap < 3);
   const noBrace = fighting && (!myTurn || d.player.ap < 1);
-  const faultLine = fighting ? knownFaults(d) : "";
+  const faultLines = fighting ? knownFaults(d) : [];
   const intents = fighting && myTurn ? boardIntents(d) : [];
   const canYield = fighting && myTurn && weaponsDark(d);
   const nearFaces = Object.values(d.actors)
@@ -333,17 +423,30 @@ function PlayScreen() {
   const turnFaces = fighting && d.combat
     ? d.combat.order.map((id, i) => ({
         id: `${id}-${i}`,
+        actorId: id,
         name: id === "player" ? "You" : (d.actors[id]?.name ?? id),
         portrait: id === "player" ? d.player.portrait : d.actors[id]?.portrait,
         on: i === d.combat!.index,
+        foe: Boolean(d.actors[id]?.alive && d.actors[id]?.hostile),
+        aim: d.combat!.aim === id,
       }))
     : [
-        { id: "you", name: "You", portrait: d.player.portrait, on: true },
-        ...nearFaces.map((a) => ({ id: a.id, name: a.name, portrait: a.portrait, on: false })),
+        { id: "you", actorId: "player", name: "You", portrait: d.player.portrait, on: true, foe: false, aim: false },
+        ...nearFaces.map((a) => ({ id: a.id, actorId: a.id, name: a.name, portrait: a.portrait, on: false, foe: false, aim: false })),
       ];
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-[440px] flex-col">
+    <div
+      ref={playRef}
+      tabIndex={-1}
+      className="relative mx-auto flex h-dvh w-full max-w-[440px] flex-col outline-none"
+      onMouseDown={(e) => {
+        // Clicks on non-interactive chrome keep the shell focused for OS arrow keys.
+        const t = e.target as HTMLElement | null;
+        if (t?.closest("button, a, input, textarea, select, [role='button']")) return;
+        focusPlay();
+      }}
+    >
       <header className="plate-head">
         <div className="head-row">
           <button type="button" className="head-gear" onClick={() => open("menu")} aria-label="Menu">
@@ -378,11 +481,12 @@ function PlayScreen() {
       </header>
       <div className="world-frame relative min-h-0 flex-1 overflow-hidden">
         <WorldCanvas />
-        {!talking && <LogChip />}
-        <DialogueBox />
+        <LogChip quiet={talking} />
       </div>
+      {/* Outside world-frame overflow: last replies used to sit under the party strip and eat clicks. */}
+      <DialogueBox />
       <footer className="instrument px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        <div className="mb-2 flex items-center gap-2">
+        <div className={`mb-2 flex items-center gap-2${talking ? " pointer-events-none" : ""}`}>
           <img src={d.player.portrait} alt="" className="bezel h-[4.75rem] w-[3.7rem] shrink-0 object-cover object-[center_15%] bg-soot" />
           <div className="min-w-0 flex-1">
             <div className="truncate font-display text-sm tracking-wide text-parchment">
@@ -391,12 +495,33 @@ function PlayScreen() {
               {d.player.stunned ? " · overloaded" : ""}
             </div>
             <div className="face-row mt-1">
-              {turnFaces.map((face) => (
-                <span key={face.id} className={face.on ? "face-tab on" : "face-tab"}>
-                  {face.portrait ? <img src={face.portrait} alt="" /> : <span className="bezel inline-block h-9 w-7 bg-soot" />}
-                  <span className="max-w-16 truncate">{face.name}</span>
-                </span>
-              ))}
+              {turnFaces.map((face) => {
+                const cls = `face-tab${face.on ? " on" : ""}${face.aim ? " aim" : ""}`;
+                const inner = (
+                  <>
+                    {face.portrait ? <img src={face.portrait} alt="" /> : <span className="bezel inline-block h-9 w-7 bg-soot" />}
+                    <span className="face-name">{face.name}</span>
+                  </>
+                );
+                // In a fight a hostile's face is where you aim Audit; a tap on the body itself strikes (H7).
+                return fighting && face.foe ? (
+                  <button
+                    key={face.id}
+                    type="button"
+                    className={`${cls} face-pick`}
+                    aria-pressed={face.aim}
+                    aria-label={face.aim ? `${face.name}, Audit reads this one` : `Aim Audit at ${face.name}`}
+                    title={face.aim ? "Audit reads this one" : "Audit this one"}
+                    onClick={() => aimAudit(face.actorId)}
+                  >
+                    {inner}
+                  </button>
+                ) : (
+                  <span key={face.id} className={cls}>
+                    {inner}
+                  </span>
+                );
+              })}
             </div>
             <div className="hp-track mt-1">
               <div className="hp-fill" style={{ width: `${Math.max(0, (d.player.hp / d.player.maxHp) * 100)}%` }} />
@@ -406,11 +531,17 @@ function PlayScreen() {
               {fighting ? (myTurn ? ` · your action · AP ${d.player.ap}${d.player.ap < 1 ? " · end the turn" : ""}` : " · their action") : ""}
               {fighting ? ` · ${weaponOf(d.player).name}` : ""}
             </div>
-            {fighting && faultLine && <div className="truncate text-xs text-rust">{faultLine}</div>}
+            {/* One wrapped line per side: a single truncated line hid the foe's part status at 440px (H14). Intent rows wrap too. */}
+            {fighting &&
+              faultLines.map((line) => (
+                <div key={line} className="fault-line break-words text-xs text-rust">
+                  {line}
+                </div>
+              ))}
             {intents.map((row) => (
-              <div key={row.id} className={`truncate text-xs ${row.live ? "text-brass" : "text-mist"}`}>
+              <div key={row.id} className={`intent-line break-words text-xs ${row.live ? "text-brass" : "text-mist"}`}>
                 {row.name}: {row.line}
-                {row.live ? "" : " — no longer that shape"}
+                {row.live ? "" : ` — ${row.why}`}
               </div>
             ))}
           </div>
@@ -421,27 +552,27 @@ function PlayScreen() {
           </button>
         )}
         <div className="grid grid-cols-4 gap-1.5">
-          <HudButton kind="audit" label="Audit" onClick={audit} dim={fighting && !myTurn} />
+          <HudButton kind="audit" label={HUD_LABELS.audit} onClick={audit} dim={fighting && !myTurn} />
           {fighting ? (
-            <HudButton kind="strike" label="Strike" onClick={strike} dim={noStrike} />
+            <HudButton kind="strike" label={HUD_LABELS.strike} onClick={strike} dim={noStrike} />
           ) : (
-            <HudButton kind="talk" label="Talk" onClick={talk} />
+            <HudButton kind="talk" label={HUD_LABELS.talk} onClick={talk} />
           )}
           {fighting ? (
-            <HudButton kind="brace" label="Brace" onClick={brace} dim={noBrace} />
+            <HudButton kind="brace" label={HUD_LABELS.brace} onClick={brace} dim={noBrace} />
           ) : (
-            <HudButton kind="map" label="Map" onClick={() => open("map")} />
+            <HudButton kind="map" label={HUD_LABELS.map} onClick={() => open("map")} />
           )}
-          <HudButton kind={fighting ? "end" : "menu"} label={fighting ? "End" : "Menu"} onClick={fighting ? endTurn : () => open("menu")} />
+          <HudButton kind={fighting ? "end" : "menu"} label={fighting ? HUD_LABELS.end : HUD_LABELS.menu} onClick={fighting ? endTurn : () => open("menu")} />
         </div>
         <div className="mt-1.5 grid grid-cols-4 gap-1.5">
-          <HudButton kind="quests" label="Quests" onClick={() => open("journal")} />
-          <HudButton kind="pack" label="Pack" onClick={() => open("inventory")} />
-          <HudButton kind="self" label="Self" onClick={() => open("char")} />
+          <HudButton kind="quests" label={HUD_LABELS.quests} onClick={() => open("journal")} />
+          <HudButton kind="pack" label={HUD_LABELS.pack} onClick={() => open("inventory")} />
+          <HudButton kind="self" label={HUD_LABELS.self} onClick={() => open("char")} />
           {fighting ? (
-            <HudButton kind="menu" label="Menu" onClick={() => open("menu")} />
+            <HudButton kind="menu" label={HUD_LABELS.menu} onClick={() => open("menu")} />
           ) : (
-            <HudButton kind="lens" label="Lens" onClick={() => zoom((d.zoom ?? 1) < 1 ? 1 : -1)} />
+            <HudButton kind="lens" label={HUD_LABELS.lens} onClick={() => zoom((d.zoom ?? 1) < 1 ? 1 : -1)} />
           )}
         </div>
       </footer>
@@ -465,22 +596,27 @@ function seamWord(n: { effect: string }) {
   return "disabled";
 }
 
-function knownFaults(d: Data) {
-  if (!d.combat) return "";
+function knownFaults(d: Data): string[] {
+  if (!d.combat) return [];
   const bits: string[] = [];
-  const note = (a: Actor, who: string) => {
+  // Who cut it, when a foe did: a severed part with no source read as if a miss had cut it (H13).
+  const cutBy = (ownerId: string, nodeId: string) => {
+    const hit = [...(d.combat?.changes ?? [])].reverse().find((c) => c.ownerId === ownerId && c.nodeId === nodeId && c.verb === "cut");
+    return hit && hit.by !== "player" ? ` by ${hit.by}` : "";
+  };
+  const note = (a: Actor, who: string, ownerId: string) => {
     const dark = a.nodes.filter(
       (n) => n.revealed && !nodeLive(a.nodes, n) && (n.severed || n.effect === "weapon" || n.effect === "motive" || n.effect === "armor"),
     );
-    if (dark.length) bits.push(`${who}: ${dark.map((n) => `${n.name} ${n.severed ? "severed" : seamWord(n)}`).slice(0, 2).join(", ")}`);
+    if (dark.length) bits.push(`${who}: ${dark.map((n) => `${n.name} ${n.severed ? `severed${cutBy(ownerId, n.id)}` : seamWord(n)}`).slice(0, 2).join(", ")}`);
   };
-  note(d.player, "You");
+  note(d.player, "You", "player");
   for (const id of d.combat.order) {
     if (id === "player") continue;
     const a = d.actors[id];
-    if (a?.alive) note(a, a.name);
+    if (a?.alive) note(a, a.name, a.id);
   }
-  return bits.join(" · ");
+  return bits;
 }
 
 const HUD_ART: Record<string, string> = {
@@ -499,8 +635,16 @@ const HUD_ART: Record<string, string> = {
 
 function HudButton({ kind, label, onClick, dim }: { kind: string; label: string; onClick: () => void; dim?: boolean }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} aria-disabled={dim || undefined} className={`hud-key ${dim ? "opacity-40" : ""}`}>
+    <button
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      aria-label={label}
+      aria-disabled={dim || undefined}
+      className={`hud-key ${dim ? "opacity-40" : ""}`}
+    >
       <img src={HUD_ART[kind] ?? HUD_ART.menu} alt="" className="hud-art" />
+      {hudShowsCaption(kind) ? <span className="hud-label">{label}</span> : null}
     </button>
   );
 }

@@ -316,6 +316,8 @@ export interface CombatState {
   audited: string[];
   /** Frozen when your turn starts. Their next action if the board stays this shape. */
   plans?: Record<string, Opening>;
+  /** The hostile you touched in the turn order. Audit reads this one instead of the nearest (H7). */
+  aim?: string;
   tally?: { strikes: number; cuts: number; mends: number; kills: number };
   /** Everyone the engagement started with. Order drops the dead; this does not. */
   roster?: string[];

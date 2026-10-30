@@ -1065,6 +1065,7 @@ export const CONVOS: Record<string, Convo> = {
         replies: [
           {
             text: "Put it on the horns. Let them hear what the lifts eat.",
+            requires: [{ missing: "citadelFate" }],
             check: { skill: "speech", dc: 58 },
             effects: [
               flag("citadelFate", "expose"),
@@ -1082,6 +1083,7 @@ export const CONVOS: Record<string, Convo> = {
           },
           {
             text: "History, then. Read the old name of the engine into the record.",
+            requires: [{ missing: "citadelFate" }],
             check: { skill: "history", dc: 60 },
             effects: [
               flag("citadelFate", "expose"),
@@ -1149,7 +1151,7 @@ export const CONVOS: Record<string, Convo> = {
             ],
             end: true,
           },
-          end("Not while the graph is a lie. I'll circle."),
+          end("Not while the graph is a lie. I'll circle.", [log("The Sovereign lets you go. South, down the drop, the unissued baseline is still holding. It can be read without a fight.")]),
         ],
       },
       sat: {
@@ -1167,7 +1169,7 @@ export const CONVOS: Record<string, Convo> = {
             ],
             end: true,
           },
-          end("Not while the graph is a lie. I'll circle."),
+          end("Not while the graph is a lie. I'll circle.", [log("The Sovereign lets you go. South, down the drop, the unissued baseline is still holding. It can be read without a fight.")]),
         ],
       },
     },
